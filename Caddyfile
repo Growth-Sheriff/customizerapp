@@ -1,0 +1,23 @@
+customizerapp.avrasya360.com {
+    reverse_proxy localhost:3000
+
+    encode gzip
+
+    # Remove X-Frame-Options for Shopify embedded app
+    header -X-Frame-Options
+
+    # Content Security Policy for Shopify
+    header Content-Security-Policy "frame-ancestors 'self' https://admin.shopify.com https://*.myshopify.com;"
+
+    # Security headers
+    header X-Content-Type-Options nosniff
+    header X-XSS-Protection "1; mode=block"
+    header Referrer-Policy strict-origin-when-cross-origin
+
+    # Logging
+    log {
+        output file /var/log/caddy/upload-lift.log
+        format json
+    }
+}
+

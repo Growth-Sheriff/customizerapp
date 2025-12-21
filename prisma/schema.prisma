@@ -1,0 +1,192 @@
+// Prisma Schema - Upload Lift Pro
+// Tenant-scoped multi-shop model
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ══════════════════════════════════════════════════════════════
+// SHOPS (Tenant)
+// ══════════════════════════════════════════════════════════════
+model Shop {
+  id                String   @id @default(cuid())
+  shopDomain        String   @unique @map("shop_domain")
+  accessToken       String   @map("access_token")
+  plan              String   @default("free") // free, starter, pro, enterprise
+  billingStatus     String   @default("active") @map("billing_status")
+  storageProvider   String   @default("r2") @map("storage_provider") // r2, s3
+  storageConfig     Json?    @map("storage_config_json")
+  settings          Json?    @map("settings_json")
+  installedAt       DateTime @default(now()) @map("installed_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  productsConfig ProductConfig[]
+  assetSets      AssetSet[]
+  uploads        Upload[]
+  ordersLink     OrderLink[]
+  exportJobs     ExportJob[]
+  auditLogs      AuditLog[]
+
+  @@map("shops")
+}
+
+// ══════════════════════════════════════════════════════════════
+// PRODUCT CONFIG
+// ══════════════════════════════════════════════════════════════
+model ProductConfig {
+  id              String   @id @default(cuid())
+  shopId          String   @map("shop_id")
+  productId       String   @map("product_id") // Shopify product GID
+  mode            String   // 3d_designer, classic, quick
+  enabled         Boolean  @default(true)
+  assetSetId      String?  @map("asset_set_id")
+  policyOverrides Json?    @map("policy_overrides_json")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  shop     Shop      @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  assetSet AssetSet? @relation(fields: [assetSetId], references: [id])
+  uploads  Upload[]
+
+  @@unique([shopId, productId])
+  @@map("products_config")
+}
+
+// ══════════════════════════════════════════════════════════════
+// ASSET SETS (3D Models + Print Locations)
+// ══════════════════════════════════════════════════════════════
+model AssetSet {
+  id           String   @id @default(cuid())
+  shopId       String   @map("shop_id")
+  name         String
+  schema       Json     @map("schema_json") // printLocations, camera, render preset
+  thumbnailUrl String?  @map("thumbnail_url")
+  status       String   @default("active") // active, archived
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  shop           Shop            @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  productsConfig ProductConfig[]
+
+  @@map("asset_sets")
+}
+
+// ══════════════════════════════════════════════════════════════
+// UPLOADS
+// ══════════════════════════════════════════════════════════════
+model Upload {
+  id               String    @id @default(cuid())
+  shopId           String    @map("shop_id")
+  productId        String?   @map("product_id")
+  variantId        String?   @map("variant_id")
+  mode             String    // 3d_designer, classic, quick
+  status           String    @default("draft") // draft, uploaded, processing, needs_review, approved, rejected, blocked, printed, archived
+  customerId       String?   @map("customer_id")
+  customerEmail    String?   @map("customer_email")
+  preflightSummary Json?     @map("preflight_summary_json")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  approvedAt       DateTime? @map("approved_at")
+  rejectedAt       DateTime? @map("rejected_at")
+
+  // Relations
+  shop          Shop           @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  productConfig ProductConfig? @relation(fields: [productId], references: [productId])
+  items         UploadItem[]
+  ordersLink    OrderLink[]
+
+  @@index([shopId, status])
+  @@index([shopId, createdAt])
+  @@map("uploads")
+}
+
+// ══════════════════════════════════════════════════════════════
+// UPLOAD ITEMS (per location)
+// ══════════════════════════════════════════════════════════════
+model UploadItem {
+  id              String   @id @default(cuid())
+  uploadId        String   @map("upload_id")
+  location        String   // front, back, left_sleeve, right_sleeve
+  storageKey      String   @map("storage_key")
+  previewKey      String?  @map("preview_key")
+  thumbnailKey    String?  @map("thumbnail_key")
+  originalName    String?  @map("original_name")
+  mimeType        String?  @map("mime_type")
+  fileSize        Int?     @map("file_size")
+  transform       Json?    @map("transform_json") // scale, rotation, position
+  preflightStatus String   @default("pending") @map("preflight_status") // pending, ok, warning, error
+  preflightResult Json?    @map("preflight_result_json")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  // Relations
+  upload Upload @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+
+  @@map("upload_items")
+}
+
+// ══════════════════════════════════════════════════════════════
+// ORDER LINKS
+// ══════════════════════════════════════════════════════════════
+model OrderLink {
+  id            String   @id @default(cuid())
+  shopId        String   @map("shop_id")
+  shopifyOrderId String  @map("shopify_order_id")
+  uploadId      String   @map("upload_id")
+  lineItemId    String?  @map("line_item_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  // Relations
+  shop   Shop   @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  upload Upload @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+
+  @@unique([shopId, shopifyOrderId, uploadId])
+  @@map("orders_link")
+}
+
+// ══════════════════════════════════════════════════════════════
+// EXPORT JOBS
+// ══════════════════════════════════════════════════════════════
+model ExportJob {
+  id          String    @id @default(cuid())
+  shopId      String    @map("shop_id")
+  uploadIds   String[]  @map("upload_ids")
+  status      String    @default("pending") // pending, processing, completed, failed, expired
+  downloadUrl String?   @map("download_url")
+  expiresAt   DateTime? @map("expires_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  completedAt DateTime? @map("completed_at")
+
+  // Relations
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@map("export_jobs")
+}
+
+// ══════════════════════════════════════════════════════════════
+// AUDIT LOGS
+// ══════════════════════════════════════════════════════════════
+model AuditLog {
+  id           String   @id @default(cuid())
+  shopId       String   @map("shop_id")
+  userId       String?  @map("user_id")
+  action       String   // create, update, delete, approve, reject, export
+  resourceType String   @map("resource_type") // upload, product_config, asset_set, etc.
+  resourceId   String?  @map("resource_id")
+  metadata     Json?    @map("metadata_json")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  // Relations
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@index([shopId, createdAt])
+  @@map("audit_logs")
+}
+
