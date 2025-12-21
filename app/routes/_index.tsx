@@ -1,6 +1,6 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { redirect } from "@remix-run/node";
-import { login } from "~/shopify.server";
+import { authenticate, login } from "~/shopify.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
@@ -8,18 +8,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const embedded = url.searchParams.get("embedded");
   const host = url.searchParams.get("host");
 
-  // If this is a Shopify embedded app request, redirect to /app
-  // The /app route will handle authentication via token exchange
+  // If this is a Shopify embedded app request
   if (embedded === "1" || host) {
-    // Preserve all query params when redirecting to /app
-    const appUrl = new URL("/app", url.origin);
-    url.searchParams.forEach((value, key) => {
-      appUrl.searchParams.set(key, value);
-    });
-    return redirect(appUrl.toString());
+    // For embedded apps, authenticate.admin handles everything
+    // including token exchange and bouncing back with session token
+    await authenticate.admin(request);
+    // If we get here, authentication succeeded - redirect to /app
+    return redirect("/app");
   }
 
-  // If shop param exists, initiate OAuth
+  // If shop param exists but not embedded, initiate OAuth
   if (shop) {
     throw await login(request);
   }

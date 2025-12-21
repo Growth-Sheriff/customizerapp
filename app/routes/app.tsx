@@ -11,7 +11,8 @@ export const links = () => [{ rel: "stylesheet", href: polarisStyles }];
 // Uses token exchange for embedded app authentication
 export async function loader({ request }: LoaderFunctionArgs) {
   // authenticate.admin handles token exchange automatically
-  // It will use the session token from the request to get/refresh access token
+  // If no session token in request, it will redirect to auth or bounce
+  // This is expected behavior for embedded apps
   const { session } = await authenticate.admin(request);
 
   return json({
@@ -25,6 +26,12 @@ export default function AppLayout() {
 
   return (
     <AppProvider isEmbeddedApp apiKey={apiKey}>
+      <ui-nav-menu>
+        <a href="/app" rel="home">Home</a>
+        <a href="/app/uploads">Uploads</a>
+        <a href="/app/products">Products</a>
+        <a href="/app/settings">Settings</a>
+      </ui-nav-menu>
       <Outlet />
     </AppProvider>
   );
