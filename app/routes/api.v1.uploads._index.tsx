@@ -5,7 +5,7 @@
 
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { authenticateApiRequest, requireApiPermission } from "./api.v1._index";
+import { authenticateApiRequest, requireApiPermission } from "~/lib/api.server";
 import prisma from "~/lib/prisma.server";
 
 // GET /api/v1/uploads
