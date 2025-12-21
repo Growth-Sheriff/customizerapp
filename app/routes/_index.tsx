@@ -1,62 +1,27 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
-import { json } from "@remix-run/node";
-import { useLoaderData } from "@remix-run/react";
-import { AppProvider, Page, Layout, Card, Text, BlockStack, Banner } from "@shopify/polaris";
-import enTranslations from "@shopify/polaris/locales/en.json";
+import { redirect } from "@remix-run/node";
+import { getShopFromSession } from "~/lib/session.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  return json({
-    appName: "Upload Lift Pro",
-    version: "1.0.0",
-    status: "healthy",
-  });
+  // Check if user is authenticated
+  const shopDomain = await getShopFromSession(request);
+
+  if (shopDomain) {
+    // Authenticated - redirect to app dashboard
+    return redirect("/app");
+  }
+
+  // Not authenticated - redirect to install
+  return redirect("/auth/install");
 }
 
 export default function Index() {
-  const data = useLoaderData<typeof loader>();
-
+  // This should never render due to redirects
   return (
-    <AppProvider i18n={enTranslations}>
-      <Page title="Upload Lift Pro">
-        <Layout>
-          <Layout.Section>
-            <Banner title="Welcome to Upload Lift Pro" tone="success">
-              <p>Your DTF/custom print customizer is ready.</p>
-            </Banner>
-          </Layout.Section>
-
-          <Layout.Section variant="oneThird">
-            <Card>
-              <BlockStack gap="200">
-                <Text as="h2" variant="headingMd">App Status</Text>
-                <Text as="p">Version: {data.version}</Text>
-                <Text as="p">Status: {data.status}</Text>
-              </BlockStack>
-            </Card>
-          </Layout.Section>
-
-          <Layout.Section variant="oneThird">
-            <Card>
-              <BlockStack gap="200">
-                <Text as="h2" variant="headingMd">Quick Stats</Text>
-                <Text as="p">Uploads: 0</Text>
-                <Text as="p">Products: 0</Text>
-              </BlockStack>
-            </Card>
-          </Layout.Section>
-
-          <Layout.Section variant="oneThird">
-            <Card>
-              <BlockStack gap="200">
-                <Text as="h2" variant="headingMd">Plan</Text>
-                <Text as="p">Current: Free</Text>
-                <Text as="p">Uploads: 0/100</Text>
-              </BlockStack>
-            </Card>
-          </Layout.Section>
-        </Layout>
-      </Page>
-    </AppProvider>
+    <div style={{ padding: 40, textAlign: "center" }}>
+      <h1>Upload Lift Pro</h1>
+      <p>Redirecting...</p>
+    </div>
   );
 }
 
