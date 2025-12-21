@@ -1,5 +1,5 @@
 import type { LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node";
-import { json } from "@remix-run/node";
+import { json, redirect } from "@remix-run/node";
 import { Form, useLoaderData } from "@remix-run/react";
 import { login } from "~/shopify.server";
 
@@ -32,7 +32,8 @@ export async function action({ request }: ActionFunctionArgs) {
     ? cleanShop
     : `${cleanShop}.myshopify.com`;
 
-  throw await login(request);
+  // Redirect to this same page with shop param - loader will handle OAuth
+  return redirect(`/auth/login?shop=${encodeURIComponent(shopDomain)}`);
 }
 
 export default function AuthLogin() {
