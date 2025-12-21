@@ -19,39 +19,39 @@
     "worker:convert": "tsx watch workers/convert.worker.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.700.0",
+    "@aws-sdk/s3-request-presigner": "^3.700.0",
     "@prisma/client": "^5.22.0",
     "@remix-run/node": "^2.15.0",
     "@remix-run/react": "^2.15.0",
     "@remix-run/serve": "^2.15.0",
-    "@shopify/polaris": "^13.9.0",
     "@shopify/app-bridge-react": "^4.1.3",
-    "@aws-sdk/client-s3": "^3.700.0",
-    "@aws-sdk/s3-request-presigner": "^3.700.0",
+    "@shopify/polaris": "^13.9.0",
+    "@shopify/polaris-icons": "^9.3.1",
     "bullmq": "^5.30.0",
     "ioredis": "^5.4.1",
     "isbot": "^5.1.0",
+    "nanoid": "^5.0.8",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "zod": "^3.23.8",
-    "nanoid": "^5.0.8"
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@remix-run/dev": "^2.15.0",
+    "@types/node": "^22.10.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
-    "@types/node": "^22.10.0",
+    "@typescript-eslint/eslint-plugin": "^8.16.0",
+    "@typescript-eslint/parser": "^8.16.0",
+    "eslint": "^9.15.0",
+    "prisma": "^5.22.0",
+    "tsx": "^4.19.0",
     "typescript": "^5.7.0",
     "vite": "^6.0.0",
     "vite-tsconfig-paths": "^5.1.0",
-    "prisma": "^5.22.0",
-    "tsx": "^4.19.0",
-    "vitest": "^2.1.0",
-    "eslint": "^9.15.0",
-    "@typescript-eslint/eslint-plugin": "^8.16.0",
-    "@typescript-eslint/parser": "^8.16.0"
+    "vitest": "^2.1.0"
   },
   "engines": {
     "node": ">=20.0.0"
   }
 }
-
