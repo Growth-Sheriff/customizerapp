@@ -26,12 +26,16 @@ model Shop {
   updatedAt         DateTime @updatedAt @map("updated_at")
 
   // Relations
-  productsConfig ProductConfig[]
-  assetSets      AssetSet[]
-  uploads        Upload[]
-  ordersLink     OrderLink[]
-  exportJobs     ExportJob[]
-  auditLogs      AuditLog[]
+  productsConfig   ProductConfig[]
+  assetSets        AssetSet[]
+  uploads          Upload[]
+  ordersLink       OrderLink[]
+  exportJobs       ExportJob[]
+  auditLogs        AuditLog[]
+  teamMembers      TeamMember[]
+  apiKeys          ApiKey[]
+  whiteLabelConfig WhiteLabelConfig?
+  flowTriggers     FlowTrigger[]
 
   @@map("shops")
 }
@@ -189,3 +193,95 @@ model AuditLog {
   @@map("audit_logs")
 }
 
+// ══════════════════════════════════════════════════════════════
+// TEAM MEMBERS (RBAC)
+// ══════════════════════════════════════════════════════════════
+model TeamMember {
+  id          String   @id @default(cuid())
+  shopId      String   @map("shop_id")
+  email       String
+  name        String?
+  role        String   @default("viewer") // owner, admin, operator, viewer
+  inviteToken String?  @map("invite_token")
+  invitedAt   DateTime @default(now()) @map("invited_at")
+  acceptedAt  DateTime? @map("accepted_at")
+  lastLoginAt DateTime? @map("last_login_at")
+  status      String   @default("pending") // pending, active, suspended
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@unique([shopId, email])
+  @@map("team_members")
+}
+
+// ══════════════════════════════════════════════════════════════
+// API KEYS (Public API)
+// ══════════════════════════════════════════════════════════════
+model ApiKey {
+  id          String    @id @default(cuid())
+  shopId      String    @map("shop_id")
+  name        String
+  keyHash     String    @map("key_hash") // SHA256 hash of the key
+  keyPrefix   String    @map("key_prefix") // First 8 chars for display
+  permissions String[]  // Array of allowed permissions
+  rateLimit   Int       @default(100) @map("rate_limit") // Requests per minute
+  expiresAt   DateTime? @map("expires_at")
+  lastUsedAt  DateTime? @map("last_used_at")
+  usageCount  Int       @default(0) @map("usage_count")
+  status      String    @default("active") // active, revoked
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@index([keyHash])
+  @@map("api_keys")
+}
+
+// ══════════════════════════════════════════════════════════════
+// WHITE LABEL SETTINGS
+// ══════════════════════════════════════════════════════════════
+model WhiteLabelConfig {
+  id              String   @id @default(cuid())
+  shopId          String   @unique @map("shop_id")
+  enabled         Boolean  @default(false)
+  logoUrl         String?  @map("logo_url")
+  primaryColor    String?  @map("primary_color") // Hex color
+  secondaryColor  String?  @map("secondary_color")
+  customCss       String?  @map("custom_css")
+  hideBranding    Boolean  @default(false) @map("hide_branding")
+  customDomain    String?  @map("custom_domain")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@map("white_label_config")
+}
+
+// ══════════════════════════════════════════════════════════════
+// FLOW TRIGGERS LOG
+// ══════════════════════════════════════════════════════════════
+model FlowTrigger {
+  id          String   @id @default(cuid())
+  shopId      String   @map("shop_id")
+  eventType   String   @map("event_type") // upload_received, upload_approved, etc.
+  resourceId  String   @map("resource_id")
+  payload     Json     @map("payload_json")
+  status      String   @default("pending") // pending, sent, failed
+  attempts    Int      @default(0)
+  sentAt      DateTime? @map("sent_at")
+  error       String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relations
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@index([shopId, eventType])
+  @@map("flow_triggers")
+}

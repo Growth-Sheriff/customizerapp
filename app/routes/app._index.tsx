@@ -179,11 +179,23 @@ export default function AppDashboard() {
                   <Button url="/app/queue">Production Queue</Button>
                   <Button url="/app/analytics">Analytics</Button>
                   <Button url="/app/exports">Exports</Button>
+                  <Button url="/app/team">Team</Button>
+                  <Button url="/app/api-keys">API Keys</Button>
                   <Button url="/app/settings">Settings</Button>
                 </InlineStack>
               </BlockStack>
             </Card>
           </Layout.Section>
+
+          {/* Plan features info */}
+          {shop.plan === "free" && (
+            <Layout.Section>
+              <Banner title="Upgrade for more features" tone="info">
+                <p>Unlock 3D Designer, team management, API access, and more with Pro or Enterprise.</p>
+                <Button url="/app/settings">View Plans</Button>
+              </Banner>
+            </Layout.Section>
+          )}
 
           {/* Recent Uploads Table */}
           <Layout.Section>

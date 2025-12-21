@@ -114,6 +114,9 @@
         <path fill="currentColor" d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/>
       </svg>
       <span id="ul-warning-text">Some checks have warnings</span>
+      <button type="button" class="ul-continue-warnings-btn" id="ul-continue-warnings">
+        {{ 'upload_lift.continue_with_warnings' | t | default: 'Continue with Warnings' }}
+      </button>
     </div>
 
     <!-- Error Banner -->
@@ -401,6 +404,24 @@
   .ul-warning-banner {
     background: rgba(244, 147, 66, 0.1);
     color: var(--ul-warning);
+    flex-wrap: wrap;
+  }
+
+  .ul-continue-warnings-btn {
+    margin-left: auto;
+    padding: 6px 12px;
+    background: var(--ul-warning);
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    transition: background 0.2s;
+  }
+
+  .ul-continue-warnings-btn:hover {
+    background: #d68030;
   }
 
   .ul-error-banner {
