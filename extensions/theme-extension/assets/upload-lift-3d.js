@@ -74,6 +74,7 @@
     renderer: null,
     controls: null,
     model: null,
+    shirtMesh: null, // Specific reference to T-shirt mesh
     decals: new Map(), // location -> decal mesh
     designs: new Map(), // location -> { texture, transform }
     currentLocation: 'front',
@@ -83,31 +84,32 @@
     uploadId: null,
   };
 
-  // Default print locations
+  // Default print locations - based on kt946/ai-threejs-products-app-yt-jsm
+  // Front logo position: [0, 0.04, 0.15] scale: 0.15
   const DEFAULT_LOCATIONS = {
     front: {
-      position: new THREE.Vector3(0, 0.15, 0.15),
+      position: new THREE.Vector3(0, 0.04, 0.15),
       rotation: new THREE.Euler(0, 0, 0),
-      scale: new THREE.Vector3(0.3, 0.3, 0.3),
-      maxScale: 0.35,
+      scale: new THREE.Vector3(0.15, 0.15, 0.15),
+      maxScale: 0.25,
     },
     back: {
-      position: new THREE.Vector3(0, 0.15, -0.15),
+      position: new THREE.Vector3(0, 0.04, -0.15),
       rotation: new THREE.Euler(0, Math.PI, 0),
-      scale: new THREE.Vector3(0.3, 0.3, 0.3),
-      maxScale: 0.4,
+      scale: new THREE.Vector3(0.2, 0.2, 0.2),
+      maxScale: 0.3,
     },
     left_sleeve: {
-      position: new THREE.Vector3(-0.2, 0.25, 0),
+      position: new THREE.Vector3(-0.13, 0.12, 0),
       rotation: new THREE.Euler(0, -Math.PI / 2, 0),
-      scale: new THREE.Vector3(0.1, 0.1, 0.1),
-      maxScale: 0.15,
+      scale: new THREE.Vector3(0.06, 0.06, 0.06),
+      maxScale: 0.1,
     },
     right_sleeve: {
-      position: new THREE.Vector3(0.2, 0.25, 0),
+      position: new THREE.Vector3(0.13, 0.12, 0),
       rotation: new THREE.Euler(0, Math.PI / 2, 0),
-      scale: new THREE.Vector3(0.1, 0.1, 0.1),
-      maxScale: 0.15,
+      scale: new THREE.Vector3(0.06, 0.06, 0.06),
+      maxScale: 0.1,
     },
   };
 
@@ -297,11 +299,15 @@
     const loader = new THREE.GLTFLoader();
 
     // Get model URL from asset set or use default
-    let modelUrl = '/assets/shirt_baked.glb'; // Default model
+    // Try multiple paths for the GLB model
+    const appUrl = state.container?.dataset?.appUrl || 'https://customizerapp.dev';
+    let modelUrl = `${appUrl}/shirt_baked.glb`; // Default model path
 
     if (state.assetSet?.model?.url) {
       modelUrl = state.assetSet.model.url;
     }
+
+    console.log('[Upload Lift 3D] Loading model from:', modelUrl);
 
     return new Promise((resolve, reject) => {
       loader.load(
@@ -309,14 +315,18 @@
         (gltf) => {
           state.model = gltf.scene;
 
-          // Configure model
+          // Find the T-Shirt mesh specifically (from kt946 repo structure)
           state.model.traverse((child) => {
             if (child.isMesh) {
               child.castShadow = true;
               child.receiveShadow = true;
 
-              // Store reference for decal application
-              child.userData.isMainMesh = true;
+              // Store specific mesh name for decal (T_Shirt_male is the mesh name in shirt_baked.glb)
+              if (child.name === 'T_Shirt_male' || child.geometry) {
+                state.shirtMesh = child;
+                child.userData.isMainMesh = true;
+                console.log('[Upload Lift 3D] Found shirt mesh:', child.name);
+              }
             }
           });
 
@@ -335,7 +345,7 @@
 
           state.scene.add(state.model);
 
-          console.log('[Upload Lift 3D] Model loaded');
+          console.log('[Upload Lift 3D] Model loaded successfully');
           resolve();
         },
         (progress) => {
@@ -364,6 +374,7 @@
     const textureLoader = new THREE.TextureLoader();
     textureLoader.load(textureUrl, (texture) => {
       texture.colorSpace = THREE.SRGBColorSpace;
+      texture.anisotropy = 16; // Better quality
 
       // Get location config
       const locConfig = DEFAULT_LOCATIONS[location] || DEFAULT_LOCATIONS.front;
@@ -375,32 +386,36 @@
 
       // Apply user transform
       if (transform.scale !== undefined) {
-        const userScale = transform.scale / 100; // Convert from percentage
-        scale.multiplyScalar(userScale * 2); // Scale factor
+        const userScale = transform.scale / 50; // Normalize: 50 = 1x
+        scale.multiplyScalar(userScale);
       }
       if (transform.rotation !== undefined) {
         rotation.z = THREE.MathUtils.degToRad(transform.rotation);
       }
 
-      // Find mesh to apply decal to
-      let targetMesh = null;
-      state.model.traverse((child) => {
-        if (child.isMesh && child.userData.isMainMesh) {
-          targetMesh = child;
-        }
-      });
+      // Use stored shirtMesh or find it
+      let targetMesh = state.shirtMesh;
+      if (!targetMesh) {
+        state.model.traverse((child) => {
+          if (child.isMesh && child.userData.isMainMesh) {
+            targetMesh = child;
+          }
+        });
+      }
 
       if (!targetMesh) {
         console.warn('[Upload Lift 3D] No mesh found for decal');
         return;
       }
 
-      // Create decal material
+      console.log('[Upload Lift 3D] Applying decal to:', targetMesh.name, 'at position:', position);
+
+      // Create decal material - matching kt946 style
       const decalMaterial = new THREE.MeshPhongMaterial({
         map: texture,
         transparent: true,
-        depthTest: true,
-        depthWrite: false,
+        depthTest: false,
+        depthWrite: true,
         polygonOffset: true,
         polygonOffsetFactor: -4,
       });

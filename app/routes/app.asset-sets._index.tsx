@@ -352,10 +352,18 @@ export default function AssetSetsPage() {
     setCreateModalOpen(true);
   }, []);
 
-  const openEditModal = useCallback((asset: typeof assetSets[0]) => {
+  const openEditModal = useCallback((asset: {
+    id: string;
+    name: string;
+    thumbnailUrl: string | null;
+    status: string;
+    productCount: number;
+    schema: Record<string, unknown>;
+    createdAt: string;
+  }) => {
     setSelectedAsset(asset);
     setFormName(asset.name);
-    setFormModelUrl((asset.schema as any)?.model?.source || "");
+    setFormModelUrl((asset.schema as Record<string, unknown>)?.model as string || "");
     setEditModalOpen(true);
   }, []);
 
