@@ -1,26 +1,20 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { redirect } from "@remix-run/node";
-import { getShopFromSession } from "~/lib/session.server";
+import { login } from "~/shopify.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
-  const shopParam = url.searchParams.get("shop");
+  const shop = url.searchParams.get("shop");
+  const embedded = url.searchParams.get("embedded");
+  const host = url.searchParams.get("host");
 
-  // Check if user is authenticated
-  const shopDomain = await getShopFromSession(request);
-
-  if (shopDomain) {
-    // Authenticated - redirect to app dashboard
-    return redirect("/app");
+  // If this is a Shopify embedded app request, authenticate
+  if (shop || embedded || host) {
+    // Redirect to login which will handle OAuth
+    throw await login(request);
   }
 
-  // Not authenticated - check for shop parameter
-  if (shopParam) {
-    // Redirect to install with shop parameter
-    return redirect(`/auth/install?shop=${encodeURIComponent(shopParam)}`);
-  }
-
-  // No shop parameter - show install page
+  // No Shopify parameters - show install page
   return new Response(
     `<!DOCTYPE html>
     <html>
