@@ -1,0 +1,23 @@
+[Unit]
+Description=Upload Lift Pro - Preflight Worker
+After=network.target postgresql.service redis-server.service upload-lift.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/var/www/upload-lift
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/pnpm worker:preflight:prod
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=upload-lift-worker
+
+# Security
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
+

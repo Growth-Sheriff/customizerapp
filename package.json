@@ -15,6 +15,7 @@
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
     "worker:preflight": "tsx watch workers/preflight.worker.ts",
+    "worker:preflight:prod": "node --loader tsx workers/preflight.worker.ts",
     "worker:convert": "tsx watch workers/convert.worker.ts"
   },
   "dependencies": {
