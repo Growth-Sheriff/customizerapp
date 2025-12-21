@@ -3,8 +3,7 @@ import { json, redirect } from "@remix-run/node";
 import { useLoaderData, useActionData, Form, useNavigation } from "@remix-run/react";
 import {
   AppProvider, Page, Layout, Card, Text, BlockStack, InlineStack,
-  Button, Banner, TextField, Checkbox, Box, ColorPicker, Popover,
-  hsbToHex, hexToHsb
+  Button, Banner, TextField, Checkbox, Box
 } from "@shopify/polaris";
 import enTranslations from "@shopify/polaris/locales/en.json";
 import { useState, useCallback } from "react";
@@ -121,9 +120,6 @@ export default function WhiteLabelPage() {
   const [hideBranding, setHideBranding] = useState(config.hideBranding);
   const [customDomain, setCustomDomain] = useState(config.customDomain || "");
 
-  const [primaryPickerOpen, setPrimaryPickerOpen] = useState(false);
-  const [secondaryPickerOpen, setSecondaryPickerOpen] = useState(false);
-
   const canUseWhiteLabel = plan === "enterprise";
 
   return (
@@ -218,78 +214,56 @@ export default function WhiteLabelPage() {
 
                   <InlineStack gap="400">
                     <BlockStack gap="100">
-                      <Text as="span" variant="bodySm">Primary Color</Text>
-                      <Popover
-                        active={primaryPickerOpen}
-                        activator={
-                          <Button
-                            onClick={() => setPrimaryPickerOpen(true)}
-                            disabled={!canUseWhiteLabel}
-                          >
-                            <InlineStack gap="200" blockAlign="center">
-                              <div
-                                style={{
-                                  width: 20,
-                                  height: 20,
-                                  backgroundColor: primaryColor,
-                                  borderRadius: 4,
-                                  border: "1px solid #ddd",
-                                }}
-                              />
-                              <span>{primaryColor}</span>
-                            </InlineStack>
-                          </Button>
+                      <TextField
+                        label="Primary Color"
+                        value={primaryColor}
+                        onChange={setPrimaryColor}
+                        name="primaryColor"
+                        placeholder="#5c6ac4"
+                        helpText="Hex color code"
+                        autoComplete="off"
+                        disabled={!canUseWhiteLabel}
+                        prefix={
+                          <div
+                            style={{
+                              width: 16,
+                              height: 16,
+                              backgroundColor: primaryColor,
+                              borderRadius: 3,
+                              border: "1px solid #ddd",
+                            }}
+                          />
                         }
-                        onClose={() => setPrimaryPickerOpen(false)}
-                      >
-                        <Popover.Pane>
-                          <Box padding="400">
-                            <ColorPicker
-                              onChange={(hsb) => setPrimaryColor(hsbToHex(hsb))}
-                              color={hexToHsb(primaryColor)}
-                            />
-                          </Box>
-                        </Popover.Pane>
-                      </Popover>
-                      <input type="hidden" name="primaryColor" value={primaryColor} />
+                      />
                     </BlockStack>
 
                     <BlockStack gap="100">
-                      <Text as="span" variant="bodySm">Secondary Color</Text>
-                      <Popover
-                        active={secondaryPickerOpen}
-                        activator={
-                          <Button
-                            onClick={() => setSecondaryPickerOpen(true)}
-                            disabled={!canUseWhiteLabel}
-                          >
-                            <InlineStack gap="200" blockAlign="center">
-                              <div
-                                style={{
-                                  width: 20,
-                                  height: 20,
-                                  backgroundColor: secondaryColor,
-                                  borderRadius: 4,
-                                  border: "1px solid #ddd",
-                                }}
-                              />
-                              <span>{secondaryColor}</span>
-                            </InlineStack>
-                          </Button>
+                      <TextField
+                        label="Secondary Color"
+                        value={secondaryColor}
+                        onChange={setSecondaryColor}
+                        name="secondaryColor"
+                        placeholder="#47c1bf"
+                        helpText="Hex color code"
+                        autoComplete="off"
+                        disabled={!canUseWhiteLabel}
+                        prefix={
+                          <div
+                            style={{
+                              width: 16,
+                              height: 16,
+                              backgroundColor: secondaryColor,
+                              borderRadius: 3,
+                              border: "1px solid #ddd",
+                            }}
+                          />
                         }
-                        onClose={() => setSecondaryPickerOpen(false)}
-                      >
-                        <Popover.Pane>
-                          <Box padding="400">
-                            <ColorPicker
-                              onChange={(hsb) => setSecondaryColor(hsbToHex(hsb))}
-                              color={hexToHsb(secondaryColor)}
-                            />
-                          </Box>
-                        </Popover.Pane>
-                      </Popover>
-                      <input type="hidden" name="secondaryColor" value={secondaryColor} />
+                      />
                     </BlockStack>
+                  </InlineStack>
+                </BlockStack>
+              </Card>
+            </Layout.Section>
                   </InlineStack>
                 </BlockStack>
               </Card>
