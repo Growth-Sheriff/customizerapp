@@ -28,6 +28,7 @@ const shopify = shopifyApp({
   authPathPrefix: "/auth",
   sessionStorage: redisSessionStorage,
   distribution: AppDistribution.AppStore,
+  isEmbeddedApp: true,
   webhooks: {
     APP_UNINSTALLED: {
       deliveryMethod: DeliveryMethod.Http,
@@ -82,8 +83,7 @@ const shopify = shopifyApp({
     },
   },
   future: {
-    unstable_newEmbeddedAuthStrategy: false,
-    wip_optionalScopesApi: true,
+    unstable_newEmbeddedAuthStrategy: true,
   },
   ...(process.env.SHOP_CUSTOM_DOMAIN
     ? { customShopDomains: [process.env.SHOP_CUSTOM_DOMAIN] }

@@ -17,8 +17,9 @@ export const links: LinksFunction = () => [
 ];
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  await addDocumentResponseHeaders(request, new Headers());
-  return json({});
+  const headers = new Headers();
+  await addDocumentResponseHeaders(request, headers);
+  return json({}, { headers });
 }
 
 export function Layout({ children }: { children: React.ReactNode }) {
