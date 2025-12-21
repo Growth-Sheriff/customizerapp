@@ -2,6 +2,11 @@ api_version = "2025-10"
 type = "theme_app_extension"
 
 [[extensions.blocks]]
+name = "Upload Lift - 3D Designer"
+type = "3d-designer"
+handle = "3d-designer"
+
+[[extensions.blocks]]
 name = "Upload Lift - Classic Upload"
 type = "classic-upload"
 handle = "classic-upload"
@@ -19,6 +24,10 @@ handle = "cart-preview"
 [[extensions.assets]]
 handle = "upload-lift-core"
 source = "upload-lift-core.js"
+
+[[extensions.assets]]
+handle = "upload-lift-3d"
+source = "upload-lift-3d.js"
 
 [[extensions.assets]]
 handle = "upload-lift-ui"

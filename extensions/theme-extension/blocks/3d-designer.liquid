@@ -1,0 +1,730 @@
+{% comment %}
+  Upload Lift Pro - 3D Designer Block
+  Mode: 3d_designer (Mod-1)
+  Location: Product page
+
+  Features:
+  - Real-time 3D preview with GLB model
+  - Multi-location support (front, back, sleeves)
+  - Transform controls (scale, rotate, position)
+  - Mobile 2D fallback
+{% endcomment %}
+
+{% liquid
+  assign product_id = product.id
+  assign variant_id = product.selected_or_first_available_variant.id
+  assign upload_enabled = product.metafields.upload_lift.config.enabled | default: false
+  assign upload_mode = product.metafields.upload_lift.config.mode | default: 'classic'
+  assign asset_set_id = product.metafields.upload_lift.config.assetSetId | default: ''
+  assign max_size_mb = product.metafields.upload_lift.config.maxSizeMB | default: 25
+%}
+
+{% if upload_enabled and upload_mode == '3d_designer' %}
+<div
+  id="upload-lift-3d-designer"
+  class="ul-3d-container"
+  data-product-id="{{ product_id }}"
+  data-variant-id="{{ variant_id }}"
+  data-mode="3d_designer"
+  data-asset-set-id="{{ asset_set_id }}"
+  data-max-size="{{ max_size_mb }}"
+  data-app-url="{{ shop.metafields.upload_lift.app_url | default: 'https://customizerapp.dev' }}"
+>
+  <!-- Header -->
+  <div class="ul-3d-header">
+    <h2 class="ul-3d-title">
+      {{ 'upload_lift.customize_design' | t | default: 'Customize Your Design' }}
+    </h2>
+    <p class="ul-3d-subtitle">
+      {{ 'upload_lift.3d_description' | t | default: 'Upload your design and see it on the product in real-time 3D' }}
+    </p>
+  </div>
+
+  <!-- Main Content: 3D Canvas + Controls -->
+  <div class="ul-3d-main">
+    <!-- 3D Canvas (Desktop) / 2D Fallback (Mobile) -->
+    <div class="ul-3d-canvas-wrapper">
+      <!-- 3D Canvas -->
+      <div id="ul-3d-canvas" class="ul-3d-canvas">
+        <div class="ul-3d-loading">
+          <div class="ul-spinner-3d"></div>
+          <p>Loading 3D Model...</p>
+        </div>
+      </div>
+
+      <!-- 2D Fallback (Mobile) -->
+      <div id="ul-2d-fallback" class="ul-2d-fallback" style="display: none;">
+        <div class="ul-2d-preview-container">
+          <img id="ul-2d-product-image" src="{{ product.featured_image | image_url: width: 600 }}" alt="{{ product.title }}">
+          <div id="ul-2d-design-overlay" class="ul-2d-design-overlay"></div>
+        </div>
+      </div>
+
+      <!-- Camera Controls -->
+      <div class="ul-camera-controls">
+        <button type="button" class="ul-camera-btn" data-view="front" title="Front View">
+          <svg viewBox="0 0 24 24" width="20" height="20">
+            <rect fill="currentColor" x="3" y="3" width="18" height="18" rx="2"/>
+          </svg>
+        </button>
+        <button type="button" class="ul-camera-btn" data-view="back" title="Back View">
+          <svg viewBox="0 0 24 24" width="20" height="20">
+            <rect fill="none" stroke="currentColor" stroke-width="2" x="3" y="3" width="18" height="18" rx="2"/>
+          </svg>
+        </button>
+        <button type="button" class="ul-camera-btn" data-view="left" title="Left View">
+          <svg viewBox="0 0 24 24" width="20" height="20">
+            <path fill="currentColor" d="M3 3h9v18H3z"/>
+            <rect fill="none" stroke="currentColor" stroke-width="2" x="3" y="3" width="18" height="18" rx="2"/>
+          </svg>
+        </button>
+        <button type="button" class="ul-camera-btn" data-view="right" title="Right View">
+          <svg viewBox="0 0 24 24" width="20" height="20">
+            <path fill="currentColor" d="M12 3h9v18h-9z"/>
+            <rect fill="none" stroke="currentColor" stroke-width="2" x="3" y="3" width="18" height="18" rx="2"/>
+          </svg>
+        </button>
+        <button type="button" class="ul-camera-btn ul-camera-reset" data-view="reset" title="Reset View">
+          <svg viewBox="0 0 24 24" width="20" height="20">
+            <path fill="currentColor" d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Sidebar Controls -->
+    <div class="ul-3d-sidebar">
+      <!-- Location Selection -->
+      <div class="ul-control-section">
+        <h3 class="ul-control-title">
+          <span class="ul-step-badge">1</span>
+          {{ 'upload_lift.select_location' | t | default: 'Select Print Location' }}
+        </h3>
+        <div class="ul-location-grid" id="ul-location-grid">
+          <button type="button" class="ul-location-btn active" data-location="front">
+            <span class="ul-location-name">Front</span>
+            <span class="ul-location-size">12" x 14"</span>
+          </button>
+          <button type="button" class="ul-location-btn" data-location="back">
+            <span class="ul-location-name">Back</span>
+            <span class="ul-location-size">12" x 16"</span>
+          </button>
+          <button type="button" class="ul-location-btn" data-location="left_sleeve">
+            <span class="ul-location-name">Left Sleeve</span>
+            <span class="ul-location-size">4" x 4"</span>
+          </button>
+          <button type="button" class="ul-location-btn" data-location="right_sleeve">
+            <span class="ul-location-name">Right Sleeve</span>
+            <span class="ul-location-size">4" x 4"</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Upload Section -->
+      <div class="ul-control-section">
+        <h3 class="ul-control-title">
+          <span class="ul-step-badge">2</span>
+          {{ 'upload_lift.upload_design' | t | default: 'Upload Design' }}
+        </h3>
+        <div class="ul-upload-area" id="ul-upload-area">
+          <div class="ul-upload-dropzone" id="ul-3d-dropzone">
+            <svg viewBox="0 0 24 24" width="32" height="32">
+              <path fill="currentColor" d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/>
+            </svg>
+            <p>Drop design here</p>
+            <span>or <button type="button" class="ul-browse-link">browse</button></span>
+          </div>
+          <input type="file" id="ul-3d-file-input" accept=".png,.jpg,.jpeg,.pdf,.svg" style="display: none;">
+
+          <!-- Uploaded Design Preview -->
+          <div class="ul-design-preview" id="ul-design-preview" style="display: none;">
+            <img id="ul-design-thumbnail" src="" alt="Design">
+            <div class="ul-design-info">
+              <span id="ul-design-name">design.png</span>
+              <button type="button" class="ul-remove-design" id="ul-remove-design">×</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Upload Progress -->
+        <div class="ul-upload-progress" id="ul-upload-progress" style="display: none;">
+          <div class="ul-progress-bar-3d">
+            <div class="ul-progress-fill-3d" id="ul-progress-fill"></div>
+          </div>
+          <span id="ul-progress-text">Uploading... 0%</span>
+        </div>
+
+        <!-- Preflight Status -->
+        <div class="ul-preflight-status" id="ul-preflight-status" style="display: none;">
+          <div class="ul-preflight-icon" id="ul-preflight-icon"></div>
+          <span id="ul-preflight-message">Checking design...</span>
+        </div>
+      </div>
+
+      <!-- Transform Controls -->
+      <div class="ul-control-section" id="ul-transform-section" style="display: none;">
+        <h3 class="ul-control-title">
+          <span class="ul-step-badge">3</span>
+          {{ 'upload_lift.adjust_design' | t | default: 'Adjust Design' }}
+        </h3>
+
+        <div class="ul-transform-control">
+          <label>Scale</label>
+          <input type="range" id="ul-scale-slider" min="10" max="100" value="50">
+          <span id="ul-scale-value">50%</span>
+        </div>
+
+        <div class="ul-transform-control">
+          <label>Rotation</label>
+          <input type="range" id="ul-rotation-slider" min="-180" max="180" value="0">
+          <span id="ul-rotation-value">0°</span>
+        </div>
+
+        <div class="ul-transform-buttons">
+          <button type="button" class="ul-transform-btn" id="ul-center-design">Center</button>
+          <button type="button" class="ul-transform-btn" id="ul-reset-transform">Reset</button>
+        </div>
+      </div>
+
+      <!-- Add to Cart -->
+      <div class="ul-control-section ul-cart-section">
+        <h3 class="ul-control-title">
+          <span class="ul-step-badge">4</span>
+          {{ 'upload_lift.confirm' | t | default: 'Confirm & Add' }}
+        </h3>
+
+        <div class="ul-design-summary" id="ul-design-summary">
+          <div class="ul-summary-locations" id="ul-summary-locations">
+            <!-- Filled by JS -->
+          </div>
+        </div>
+
+        <label class="ul-approval-checkbox">
+          <input type="checkbox" id="ul-3d-approval">
+          <span>{{ 'upload_lift.approval_text' | t | default: 'I confirm my design is print-ready' }}</span>
+        </label>
+
+        <button type="button" class="ul-add-to-cart-3d" id="ul-add-to-cart-3d" disabled>
+          {{ 'upload_lift.add_to_cart' | t | default: 'Add to Cart' }}
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hidden fields for cart -->
+  <input type="hidden" name="properties[_upload_lift_id]" id="ul-3d-prop-id" value="">
+  <input type="hidden" name="properties[_upload_lift_mode]" id="ul-3d-prop-mode" value="3d_designer">
+  <input type="hidden" name="properties[_upload_lift_preview]" id="ul-3d-prop-preview" value="">
+  <input type="hidden" name="properties[_upload_lift_locations]" id="ul-3d-prop-locations" value="">
+</div>
+
+<style>
+  .ul-3d-container {
+    --ul-primary: #5c6ac4;
+    --ul-primary-hover: #4c5bb3;
+    --ul-success: #50b83c;
+    --ul-warning: #f49342;
+    --ul-error: #de3618;
+    --ul-border: #dfe3e8;
+    --ul-bg: #f9fafb;
+    --ul-bg-dark: #1a1a2e;
+    --ul-text: #212b36;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    max-width: 1200px;
+    margin: 20px auto;
+  }
+
+  .ul-3d-header {
+    text-align: center;
+    margin-bottom: 24px;
+  }
+
+  .ul-3d-title {
+    font-size: 24px;
+    font-weight: 600;
+    margin: 0 0 8px 0;
+  }
+
+  .ul-3d-subtitle {
+    font-size: 14px;
+    color: #637381;
+    margin: 0;
+  }
+
+  .ul-3d-main {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 24px;
+  }
+
+  @media (max-width: 900px) {
+    .ul-3d-main {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .ul-3d-canvas-wrapper {
+    position: relative;
+    background: var(--ul-bg-dark);
+    border-radius: 12px;
+    overflow: hidden;
+    min-height: 500px;
+  }
+
+  .ul-3d-canvas {
+    width: 100%;
+    height: 500px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .ul-3d-loading {
+    text-align: center;
+    color: #fff;
+  }
+
+  .ul-spinner-3d {
+    width: 40px;
+    height: 40px;
+    border: 3px solid rgba(255,255,255,0.2);
+    border-top-color: var(--ul-primary);
+    border-radius: 50%;
+    animation: ul-spin 0.8s linear infinite;
+    margin: 0 auto 12px;
+  }
+
+  @keyframes ul-spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .ul-2d-fallback {
+    width: 100%;
+    height: 500px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--ul-bg);
+  }
+
+  .ul-2d-preview-container {
+    position: relative;
+    max-width: 100%;
+    max-height: 100%;
+  }
+
+  .ul-2d-preview-container img {
+    max-width: 100%;
+    max-height: 450px;
+    object-fit: contain;
+  }
+
+  .ul-2d-design-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+  }
+
+  .ul-camera-controls {
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 8px;
+    background: rgba(0,0,0,0.6);
+    padding: 8px;
+    border-radius: 8px;
+  }
+
+  .ul-camera-btn {
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 6px;
+    background: rgba(255,255,255,0.1);
+    color: #fff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+  }
+
+  .ul-camera-btn:hover {
+    background: rgba(255,255,255,0.2);
+  }
+
+  .ul-camera-btn.active {
+    background: var(--ul-primary);
+  }
+
+  .ul-3d-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .ul-control-section {
+    background: #fff;
+    border: 1px solid var(--ul-border);
+    border-radius: 12px;
+    padding: 16px;
+  }
+
+  .ul-control-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    margin: 0 0 12px 0;
+  }
+
+  .ul-step-badge {
+    width: 24px;
+    height: 24px;
+    background: var(--ul-primary);
+    color: #fff;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+  }
+
+  .ul-location-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .ul-location-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 12px 8px;
+    border: 2px solid var(--ul-border);
+    border-radius: 8px;
+    background: #fff;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+  }
+
+  .ul-location-btn:hover {
+    border-color: var(--ul-primary);
+  }
+
+  .ul-location-btn.active {
+    border-color: var(--ul-primary);
+    background: rgba(92, 106, 196, 0.1);
+  }
+
+  .ul-location-btn.has-design {
+    position: relative;
+  }
+
+  .ul-location-btn.has-design::after {
+    content: '✓';
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 16px;
+    height: 16px;
+    background: var(--ul-success);
+    color: #fff;
+    border-radius: 50%;
+    font-size: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .ul-location-name {
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .ul-location-size {
+    font-size: 11px;
+    color: #637381;
+  }
+
+  .ul-upload-area {
+    position: relative;
+  }
+
+  .ul-upload-dropzone {
+    border: 2px dashed var(--ul-border);
+    border-radius: 8px;
+    padding: 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+  }
+
+  .ul-upload-dropzone:hover,
+  .ul-upload-dropzone.dragover {
+    border-color: var(--ul-primary);
+    background: rgba(92, 106, 196, 0.05);
+  }
+
+  .ul-upload-dropzone svg {
+    color: #919eab;
+    margin-bottom: 8px;
+  }
+
+  .ul-upload-dropzone p {
+    margin: 0;
+    font-size: 14px;
+  }
+
+  .ul-browse-link {
+    background: none;
+    border: none;
+    color: var(--ul-primary);
+    cursor: pointer;
+    text-decoration: underline;
+  }
+
+  .ul-design-preview {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: var(--ul-bg);
+    border-radius: 8px;
+  }
+
+  .ul-design-preview img {
+    width: 48px;
+    height: 48px;
+    object-fit: contain;
+    border-radius: 4px;
+    background: #fff;
+  }
+
+  .ul-design-info {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .ul-design-info span {
+    font-size: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 150px;
+  }
+
+  .ul-remove-design {
+    width: 24px;
+    height: 24px;
+    border: none;
+    background: var(--ul-error);
+    color: #fff;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+  }
+
+  .ul-upload-progress {
+    margin-top: 12px;
+  }
+
+  .ul-progress-bar-3d {
+    height: 6px;
+    background: var(--ul-border);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .ul-progress-fill-3d {
+    height: 100%;
+    background: var(--ul-primary);
+    width: 0%;
+    transition: width 0.3s;
+  }
+
+  .ul-preflight-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+  }
+
+  .ul-preflight-status.ok {
+    background: rgba(80, 184, 60, 0.1);
+    color: var(--ul-success);
+  }
+
+  .ul-preflight-status.warning {
+    background: rgba(244, 147, 66, 0.1);
+    color: var(--ul-warning);
+  }
+
+  .ul-preflight-status.error {
+    background: rgba(222, 54, 24, 0.1);
+    color: var(--ul-error);
+  }
+
+  .ul-transform-control {
+    margin-bottom: 12px;
+  }
+
+  .ul-transform-control label {
+    display: block;
+    font-size: 12px;
+    color: #637381;
+    margin-bottom: 4px;
+  }
+
+  .ul-transform-control input[type="range"] {
+    width: calc(100% - 50px);
+    vertical-align: middle;
+  }
+
+  .ul-transform-control span {
+    display: inline-block;
+    width: 45px;
+    text-align: right;
+    font-size: 12px;
+  }
+
+  .ul-transform-buttons {
+    display: flex;
+    gap: 8px;
+  }
+
+  .ul-transform-btn {
+    flex: 1;
+    padding: 8px;
+    border: 1px solid var(--ul-border);
+    border-radius: 6px;
+    background: #fff;
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  .ul-transform-btn:hover {
+    background: var(--ul-bg);
+  }
+
+  .ul-cart-section {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  }
+
+  .ul-design-summary {
+    margin-bottom: 12px;
+  }
+
+  .ul-summary-locations {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .ul-summary-location-badge {
+    padding: 4px 8px;
+    background: var(--ul-primary);
+    color: #fff;
+    border-radius: 4px;
+    font-size: 11px;
+  }
+
+  .ul-approval-checkbox {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 12px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+
+  .ul-add-to-cart-3d {
+    width: 100%;
+    padding: 14px;
+    background: var(--ul-primary);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s, opacity 0.2s;
+  }
+
+  .ul-add-to-cart-3d:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .ul-add-to-cart-3d:not(:disabled):hover {
+    background: var(--ul-primary-hover);
+  }
+
+  /* Mobile adjustments */
+  @media (max-width: 600px) {
+    .ul-3d-canvas-wrapper {
+      min-height: 350px;
+    }
+
+    .ul-3d-canvas,
+    .ul-2d-fallback {
+      height: 350px;
+    }
+
+    .ul-location-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+
+<!-- Load core widget first, then 3D module -->
+<script src="{{ 'upload-lift-core.js' | asset_url }}" defer></script>
+<script src="{{ 'upload-lift-3d.js' | asset_url }}" defer></script>
+
+{% else %}
+  <!-- 3D Designer not enabled for this product -->
+{% endif %}
+
+{% schema %}
+{
+  "name": "Upload Lift - 3D Designer",
+  "target": "section",
+  "settings": [
+    {
+      "type": "checkbox",
+      "id": "show_header",
+      "label": "Show section header",
+      "default": true
+    },
+    {
+      "type": "text",
+      "id": "title",
+      "label": "Title",
+      "default": "Customize Your Design"
+    },
+    {
+      "type": "select",
+      "id": "canvas_height",
+      "label": "3D Canvas Height",
+      "options": [
+        { "value": "400", "label": "Small (400px)" },
+        { "value": "500", "label": "Medium (500px)" },
+        { "value": "600", "label": "Large (600px)" }
+      ],
+      "default": "500"
+    }
+  ]
+}
+{% endschema %}
+
