@@ -9,7 +9,7 @@ Group=www-data
 WorkingDirectory=/var/www/upload-lift
 Environment=NODE_ENV=production
 Environment=PORT=3000
-ExecStart=/usr/bin/node build/server/index.js
+ExecStart=/usr/bin/npx remix-serve ./build/server/index.js
 Restart=always
 RestartSec=10
 StandardOutput=journal
