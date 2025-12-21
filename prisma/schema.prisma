@@ -53,7 +53,6 @@ model ProductConfig {
   // Relations
   shop     Shop      @relation(fields: [shopId], references: [id], onDelete: Cascade)
   assetSet AssetSet? @relation(fields: [assetSetId], references: [id])
-  uploads  Upload[]
 
   @@unique([shopId, productId])
   @@map("products_config")
@@ -99,7 +98,6 @@ model Upload {
 
   // Relations
   shop          Shop           @relation(fields: [shopId], references: [id], onDelete: Cascade)
-  productConfig ProductConfig? @relation(fields: [productId], references: [productId])
   items         UploadItem[]
   ordersLink    OrderLink[]
 
