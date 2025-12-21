@@ -264,10 +264,6 @@ export default function WhiteLabelPage() {
                 </BlockStack>
               </Card>
             </Layout.Section>
-                  </InlineStack>
-                </BlockStack>
-              </Card>
-            </Layout.Section>
 
             {/* Branding */}
             <Layout.Section>
