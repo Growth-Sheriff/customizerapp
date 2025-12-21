@@ -1,6 +1,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { getShopFromSession } from "~/lib/session.server";
+import { triggerUploadReceived } from "~/lib/flow.server";
 import prisma from "~/lib/prisma.server";
 import { Queue } from "bullmq";
 import Redis from "ioredis";
@@ -85,6 +86,17 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     await connection.quit();
+
+    // Trigger Flow event
+    await triggerUploadReceived(shop.id, shop.shopDomain, {
+      id: uploadId,
+      mode: upload.mode,
+      productId: upload.productId,
+      variantId: upload.variantId,
+      customerId: upload.customerId,
+      customerEmail: upload.customerEmail,
+      items: upload.items.map((i: { location: string }) => ({ location: i.location })),
+    });
 
     return json({
       success: true,

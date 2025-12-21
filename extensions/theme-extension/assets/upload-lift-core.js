@@ -101,6 +101,7 @@
       checksList: container.querySelector('#ul-checks-list'),
       warningBanner: container.querySelector('#ul-warning-banner'),
       warningText: container.querySelector('#ul-warning-text'),
+      continueWarningsBtn: container.querySelector('#ul-continue-warnings'),
       errorBanner: container.querySelector('#ul-error-banner'),
       errorText: container.querySelector('#ul-error-text'),
       summarySize: container.querySelector('#ul-summary-size'),
@@ -152,6 +153,11 @@
     // Add to cart
     if (elements.addToCartBtn) {
       elements.addToCartBtn.addEventListener('click', handleAddToCart);
+    }
+
+    // Continue with warnings button
+    if (elements.continueWarningsBtn) {
+      elements.continueWarningsBtn.addEventListener('click', handleContinueWithWarnings);
     }
   }
 
@@ -506,6 +512,20 @@
   function handleApprovalChange(e) {
     state.approved = e.target.checked;
     updateAddToCartButton();
+  }
+
+  function handleContinueWithWarnings() {
+    // User acknowledged warnings, proceed to step 4
+    console.log('[Upload Lift] Continuing with warnings');
+
+    // Hide warning banner
+    if (elements.warningBanner) {
+      elements.warningBanner.style.display = 'none';
+    }
+
+    // Unlock confirm step
+    unlockStep(4);
+    updateSummary();
   }
 
   function updateAddToCartButton() {

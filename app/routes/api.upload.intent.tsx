@@ -4,6 +4,7 @@ import { nanoid } from "nanoid";
 import { getShopFromSession, getAccessTokenFromSession } from "~/lib/session.server";
 import { getStorageConfig, getUploadSignedUrl, buildStorageKey } from "~/lib/storage.server";
 import { rateLimitGuard, getIdentifier } from "~/lib/rateLimit.server";
+import { checkUploadAllowed } from "~/lib/billing.server";
 import prisma from "~/lib/prisma.server";
 
 // Plan limits
@@ -56,6 +57,17 @@ export async function action({ request }: ActionFunctionArgs) {
   // Validate mode
   if (!["3d_designer", "classic", "quick"].includes(mode)) {
     return json({ error: "Invalid mode" }, { status: 400 });
+  }
+
+  // Check billing / plan limits
+  const fileSizeMB = fileSize ? fileSize / (1024 * 1024) : 0;
+  const billingCheck = await checkUploadAllowed(shop.id, mode, fileSizeMB);
+
+  if (!billingCheck.allowed) {
+    return json({
+      error: billingCheck.error,
+      code: "BILLING_LIMIT",
+    }, { status: 403 });
   }
 
   // Validate content type

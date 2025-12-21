@@ -1,12 +1,13 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json, redirect } from "@remix-run/node";
-import { useLoaderData, Link } from "@remix-run/react";
+import { useLoaderData } from "@remix-run/react";
 import {
   AppProvider, Page, Layout, Card, Text, BlockStack, Banner,
   DataTable, Badge, Button, InlineStack, Box
 } from "@shopify/polaris";
 import enTranslations from "@shopify/polaris/locales/en.json";
 import { getShopFromSession } from "~/lib/session.server";
+import { getUsageAlerts } from "~/lib/billing.server";
 import prisma from "~/lib/prisma.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -60,6 +61,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
   };
   const monthlyLimit = planLimits[shop.plan] || 100;
 
+  // Get usage alerts
+  const usageAlerts = await getUsageAlerts(shop.id);
+
   return json({
     shop: {
       domain: shop.shopDomain,
@@ -72,17 +76,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
       monthlyLimit,
       productsConfigured,
     },
-    uploads: uploads.map(u => ({
+    usageAlerts,
+    uploads: uploads.map((u: any) => ({
       id: u.id,
       mode: u.mode,
       status: u.status,
       productId: u.productId,
       itemCount: u.items.length,
-      preflightStatus: u.items.some(i => i.preflightStatus === "error")
+      preflightStatus: u.items.some((i: any) => i.preflightStatus === "error")
         ? "error"
-        : u.items.some(i => i.preflightStatus === "warning")
+        : u.items.some((i: any) => i.preflightStatus === "warning")
           ? "warning"
-          : u.items.every(i => i.preflightStatus === "ok")
+          : u.items.every((i: any) => i.preflightStatus === "ok")
             ? "ok"
             : "pending",
       createdAt: u.createdAt.toISOString(),
@@ -110,9 +115,9 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export default function AppDashboard() {
-  const { shop, stats, uploads } = useLoaderData<typeof loader>();
+  const { shop, stats, uploads, usageAlerts } = useLoaderData<typeof loader>();
 
-  const rows = uploads.map(upload => [
+  const rows = uploads.map((upload: any) => [
     upload.id.slice(0, 8) + "...",
     upload.mode,
     <StatusBadge key={upload.id + "-status"} status={upload.status} />,
@@ -125,6 +130,18 @@ export default function AppDashboard() {
     <AppProvider i18n={enTranslations}>
       <Page title="Upload Lift Pro Dashboard">
         <Layout>
+          {/* Usage Alerts */}
+          {usageAlerts && usageAlerts.length > 0 && usageAlerts.map((alert, idx) => (
+            <Layout.Section key={idx}>
+              <Banner tone={alert.type === "critical" ? "critical" : "warning"}>
+                <p>{alert.message}</p>
+                {alert.action && (
+                  <Button url={alert.action.url}>{alert.action.label}</Button>
+                )}
+              </Banner>
+            </Layout.Section>
+          ))}
+
           {/* Welcome Banner */}
           <Layout.Section>
             <Banner title={`Welcome, ${(shop.settings as any)?.shopName || shop.domain}`} tone="success">

@@ -128,6 +128,8 @@ export async function registerWebhooks(shop: string, accessToken: string) {
     { topic: "APP_UNINSTALLED", address: `${shopifyConfig.hostName}/webhooks/app-uninstalled` },
     { topic: "ORDERS_CREATE", address: `${shopifyConfig.hostName}/webhooks/orders-create` },
     { topic: "ORDERS_PAID", address: `${shopifyConfig.hostName}/webhooks/orders-paid` },
+    { topic: "ORDERS_CANCELLED", address: `${shopifyConfig.hostName}/webhooks/orders-cancelled` },
+    { topic: "ORDERS_FULFILLED", address: `${shopifyConfig.hostName}/webhooks/orders-fulfilled` },
     { topic: "PRODUCTS_UPDATE", address: `${shopifyConfig.hostName}/webhooks/products-update` },
     { topic: "PRODUCTS_DELETE", address: `${shopifyConfig.hostName}/webhooks/products-delete` },
   ];

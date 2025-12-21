@@ -15,14 +15,97 @@ import archiver from "archiver";
 import { createWriteStream, mkdirSync, rmSync } from "fs";
 import { join } from "path";
 import { createObjectCsvStringifier } from "csv-writer";
-import {
-  getStorageConfig,
-  downloadFile,
-  uploadFile,
-  getDownloadSignedUrl
-} from "../lib/storage";
+import { S3Client, GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import Redis from "ioredis";
+import fs from "fs/promises";
 
 const prisma = new PrismaClient();
+
+// Redis connection
+const connection = new Redis(process.env.REDIS_URL || "redis://localhost:6379", {
+  maxRetriesPerRequest: null,
+});
+
+// Get S3/R2 client from env
+function getStorageClient(): S3Client {
+  const provider = process.env.STORAGE_PROVIDER || "r2";
+
+  if (provider === "r2") {
+    return new S3Client({
+      region: "auto",
+      endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+      credentials: {
+        accessKeyId: process.env.R2_ACCESS_KEY_ID || "",
+        secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || "",
+      },
+    });
+  }
+
+  return new S3Client({
+    region: process.env.S3_REGION || "us-east-1",
+    credentials: {
+      accessKeyId: process.env.S3_ACCESS_KEY_ID || "",
+      secretAccessKey: process.env.S3_SECRET_ACCESS_KEY || "",
+    },
+  });
+}
+
+function getBucketName(): string {
+  return process.env.R2_BUCKET_NAME || process.env.S3_BUCKET_NAME || "upload-lift";
+}
+
+// Download file from storage
+async function downloadFileFromStorage(key: string, localPath: string): Promise<void> {
+  const client = getStorageClient();
+  const bucket = getBucketName();
+
+  const response = await client.send(new GetObjectCommand({
+    Bucket: bucket,
+    Key: key,
+  }));
+
+  if (!response.Body) {
+    throw new Error("Empty response body");
+  }
+
+  const chunks: Uint8Array[] = [];
+  for await (const chunk of response.Body as AsyncIterable<Uint8Array>) {
+    chunks.push(chunk);
+  }
+
+  await fs.writeFile(localPath, Buffer.concat(chunks));
+}
+
+// Upload file to storage
+async function uploadFileToStorage(key: string, localPath: string, contentType: string): Promise<void> {
+  const client = getStorageClient();
+  const bucket = getBucketName();
+  const content = await fs.readFile(localPath);
+
+  await client.send(new PutObjectCommand({
+    Bucket: bucket,
+    Key: key,
+    Body: content,
+    ContentType: contentType,
+  }));
+}
+
+// Get signed download URL
+async function getSignedDownloadUrl(key: string, expiresIn: number = 86400): Promise<string> {
+  const client = getStorageClient();
+  const bucket = getBucketName();
+
+  return getSignedUrl(client, new GetObjectCommand({
+    Bucket: bucket,
+    Key: key,
+  }), { expiresIn });
+}
+
+// Helper function to get storage config from shop
+function getStorageConfig(shopConfig: any): any {
+  return shopConfig || {};
+}
 
 interface ExportJobData {
   jobId: string;
@@ -130,8 +213,10 @@ async function processExportJob(job: Job<ExportJobData>) {
 
           for (const item of upload.items) {
             try {
-              // Download original file from storage
-              const fileBuffer = await downloadFile(storageConfig, item.storageKey);
+              // Download original file from storage to temp
+              const localFilePath = join(tempDir, `temp_${item.id}`);
+              await downloadFileFromStorage(item.storageKey, localFilePath);
+              const fileBuffer = await fs.readFile(localFilePath);
 
               // Determine file extension
               const ext = item.originalName?.split(".").pop() || "png";
@@ -203,13 +288,12 @@ async function processExportJob(job: Job<ExportJobData>) {
     });
 
     // Upload ZIP to storage
-    const zipBuffer = require("fs").readFileSync(zipPath);
     const zipStorageKey = `${shop.shopDomain}/exports/${zipFileName}`;
 
-    await uploadFile(storageConfig, zipStorageKey, zipBuffer, "application/zip");
+    await uploadFileToStorage(zipStorageKey, zipPath, "application/zip");
 
     // Get download URL (24 hour expiry)
-    const downloadUrl = await getDownloadSignedUrl(storageConfig, zipStorageKey, 24 * 60 * 60);
+    const downloadUrl = await getSignedDownloadUrl(zipStorageKey, 24 * 60 * 60);
 
     // Update export job
     await prisma.exportJob.update({

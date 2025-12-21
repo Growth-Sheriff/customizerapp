@@ -6,7 +6,7 @@ import {
   Button, Banner, TextField, Checkbox, Box
 } from "@shopify/polaris";
 import enTranslations from "@shopify/polaris/locales/en.json";
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { getShopFromSession } from "~/lib/session.server";
 import prisma from "~/lib/prisma.server";
 
