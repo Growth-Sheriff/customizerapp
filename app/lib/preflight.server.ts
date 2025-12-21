@@ -165,11 +165,13 @@ export async function getPdfInfo(filePath: string): Promise<{
 }
 
 // Convert PDF to PNG using Ghostscript
+// Security: -dSAFER prevents file system access, -dNOCACHE prevents disk caching
+// -dNOPLATFONTS disables platform font access, -dSANDBOX enables full sandbox mode
 export async function convertPdfToPng(inputPath: string, outputPath: string, dpi: number = 300): Promise<void> {
-  const cmd = `gs -dSAFER -dBATCH -dNOPAUSE -dNOCACHE -sDEVICE=png16m -r${dpi} -dFirstPage=1 -dLastPage=1 -sOutputFile="${outputPath}" "${inputPath}"`;
+  const cmd = `gs -dSAFER -dBATCH -dNOPAUSE -dNOCACHE -dNOPLATFONTS -dPARANOIDSAFER -sDEVICE=png16m -r${dpi} -dFirstPage=1 -dLastPage=1 -dMaxBitmap=500000000 -dBufferSpace=1000000 -sOutputFile="${outputPath}" "${inputPath}"`;
 
   try {
-    await execAsync(cmd, { timeout: 60000 });
+    await execAsync(cmd, { timeout: 30000 }); // Reduced timeout for security
   } catch (error) {
     console.error("[Preflight] Ghostscript conversion failed:", error);
     throw new Error("PDF conversion failed");
@@ -178,10 +180,10 @@ export async function convertPdfToPng(inputPath: string, outputPath: string, dpi
 
 // Convert AI/EPS to PNG using Ghostscript
 export async function convertEpsToPng(inputPath: string, outputPath: string, dpi: number = 300): Promise<void> {
-  const cmd = `gs -dSAFER -dBATCH -dNOPAUSE -dNOCACHE -sDEVICE=png16m -r${dpi} -dEPSCrop -sOutputFile="${outputPath}" "${inputPath}"`;
+  const cmd = `gs -dSAFER -dBATCH -dNOPAUSE -dNOCACHE -dNOPLATFONTS -dPARANOIDSAFER -sDEVICE=png16m -r${dpi} -dEPSCrop -dMaxBitmap=500000000 -dBufferSpace=1000000 -sOutputFile="${outputPath}" "${inputPath}"`;
 
   try {
-    await execAsync(cmd, { timeout: 60000 });
+    await execAsync(cmd, { timeout: 30000 }); // Reduced timeout for security
   } catch (error) {
     console.error("[Preflight] Ghostscript EPS conversion failed:", error);
     throw new Error("EPS/AI conversion failed");

@@ -3,6 +3,7 @@ import { json } from "@remix-run/node";
 import { nanoid } from "nanoid";
 import { getShopFromSession, getAccessTokenFromSession } from "~/lib/session.server";
 import { getStorageConfig, getUploadSignedUrl, buildStorageKey } from "~/lib/storage.server";
+import { rateLimitGuard, getIdentifier } from "~/lib/rateLimit.server";
 import prisma from "~/lib/prisma.server";
 
 // Plan limits
@@ -19,6 +20,13 @@ const PLAN_LIMITS = {
 export async function action({ request }: ActionFunctionArgs) {
   if (request.method !== "POST") {
     return json({ error: "Method not allowed" }, { status: 405 });
+  }
+
+  // Rate limit check (10/min per customer)
+  const identifier = getIdentifier(request, "customer");
+  const rateLimitResponse = await rateLimitGuard(identifier, "uploadIntent");
+  if (rateLimitResponse) {
+    return rateLimitResponse;
   }
 
   const shopDomain = await getShopFromSession(request);

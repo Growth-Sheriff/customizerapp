@@ -1,0 +1,31 @@
+[Unit]
+Description=Upload Lift Pro - Preflight Worker
+After=network.target redis.service postgresql.service upload-lift.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/upload-lift
+ExecStart=/usr/bin/pnpm run worker:preflight
+Restart=always
+RestartSec=5
+
+# Environment
+Environment=NODE_ENV=production
+EnvironmentFile=/var/www/upload-lift/.env
+
+# Logging
+StandardOutput=append:/var/log/upload-lift/preflight-worker.log
+StandardError=append:/var/log/upload-lift/preflight-worker-error.log
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/var/www/upload-lift/temp /var/log/upload-lift
+
+[Install]
+WantedBy=multi-user.target
+
