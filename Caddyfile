@@ -1,4 +1,4 @@
-customizerapp.avrasya360.com {
+customizerapp.dev {
     reverse_proxy localhost:3000
 
     encode gzip

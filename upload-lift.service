@@ -4,12 +4,12 @@ After=network.target postgresql.service redis-server.service
 
 [Service]
 Type=simple
-User=www-data
-Group=www-data
+User=root
+Group=root
 WorkingDirectory=/var/www/upload-lift
 Environment=NODE_ENV=production
 Environment=PORT=3000
-ExecStart=/usr/bin/npx remix-serve ./build/server/index.js
+ExecStart=/usr/bin/pnpm start
 Restart=always
 RestartSec=10
 StandardOutput=journal
