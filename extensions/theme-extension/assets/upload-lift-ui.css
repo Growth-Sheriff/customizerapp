@@ -1,0 +1,193 @@
+/* Upload Lift Pro - UI Styles */
+
+:root {
+  --ul-primary: #5c6ac4;
+  --ul-primary-hover: #4c5bb3;
+  --ul-success: #50b83c;
+  --ul-warning: #f49342;
+  --ul-error: #de3618;
+  --ul-border: #dfe3e8;
+  --ul-bg: #f9fafb;
+  --ul-text: #212b36;
+  --ul-text-subdued: #637381;
+}
+
+/* Common Components */
+.ul-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, opacity 0.2s, transform 0.1s;
+}
+
+.ul-btn:active {
+  transform: scale(0.98);
+}
+
+.ul-btn-primary {
+  background: var(--ul-primary);
+  color: #fff;
+}
+
+.ul-btn-primary:hover {
+  background: var(--ul-primary-hover);
+}
+
+.ul-btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ul-btn-secondary {
+  background: #fff;
+  color: var(--ul-text);
+  border: 1px solid var(--ul-border);
+}
+
+.ul-btn-secondary:hover {
+  background: var(--ul-bg);
+}
+
+/* Badge */
+.ul-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ul-badge-ok {
+  background: rgba(80, 184, 60, 0.15);
+  color: var(--ul-success);
+}
+
+.ul-badge-warning {
+  background: rgba(244, 147, 66, 0.15);
+  color: var(--ul-warning);
+}
+
+.ul-badge-error {
+  background: rgba(222, 54, 24, 0.15);
+  color: var(--ul-error);
+}
+
+.ul-badge-pending {
+  background: rgba(99, 115, 129, 0.15);
+  color: var(--ul-text-subdued);
+}
+
+/* Toast */
+.ul-toast {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%) translateY(100px);
+  padding: 12px 20px;
+  background: var(--ul-text);
+  color: #fff;
+  border-radius: 8px;
+  font-size: 14px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  z-index: 9999;
+  opacity: 0;
+  transition: transform 0.3s, opacity 0.3s;
+}
+
+.ul-toast.visible {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+}
+
+.ul-toast-success {
+  background: var(--ul-success);
+}
+
+.ul-toast-error {
+  background: var(--ul-error);
+}
+
+/* Spinner */
+.ul-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--ul-border);
+  border-top-color: var(--ul-primary);
+  border-radius: 50%;
+  animation: ul-spin 0.8s linear infinite;
+}
+
+@keyframes ul-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Card */
+.ul-card {
+  background: #fff;
+  border: 1px solid var(--ul-border);
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.ul-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.ul-card-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+  .ul-size-options {
+    grid-template-columns: 1fr !important;
+  }
+
+  .ul-preview-container {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Accessibility */
+.ul-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Focus styles */
+.ul-btn:focus-visible,
+.ul-size-btn:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--ul-primary);
+  outline-offset: 2px;
+}
+
+/* Print styles - hide upload UI */
+@media print {
+  .upload-lift-container,
+  .ul-quick-grid {
+    display: none !important;
+  }
+}
+

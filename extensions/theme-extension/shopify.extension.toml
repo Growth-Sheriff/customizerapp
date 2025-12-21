@@ -1,0 +1,26 @@
+api_version = "2025-10"
+type = "theme_app_extension"
+
+[[extensions.blocks]]
+name = "Upload Lift - Classic Upload"
+type = "classic-upload"
+handle = "classic-upload"
+
+[[extensions.blocks]]
+name = "Upload Lift - Quick Upload Grid"
+type = "quick-upload-grid"
+handle = "quick-upload-grid"
+
+[[extensions.blocks]]
+name = "Upload Lift - Cart Preview"
+type = "cart-preview"
+handle = "cart-preview"
+
+[[extensions.assets]]
+handle = "upload-lift-core"
+source = "upload-lift-core.js"
+
+[[extensions.assets]]
+handle = "upload-lift-ui"
+source = "upload-lift-ui.css"
+

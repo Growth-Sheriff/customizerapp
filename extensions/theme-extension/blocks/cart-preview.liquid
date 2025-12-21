@@ -1,0 +1,141 @@
+{% comment %}
+  Upload Lift Pro - Cart Preview Block
+  Shows upload previews in cart line items
+{% endcomment %}
+
+{% for item in cart.items %}
+  {% assign upload_id = item.properties['_upload_lift_id'] %}
+  {% assign upload_preview = item.properties['_upload_lift_preview'] %}
+  {% assign upload_mode = item.properties['_upload_lift_mode'] %}
+  {% assign design_size = item.properties['Design Size'] %}
+  {% assign design_file = item.properties['Design File'] %}
+
+  {% if upload_id %}
+  <div class="ul-cart-preview" data-line-item-key="{{ item.key }}" data-upload-id="{{ upload_id }}">
+    <div class="ul-cart-preview-image">
+      {% if upload_preview != blank %}
+        <img src="{{ upload_preview }}" alt="Design Preview" loading="lazy">
+      {% else %}
+        <div class="ul-cart-preview-placeholder">
+          <svg viewBox="0 0 24 24" width="32" height="32">
+            <path fill="currentColor" d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/>
+          </svg>
+        </div>
+      {% endif %}
+    </div>
+
+    <div class="ul-cart-preview-details">
+      <div class="ul-cart-preview-badge ul-badge-{{ upload_mode }}">
+        {% case upload_mode %}
+          {% when '3d_designer' %}
+            3D Designer
+          {% when 'classic' %}
+            Custom Print
+          {% when 'quick' %}
+            Quick Upload
+          {% else %}
+            Custom Design
+        {% endcase %}
+      </div>
+
+      {% if design_size != blank %}
+        <p class="ul-cart-preview-size">
+          <strong>Size:</strong> {{ design_size }}
+        </p>
+      {% endif %}
+
+      {% if design_file != blank %}
+        <p class="ul-cart-preview-file">
+          <strong>File:</strong> {{ design_file | truncate: 30 }}
+        </p>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+{% endfor %}
+
+<style>
+  .ul-cart-preview {
+    display: flex;
+    gap: 12px;
+    padding: 12px;
+    background: #f9fafb;
+    border-radius: 8px;
+    margin-top: 8px;
+  }
+
+  .ul-cart-preview-image {
+    width: 80px;
+    height: 80px;
+    border-radius: 4px;
+    overflow: hidden;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #dfe3e8;
+  }
+
+  .ul-cart-preview-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .ul-cart-preview-placeholder {
+    color: #919eab;
+  }
+
+  .ul-cart-preview-details {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .ul-cart-preview-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    width: fit-content;
+  }
+
+  .ul-badge-3d_designer {
+    background: #5c6ac4;
+    color: #fff;
+  }
+
+  .ul-badge-classic {
+    background: #47c1bf;
+    color: #fff;
+  }
+
+  .ul-badge-quick {
+    background: #9c6ade;
+    color: #fff;
+  }
+
+  .ul-cart-preview-size,
+  .ul-cart-preview-file {
+    margin: 0;
+    font-size: 13px;
+    color: #454f5b;
+  }
+
+  .ul-cart-preview-size strong,
+  .ul-cart-preview-file strong {
+    color: #212b36;
+  }
+</style>
+
+{% schema %}
+{
+  "name": "Upload Lift - Cart Preview",
+  "target": "section",
+  "settings": []
+}
+{% endschema %}
+
