@@ -1,28 +1,34 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
-import { json, redirect } from "@remix-run/node";
+import { json } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 import {
-  AppProvider, Page, Layout, Card, Text, BlockStack, Banner,
+  Page, Layout, Card, Text, BlockStack, Banner,
   DataTable, Badge, Button, InlineStack, Box
 } from "@shopify/polaris";
-import enTranslations from "@shopify/polaris/locales/en.json";
-import { getShopFromSession } from "~/lib/session.server";
+import { authenticate } from "~/shopify.server";
 import { getUsageAlerts } from "~/lib/billing.server";
 import prisma from "~/lib/prisma.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const shopDomain = await getShopFromSession(request);
+  const { session } = await authenticate.admin(request);
+  const shopDomain = session.shop;
 
-  if (!shopDomain) {
-    return redirect("/auth/install");
-  }
-
-  const shop = await prisma.shop.findUnique({
+  let shop = await prisma.shop.findUnique({
     where: { shopDomain },
   });
 
+  // Create shop if not exists
   if (!shop) {
-    return redirect("/auth/install");
+    shop = await prisma.shop.create({
+      data: {
+        shopDomain,
+        accessToken: session.accessToken || "",
+        plan: "free",
+        billingStatus: "active",
+        storageProvider: "r2",
+        settings: {},
+      },
+    });
   }
 
   // Get uploads
@@ -127,9 +133,8 @@ export default function AppDashboard() {
   ]);
 
   return (
-    <AppProvider i18n={enTranslations}>
-      <Page title="Upload Lift Pro Dashboard">
-        <Layout>
+    <Page title="Upload Lift Pro Dashboard">
+      <Layout>
           {/* Usage Alerts */}
           {usageAlerts && usageAlerts.length > 0 && usageAlerts.map((alert, idx) => (
             <Layout.Section key={idx}>
@@ -238,8 +243,7 @@ export default function AppDashboard() {
             </Card>
           </Layout.Section>
         </Layout>
-      </Page>
-    </AppProvider>
+    </Page>
   );
 }
 
