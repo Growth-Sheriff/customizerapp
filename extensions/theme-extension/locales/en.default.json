@@ -1,0 +1,26 @@
+                                                                                                                                                                                                                                                                                                                                  {
+  "upload_lift": {
+    "customize_design": "Customize Your Design",
+    "3d_description": "Upload your design and see it on the product in real-time 3D",
+    "select_location": "Select Print Location",
+    "upload_design": "Upload Your Design",
+    "adjust_design": "Adjust Design",
+    "confirm": "Confirm & Add",
+    "approval_text": "I confirm my design is print-ready",
+    "add_to_cart": "Add to Cart",
+    "select_size": "Select Print Size",
+    "drag_drop": "Drag & drop your file here",
+    "browse_files": "Browse Files",
+    "preview_validate": "Preview & Validation",
+    "continue_with_warnings": "Continue with Warnings",
+    "confirm_add": "Confirm & Add to Cart",
+    "front": "Front",
+    "back": "Back",
+    "left_sleeve": "Left Sleeve",
+    "right_sleeve": "Right Sleeve",
+    "small": "Small",
+    "medium": "Medium",
+    "large": "Large",
+    "custom": "Custom Size"
+  }
+}

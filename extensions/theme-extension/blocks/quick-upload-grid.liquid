@@ -18,7 +18,7 @@
     >
       <div class="ul-quick-item-image">
         {% if product.featured_image %}
-          <img src="{{ product.featured_image | image_url: width: 300 }}" alt="{{ product.title }}" loading="lazy">
+          <img src="{{ product.featured_image | image_url: width: 300 }}" alt="{{ product.title }}" width="300" height="300" loading="lazy">
         {% endif %}
 
         <div class="ul-quick-overlay">
@@ -183,7 +183,7 @@
 
 {% schema %}
 {
-  "name": "Upload Lift - Quick Grid",
+  "name": "UL Quick Grid",
   "target": "section",
   "settings": [
     {

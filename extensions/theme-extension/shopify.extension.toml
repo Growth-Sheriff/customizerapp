@@ -1,35 +1,9 @@
-api_version = "2025-10"
-type = "theme_app_extension"
+api_version = "2025-01"
 
-[[extensions.blocks]]
-name = "Upload Lift - 3D Designer"
-type = "3d-designer"
-handle = "3d-designer"
+[[extensions]]
+uid = "a15fda35-486a-d53f-7288-b233dc6fe3900fa8210e"
+type = "theme"
+name = "Upload Lift Theme Extension"
+handle = "upload-lift-theme"
 
-[[extensions.blocks]]
-name = "Upload Lift - Classic Upload"
-type = "classic-upload"
-handle = "classic-upload"
-
-[[extensions.blocks]]
-name = "Upload Lift - Quick Upload Grid"
-type = "quick-upload-grid"
-handle = "quick-upload-grid"
-
-[[extensions.blocks]]
-name = "Upload Lift - Cart Preview"
-type = "cart-preview"
-handle = "cart-preview"
-
-[[extensions.assets]]
-handle = "upload-lift-core"
-source = "upload-lift-core.js"
-
-[[extensions.assets]]
-handle = "upload-lift-3d"
-source = "upload-lift-3d.js"
-
-[[extensions.assets]]
-handle = "upload-lift-ui"
-source = "upload-lift-ui.css"
 

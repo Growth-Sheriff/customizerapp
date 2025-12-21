@@ -55,7 +55,7 @@
       <!-- 2D Fallback (Mobile) -->
       <div id="ul-2d-fallback" class="ul-2d-fallback" style="display: none;">
         <div class="ul-2d-preview-container">
-          <img id="ul-2d-product-image" src="{{ product.featured_image | image_url: width: 600 }}" alt="{{ product.title }}">
+          <img id="ul-2d-product-image" src="{{ product.featured_image | image_url: width: 600 }}" alt="{{ product.title }}" width="600" height="600">
           <div id="ul-2d-design-overlay" class="ul-2d-design-overlay"></div>
         </div>
       </div>
@@ -138,7 +138,7 @@
 
           <!-- Uploaded Design Preview -->
           <div class="ul-design-preview" id="ul-design-preview" style="display: none;">
-            <img id="ul-design-thumbnail" src="" alt="Design">
+            <img id="ul-design-thumbnail" src="" alt="Design" width="60" height="60">
             <div class="ul-design-info">
               <span id="ul-design-name">design.png</span>
               <button type="button" class="ul-remove-design" id="ul-remove-design">×</button>
@@ -698,7 +698,7 @@
 
 {% schema %}
 {
-  "name": "Upload Lift - 3D Designer",
+  "name": "UL 3D Designer",
   "target": "section",
   "settings": [
     {

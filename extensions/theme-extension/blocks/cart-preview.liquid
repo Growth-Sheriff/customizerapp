@@ -14,7 +14,7 @@
   <div class="ul-cart-preview" data-line-item-key="{{ item.key }}" data-upload-id="{{ upload_id }}">
     <div class="ul-cart-preview-image">
       {% if upload_preview != blank %}
-        <img src="{{ upload_preview }}" alt="Design Preview" loading="lazy">
+        <img src="{{ upload_preview }}" alt="Design Preview" width="80" height="80" loading="lazy">
       {% else %}
         <div class="ul-cart-preview-placeholder">
           <svg viewBox="0 0 24 24" width="32" height="32">
@@ -133,7 +133,7 @@
 
 {% schema %}
 {
-  "name": "Upload Lift - Cart Preview",
+  "name": "UL Cart Preview",
   "target": "section",
   "settings": []
 }
