@@ -173,10 +173,13 @@ export default function AppDashboard() {
             <Card>
               <BlockStack gap="400">
                 <Text as="h2" variant="headingMd">Quick Actions</Text>
-                <InlineStack gap="300">
+                <InlineStack gap="300" wrap>
                   <Button url="/app/products">Configure Products</Button>
-                  <Button url="/app/settings">Settings</Button>
+                  <Button url="/app/asset-sets">Asset Sets (3D)</Button>
                   <Button url="/app/queue">Production Queue</Button>
+                  <Button url="/app/analytics">Analytics</Button>
+                  <Button url="/app/exports">Exports</Button>
+                  <Button url="/app/settings">Settings</Button>
                 </InlineStack>
               </BlockStack>
             </Card>

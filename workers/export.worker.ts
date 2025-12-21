@@ -1,0 +1,288 @@
+/**
+ * Export Worker
+ * Creates ZIP archives of approved uploads with manifest
+ *
+ * Job Payload:
+ * {
+ *   jobId: string,
+ *   shopId: string
+ * }
+ */
+
+import { Worker, Job } from "bullmq";
+import { PrismaClient } from "@prisma/client";
+import archiver from "archiver";
+import { createWriteStream, mkdirSync, rmSync } from "fs";
+import { join } from "path";
+import { createObjectCsvStringifier } from "csv-writer";
+import {
+  getStorageConfig,
+  downloadFile,
+  uploadFile,
+  getDownloadSignedUrl
+} from "../lib/storage";
+
+const prisma = new PrismaClient();
+
+interface ExportJobData {
+  jobId: string;
+  shopId: string;
+}
+
+interface ManifestRow {
+  orderId: string;
+  uploadId: string;
+  location: string;
+  fileName: string;
+  originalName: string;
+  dpi: string;
+  dimensions: string;
+  preflightStatus: string;
+}
+
+async function processExportJob(job: Job<ExportJobData>) {
+  const { jobId, shopId } = job.data;
+
+  console.log(`[Export Worker] Starting job ${jobId}`);
+
+  try {
+    // Get export job
+    const exportJob = await prisma.exportJob.findFirst({
+      where: { id: jobId, shopId },
+    });
+
+    if (!exportJob) {
+      throw new Error("Export job not found");
+    }
+
+    // Update status to processing
+    await prisma.exportJob.update({
+      where: { id: jobId },
+      data: { status: "processing" },
+    });
+
+    // Get shop for storage config
+    const shop = await prisma.shop.findUnique({
+      where: { id: shopId },
+    });
+
+    if (!shop) {
+      throw new Error("Shop not found");
+    }
+
+    const storageConfig = getStorageConfig(shop.storageConfig as any);
+
+    // Get uploads with items
+    const uploads = await prisma.upload.findMany({
+      where: {
+        id: { in: exportJob.uploadIds },
+        shopId,
+      },
+      include: {
+        items: true,
+        ordersLink: {
+          select: { orderId: true, lineItemId: true },
+        },
+      },
+    });
+
+    if (uploads.length === 0) {
+      throw new Error("No uploads found");
+    }
+
+    // Create temp directory
+    const tempDir = join(process.cwd(), "temp", `export_${jobId}`);
+    mkdirSync(tempDir, { recursive: true });
+
+    const manifestRows: ManifestRow[] = [];
+    const dateStr = new Date().toISOString().split("T")[0];
+    const zipFileName = `export_${dateStr}_${jobId.slice(0, 8)}.zip`;
+    const zipPath = join(tempDir, zipFileName);
+
+    // Create ZIP archive
+    const archive = archiver("zip", { zlib: { level: 5 } });
+    const output = createWriteStream(zipPath);
+
+    await new Promise<void>((resolve, reject) => {
+      output.on("close", resolve);
+      output.on("error", reject);
+      archive.on("error", reject);
+      archive.pipe(output);
+
+      // Process each upload
+      (async () => {
+        for (const upload of uploads) {
+          const orderId = upload.ordersLink[0]?.orderId || upload.orderId || "no_order";
+          const orderFolder = `order_${orderId.slice(-8)}`;
+
+          // Create metadata for this upload
+          const metadata = {
+            uploadId: upload.id,
+            orderId,
+            mode: upload.mode,
+            customerId: upload.customerId,
+            customerEmail: upload.customerEmail,
+            status: upload.status,
+            createdAt: upload.createdAt.toISOString(),
+            approvedAt: upload.approvedAt?.toISOString() || null,
+            items: [] as any[],
+          };
+
+          for (const item of upload.items) {
+            try {
+              // Download original file from storage
+              const fileBuffer = await downloadFile(storageConfig, item.storageKey);
+
+              // Determine file extension
+              const ext = item.originalName?.split(".").pop() || "png";
+              const fileName = `${item.location}_design.${ext}`;
+
+              // Add to archive
+              archive.append(fileBuffer, { name: `${orderFolder}/${fileName}` });
+
+              // Add to metadata
+              const preflightResult = item.preflightResult as any || {};
+              metadata.items.push({
+                location: item.location,
+                fileName,
+                originalName: item.originalName,
+                transform: item.transform,
+                preflight: preflightResult,
+              });
+
+              // Add to manifest
+              manifestRows.push({
+                orderId,
+                uploadId: upload.id,
+                location: item.location,
+                fileName,
+                originalName: item.originalName || "",
+                dpi: preflightResult.dpi?.toString() || "",
+                dimensions: preflightResult.dimensions
+                  ? `${preflightResult.dimensions.width}x${preflightResult.dimensions.height}`
+                  : "",
+                preflightStatus: item.preflightStatus,
+              });
+
+              console.log(`[Export Worker] Added ${fileName} for order ${orderId}`);
+            } catch (error) {
+              console.error(`[Export Worker] Failed to process item ${item.id}:`, error);
+            }
+          }
+
+          // Add metadata.json for this order
+          archive.append(JSON.stringify(metadata, null, 2), {
+            name: `${orderFolder}/metadata.json`,
+          });
+
+          // Report progress
+          const progress = Math.round((uploads.indexOf(upload) + 1) / uploads.length * 100);
+          await job.updateProgress(progress);
+        }
+
+        // Generate manifest CSV
+        const csvStringifier = createObjectCsvStringifier({
+          header: [
+            { id: "orderId", title: "Order ID" },
+            { id: "uploadId", title: "Upload ID" },
+            { id: "location", title: "Location" },
+            { id: "fileName", title: "File Name" },
+            { id: "originalName", title: "Original Name" },
+            { id: "dpi", title: "DPI" },
+            { id: "dimensions", title: "Dimensions" },
+            { id: "preflightStatus", title: "Preflight Status" },
+          ],
+        });
+
+        const csvContent = csvStringifier.getHeaderString() + csvStringifier.stringifyRecords(manifestRows);
+        archive.append(csvContent, { name: "manifest.csv" });
+
+        // Finalize archive
+        await archive.finalize();
+      })();
+    });
+
+    // Upload ZIP to storage
+    const zipBuffer = require("fs").readFileSync(zipPath);
+    const zipStorageKey = `${shop.shopDomain}/exports/${zipFileName}`;
+
+    await uploadFile(storageConfig, zipStorageKey, zipBuffer, "application/zip");
+
+    // Get download URL (24 hour expiry)
+    const downloadUrl = await getDownloadSignedUrl(storageConfig, zipStorageKey, 24 * 60 * 60);
+
+    // Update export job
+    await prisma.exportJob.update({
+      where: { id: jobId },
+      data: {
+        status: "completed",
+        downloadUrl,
+        completedAt: new Date(),
+      },
+    });
+
+    // Cleanup temp files
+    rmSync(tempDir, { recursive: true, force: true });
+
+    console.log(`[Export Worker] Job ${jobId} completed. Files: ${uploads.length}`);
+
+    return {
+      success: true,
+      filesCount: manifestRows.length,
+      downloadUrl,
+    };
+
+  } catch (error) {
+    console.error(`[Export Worker] Job ${jobId} failed:`, error);
+
+    // Update job status to failed
+    await prisma.exportJob.update({
+      where: { id: jobId },
+      data: { status: "failed" },
+    });
+
+    throw error;
+  }
+}
+
+// Create worker
+export function createExportWorker(redisConnection: { host: string; port: number }) {
+  const worker = new Worker<ExportJobData>(
+    "export",
+    processExportJob,
+    {
+      connection: redisConnection,
+      concurrency: 2,
+      limiter: {
+        max: 5,
+        duration: 60000, // 5 jobs per minute
+      },
+    }
+  );
+
+  worker.on("completed", (job, result) => {
+    console.log(`[Export Worker] Job ${job.id} completed:`, result);
+  });
+
+  worker.on("failed", (job, error) => {
+    console.error(`[Export Worker] Job ${job?.id} failed:`, error.message);
+  });
+
+  worker.on("progress", (job, progress) => {
+    console.log(`[Export Worker] Job ${job.id} progress: ${progress}%`);
+  });
+
+  return worker;
+}
+
+// Standalone execution
+if (require.main === module) {
+  const redisConnection = {
+    host: process.env.REDIS_HOST || "localhost",
+    port: parseInt(process.env.REDIS_PORT || "6379"),
+  };
+
+  const worker = createExportWorker(redisConnection);
+  console.log("[Export Worker] Started and waiting for jobs...");
+}
+
