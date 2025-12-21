@@ -11,12 +11,31 @@ export async function loader({ request }: LoaderFunctionArgs) {
   if (!shopDomain) {
     // Check if this is a Shopify embedded app request
     const url = new URL(request.url);
-    const shop = url.searchParams.get("shop");
+or     let shop = url.searchParams.get("shop");
 
-    if (shop) {
-      return redirect(`/auth/install?shop=${shop}`);
+    // Try to get shop from Referer header if not in URL
+    if (!shop) {
+      const referer = request.headers.get("Referer");
+      if (referer) {
+        try {
+          const refererUrl = new URL(referer);
+          // Extract shop from Shopify admin URL
+          // Format: https://admin.shopify.com/store/shop-name/apps/...
+          const match = refererUrl.pathname.match(/\/store\/([^\/]+)\//);
+          if (match) {
+            shop = `${match[1]}.myshopify.com`;
+          }
+        } catch (e) {
+          // Invalid referer URL
+        }
+      }
     }
 
+    if (shop) {
+      return redirect(`/auth/install?shop=${encodeURIComponent(shop)}`);
+    }
+
+    // No shop found - redirect to install page
     return redirect("/");
   }
 
