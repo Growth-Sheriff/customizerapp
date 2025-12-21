@@ -11,7 +11,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   if (!shopDomain) {
     // Check if this is a Shopify embedded app request
     const url = new URL(request.url);
-or     let shop = url.searchParams.get("shop");
+    let shop = url.searchParams.get("shop");
 
     // Try to get shop from Referer header if not in URL
     if (!shop) {
