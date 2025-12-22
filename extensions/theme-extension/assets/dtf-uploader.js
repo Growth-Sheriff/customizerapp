@@ -640,10 +640,27 @@
 
     /**
      * Upload file to storage with progress tracking
+     * Supports: R2/S3 (signed URL PUT), Shopify (two-phase), Local (POST)
      */
-    uploadToStorage(productId, file, intentData) {
+    async uploadToStorage(productId, file, intentData) {
       const instance = this.instances[productId];
-      const { elements } = instance;
+      const { elements, apiBase, shopDomain } = instance;
+
+      // Shopify Files API - two-phase upload
+      if (intentData.isShopify) {
+        return this.uploadToShopify(productId, file, intentData);
+      }
+
+      // Local upload - POST with FormData
+      if (intentData.isLocal) {
+        return this.uploadToLocal(productId, file, intentData);
+      }
+
+      // R2/S3 - Direct PUT to signed URL
+      const uploadUrl = intentData.uploadUrl || intentData.signedUrl;
+      if (!uploadUrl) {
+        throw new Error('No upload URL provided');
+      }
 
       return new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
@@ -667,9 +684,124 @@
         xhr.addEventListener('error', () => reject(new Error('Network error during upload')));
         xhr.addEventListener('abort', () => reject(new Error('Upload cancelled')));
 
-        xhr.open('PUT', intentData.signedUrl);
+        xhr.open('PUT', uploadUrl);
         xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
         xhr.send(file);
+      });
+    },
+
+    /**
+     * Upload to Shopify Files API (two-phase)
+     */
+    async uploadToShopify(productId, file, intentData) {
+      const instance = this.instances[productId];
+      const { elements, apiBase, shopDomain } = instance;
+
+      // Phase 1: Get staged upload URL from Shopify
+      elements.progressText.textContent = 'Preparing Shopify upload...';
+      
+      const stagedResponse = await fetch(`${apiBase}/api/upload/shopify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'get_staged_url',
+          shopDomain,
+          fileName: file.name,
+          fileSize: file.size,
+          mimeType: file.type || 'application/octet-stream'
+        })
+      });
+
+      if (!stagedResponse.ok) {
+        const err = await stagedResponse.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to get Shopify upload URL');
+      }
+
+      const stagedData = await stagedResponse.json();
+      
+      // Phase 2: Upload to Shopify's staged URL
+      elements.progressText.textContent = 'Uploading to Shopify...';
+      
+      const formData = new FormData();
+      // Add parameters first
+      if (stagedData.parameters) {
+        for (const param of stagedData.parameters) {
+          formData.append(param.name, param.value);
+        }
+      }
+      // Add file last
+      formData.append('file', file);
+
+      const uploadResponse = await fetch(stagedData.stagedUrl, {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error(`Shopify upload failed (${uploadResponse.status})`);
+      }
+
+      elements.progressFill.style.width = '70%';
+      elements.progressText.textContent = 'Creating file...';
+
+      // Phase 3: Create file in Shopify
+      const createResponse = await fetch(`${apiBase}/api/upload/shopify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'create_file',
+          shopDomain,
+          resourceUrl: stagedData.resourceUrl,
+          fileName: file.name,
+          mimeType: file.type || 'application/octet-stream'
+        })
+      });
+
+      if (!createResponse.ok) {
+        const err = await createResponse.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to create Shopify file');
+      }
+
+      return createResponse.json();
+    },
+
+    /**
+     * Upload to local storage (POST with FormData)
+     */
+    async uploadToLocal(productId, file, intentData) {
+      const instance = this.instances[productId];
+      const { elements } = instance;
+
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('key', intentData.key);
+      formData.append('uploadId', intentData.uploadId);
+      formData.append('itemId', intentData.itemId);
+
+      return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+
+        xhr.upload.addEventListener('progress', (e) => {
+          if (e.lengthComputable) {
+            const percent = 15 + ((e.loaded / e.total) * 60);
+            elements.progressFill.style.width = `${percent}%`;
+            elements.progressText.textContent = `Uploading... ${Math.round((e.loaded / e.total) * 100)}%`;
+          }
+        });
+
+        xhr.addEventListener('load', () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve();
+          } else {
+            reject(new Error(`Upload failed (${xhr.status})`));
+          }
+        });
+
+        xhr.addEventListener('error', () => reject(new Error('Network error during upload')));
+        xhr.addEventListener('abort', () => reject(new Error('Upload cancelled')));
+
+        xhr.open('POST', intentData.uploadUrl);
+        xhr.send(formData);
       });
     },
 
