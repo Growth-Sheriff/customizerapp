@@ -13,7 +13,7 @@ export const PLAN_LIMITS = {
   free: {
     uploadsPerMonth: 100,
     maxFileSizeMB: 25,
-    modes: ["classic"],
+    modes: ["classic", "dtf"], // dtf allowed for free users
     features: {
       "3d_designer": false,
       "quick_upload": false,
@@ -28,7 +28,7 @@ export const PLAN_LIMITS = {
   starter: {
     uploadsPerMonth: 1000,
     maxFileSizeMB: 50,
-    modes: ["classic", "quick"],
+    modes: ["classic", "quick", "dtf"],
     features: {
       "3d_designer": false,
       "quick_upload": true,
@@ -43,7 +43,7 @@ export const PLAN_LIMITS = {
   pro: {
     uploadsPerMonth: -1, // unlimited
     maxFileSizeMB: 150,
-    modes: ["3d_designer", "classic", "quick"],
+    modes: ["3d_designer", "classic", "quick", "dtf"],
     features: {
       "3d_designer": true,
       "quick_upload": true,
@@ -58,7 +58,7 @@ export const PLAN_LIMITS = {
   enterprise: {
     uploadsPerMonth: -1, // unlimited
     maxFileSizeMB: 150,
-    modes: ["3d_designer", "classic", "quick"],
+    modes: ["3d_designer", "classic", "quick", "dtf"],
     features: {
       "3d_designer": true,
       "quick_upload": true,
