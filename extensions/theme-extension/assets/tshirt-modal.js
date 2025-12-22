@@ -15,8 +15,12 @@
  * Architecture: DTF_TSHIRT_MODAL_ARCHITECTURE.md
  */
 
+console.log('[ULTShirtModal] Script loading...');
+
 (function() {
   'use strict';
+  
+  console.log('[ULTShirtModal] IIFE started');
 
   // ==========================================================================
   // STATE MANAGEMENT
@@ -126,9 +130,16 @@
     // INITIALIZATION
     // ==========================================================================
     init() {
-      this.cacheElements();
-      this.bindEvents();
-      console.log('[ULTShirtModal] Initialized v4.1.0');
+      try {
+        console.log('[ULTShirtModal] Starting init...');
+        this.cacheElements();
+        console.log('[ULTShirtModal] Elements cached, overlay:', !!this.el.overlay);
+        this.bindEvents();
+        console.log('[ULTShirtModal] Events bound');
+        console.log('[ULTShirtModal] Initialized v4.1.0');
+      } catch (err) {
+        console.error('[ULTShirtModal] Init error:', err);
+      }
     },
 
     cacheElements() {
