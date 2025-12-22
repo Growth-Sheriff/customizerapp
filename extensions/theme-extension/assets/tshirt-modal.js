@@ -128,7 +128,7 @@
     init() {
       this.cacheElements();
       this.bindEvents();
-      console.log('[ULTShirtModal] Initialized v4.0.0');
+      console.log('[ULTShirtModal] Initialized v4.1.0');
     },
 
     cacheElements() {
@@ -631,8 +631,11 @@
     },
 
     async performUpload(file) {
+      // API base from customizerapp.dev
+      const apiBase = 'https://customizerapp.dev';
+      
       // Get signed URL
-      const intentRes = await fetch('/apps/upload-lift/api/upload/intent', {
+      const intentRes = await fetch(`${apiBase}/api/upload/intent`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -655,7 +658,7 @@
       if (!uploadRes.ok) throw new Error('Upload failed');
       
       // Mark complete
-      await fetch('/apps/upload-lift/api/upload/complete', {
+      await fetch(`${apiBase}/api/upload/complete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ uploadId })

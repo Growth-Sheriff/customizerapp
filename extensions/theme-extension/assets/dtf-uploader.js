@@ -43,7 +43,7 @@
   // ===== GLOBAL NAMESPACE =====
   const ULDTFUploader = {
     instances: {},
-    version: '4.0.0',
+    version: '4.1.0',
 
     /**
      * Initialize uploader for a product

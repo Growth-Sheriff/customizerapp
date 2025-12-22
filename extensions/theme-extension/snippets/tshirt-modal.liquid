@@ -2,6 +2,7 @@
   T-Shirt Modal Snippet
   =====================
   FAZ 2: 4-Step Wizard + 3D Preview Modal
+  FAZ 6: Mobile Experience + 3D Fallback
   
   Usage: {% render 'tshirt-modal' %}
   
@@ -10,13 +11,14 @@
   - Step 2: 3D Preview + Options (color, size, locations)
   - Step 3: Extra Questions
   - Step 4: Review & Actions
+  - 3D Fallback for low-end devices (FAZ 6)
   
   Integration:
   - Listens for 'ul:openTShirtModal' event from DTF uploader
   - Uses Three.js for 3D rendering
   - Supports multi-location printing
   
-  Version: 4.0.0
+  Version: 4.1.0
   Architecture: DTF_TSHIRT_MODAL_ARCHITECTURE.md
 {% endcomment %}
 
@@ -407,9 +409,103 @@
 <!-- Three.js CDN -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.min.js" defer></script>
 
-<!-- OrbitControls CDN (separate module) -->
+<!-- OrbitControls CDN (ES5 version for compatibility) -->
 <script>
-  // OrbitControls will be loaded dynamically in the JS
+  // OrbitControls inline for compatibility (Three.js r160)
+  // This is loaded after Three.js via defer
+  document.addEventListener('DOMContentLoaded', function() {
+    if (typeof THREE === 'undefined') return;
+    
+    // Simple OrbitControls implementation for T-Shirt preview
+    THREE.OrbitControls = function(camera, domElement) {
+      this.camera = camera;
+      this.domElement = domElement;
+      this.enableDamping = true;
+      this.dampingFactor = 0.05;
+      this.enableZoom = true;
+      this.enablePan = false;
+      this.minDistance = 2;
+      this.maxDistance = 10;
+      this.autoRotate = false;
+      this.autoRotateSpeed = 2.0;
+      
+      var scope = this;
+      var spherical = { theta: 0, phi: Math.PI / 2, radius: camera.position.length() };
+      var target = new THREE.Vector3(0, 0, 0);
+      var isMouseDown = false;
+      var previousMouse = { x: 0, y: 0 };
+      
+      function onMouseDown(e) {
+        isMouseDown = true;
+        previousMouse.x = e.clientX;
+        previousMouse.y = e.clientY;
+      }
+      
+      function onMouseMove(e) {
+        if (!isMouseDown) return;
+        var deltaX = e.clientX - previousMouse.x;
+        var deltaY = e.clientY - previousMouse.y;
+        spherical.theta -= deltaX * 0.005;
+        spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, spherical.phi + deltaY * 0.005));
+        previousMouse.x = e.clientX;
+        previousMouse.y = e.clientY;
+      }
+      
+      function onMouseUp() { isMouseDown = false; }
+      
+      function onWheel(e) {
+        spherical.radius = Math.max(scope.minDistance, Math.min(scope.maxDistance, spherical.radius + e.deltaY * 0.01));
+      }
+      
+      // Touch support
+      function onTouchStart(e) {
+        if (e.touches.length === 1) {
+          isMouseDown = true;
+          previousMouse.x = e.touches[0].clientX;
+          previousMouse.y = e.touches[0].clientY;
+        }
+      }
+      
+      function onTouchMove(e) {
+        if (!isMouseDown || e.touches.length !== 1) return;
+        var deltaX = e.touches[0].clientX - previousMouse.x;
+        var deltaY = e.touches[0].clientY - previousMouse.y;
+        spherical.theta -= deltaX * 0.005;
+        spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, spherical.phi + deltaY * 0.005));
+        previousMouse.x = e.touches[0].clientX;
+        previousMouse.y = e.touches[0].clientY;
+      }
+      
+      function onTouchEnd() { isMouseDown = false; }
+      
+      domElement.addEventListener('mousedown', onMouseDown);
+      domElement.addEventListener('mousemove', onMouseMove);
+      domElement.addEventListener('mouseup', onMouseUp);
+      domElement.addEventListener('mouseleave', onMouseUp);
+      domElement.addEventListener('wheel', onWheel, { passive: true });
+      domElement.addEventListener('touchstart', onTouchStart, { passive: true });
+      domElement.addEventListener('touchmove', onTouchMove, { passive: true });
+      domElement.addEventListener('touchend', onTouchEnd);
+      
+      this.update = function() {
+        camera.position.x = target.x + spherical.radius * Math.sin(spherical.phi) * Math.sin(spherical.theta);
+        camera.position.y = target.y + spherical.radius * Math.cos(spherical.phi);
+        camera.position.z = target.z + spherical.radius * Math.sin(spherical.phi) * Math.cos(spherical.theta);
+        camera.lookAt(target);
+      };
+      
+      this.dispose = function() {
+        domElement.removeEventListener('mousedown', onMouseDown);
+        domElement.removeEventListener('mousemove', onMouseMove);
+        domElement.removeEventListener('mouseup', onMouseUp);
+        domElement.removeEventListener('mouseleave', onMouseUp);
+        domElement.removeEventListener('wheel', onWheel);
+        domElement.removeEventListener('touchstart', onTouchStart);
+        domElement.removeEventListener('touchmove', onTouchMove);
+        domElement.removeEventListener('touchend', onTouchEnd);
+      };
+    };
+  });
 </script>
 
 <!-- T-Shirt Modal Script -->
