@@ -11,26 +11,26 @@
 (function() {
   'use strict';
 
-  // CDN URLs with fallbacks
+  // CDN URLs with fallbacks - Using r128 which is last version with examples/js
   const THREE_CDNS = [
-    'https://unpkg.com/three@0.160.0/build/three.min.js',
-    'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js',
-    'https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.min.js',
+    'https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js',
+    'https://unpkg.com/three@0.128.0/build/three.min.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js',
   ];
 
   const ORBIT_CDNS = [
-    'https://unpkg.com/three@0.160.0/examples/js/controls/OrbitControls.js',
-    'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/controls/OrbitControls.js',
+    'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js',
+    'https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js',
   ];
 
   const GLTF_CDNS = [
-    'https://unpkg.com/three@0.160.0/examples/js/loaders/GLTFLoader.js',
-    'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/loaders/GLTFLoader.js',
+    'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js',
+    'https://unpkg.com/three@0.128.0/examples/js/loaders/GLTFLoader.js',
   ];
 
   const DECAL_CDNS = [
-    'https://unpkg.com/three@0.160.0/examples/js/geometries/DecalGeometry.js',
-    'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/geometries/DecalGeometry.js',
+    'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/geometries/DecalGeometry.js',
+    'https://unpkg.com/three@0.128.0/examples/js/geometries/DecalGeometry.js',
   ];
 
   // Load script with fallback CDNs
@@ -290,7 +290,8 @@
     state.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     state.renderer.shadowMap.enabled = true;
     state.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    state.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    // Use outputEncoding for r128 (outputColorSpace is r152+)
+    state.renderer.outputEncoding = THREE.sRGBEncoding;
     state.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     state.renderer.toneMappingExposure = 1;
 
@@ -431,7 +432,8 @@
     // Load texture
     const textureLoader = new THREE.TextureLoader();
     textureLoader.load(textureUrl, (texture) => {
-      texture.colorSpace = THREE.SRGBColorSpace;
+      // Use encoding for r128 (colorSpace is r152+)
+      texture.encoding = THREE.sRGBEncoding;
       texture.anisotropy = 16; // Better quality
 
       // Get location config
