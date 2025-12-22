@@ -1,0 +1,108 @@
+/**
+ * Public API v1 - Single Export Endpoint
+ * GET /api/v1/exports/:id - Get export details
+ */
+
+import type { LoaderFunctionArgs } from "@remix-run/node";
+import { json } from "@remix-run/node";
+import prisma from "~/lib/prisma.server";
+import { rateLimitGuard, getIdentifier } from "~/lib/rateLimit.server";
+import { getDownloadSignedUrl, getStorageConfig } from "~/lib/storage.server";
+import { createHash } from "crypto";
+
+// Hash API key for lookup
+function hashApiKey(key: string): string {
+  return createHash("sha256").update(key).digest("hex");
+}
+
+// Helper to authenticate API request via API key
+async function authenticateRequest(request: Request) {
+  const authHeader = request.headers.get("Authorization");
+  if (!authHeader?.startsWith("Bearer ")) {
+    return null;
+  }
+
+  const apiKey = authHeader.slice(7);
+  const keyHash = hashApiKey(apiKey);
+
+  const keyRecord = await prisma.apiKey.findFirst({
+    where: {
+      keyHash,
+      status: "active",
+      OR: [
+        { expiresAt: null },
+        { expiresAt: { gt: new Date() } },
+      ],
+    },
+  });
+
+  if (!keyRecord) return null;
+
+  // Update last used
+  await prisma.apiKey.update({
+    where: { id: keyRecord.id },
+    data: { lastUsedAt: new Date(), usageCount: { increment: 1 } },
+  });
+
+  // Get shop
+  const shop = await prisma.shop.findUnique({
+    where: { id: keyRecord.shopId },
+  });
+
+  return shop;
+}
+
+// GET /api/v1/exports/:id
+export async function loader({ request, params }: LoaderFunctionArgs) {
+  // Rate limiting
+  const identifier = getIdentifier(request, "shop");
+  const rateLimitResponse = await rateLimitGuard(identifier, "adminApi");
+  if (rateLimitResponse) return rateLimitResponse;
+
+  const shop = await authenticateRequest(request);
+  if (!shop) {
+    return json({ error: "Unauthorized. Please provide valid API key." }, { status: 401 });
+  }
+
+  const exportId = params.id;
+  if (!exportId) {
+    return json({ error: "Missing export ID" }, { status: 400 });
+  }
+
+  const exportRecord = await prisma.exportJob.findFirst({
+    where: { id: exportId, shopId: shop.id },
+  });
+
+  if (!exportRecord) {
+    return json({ error: "Export not found" }, { status: 404 });
+  }
+
+  // Generate signed URL for download if completed
+  let downloadUrl = exportRecord.downloadUrl;
+  if (exportRecord.status === "completed" && exportRecord.downloadUrl) {
+    // Check if it's a storage key (not a full URL)
+    if (!exportRecord.downloadUrl.startsWith("http")) {
+      try {
+        const storageConfig = getStorageConfig(shop.storageConfig as any);
+        downloadUrl = await getDownloadSignedUrl(
+          storageConfig,
+          exportRecord.downloadUrl,
+          15 * 60 // 15 minutes
+        );
+      } catch (error) {
+        console.error("[Export API] Failed to generate signed URL:", error);
+        downloadUrl = null;
+      }
+    }
+  }
+
+  return json({
+    id: exportRecord.id,
+    status: exportRecord.status,
+    uploadIds: exportRecord.uploadIds,
+    downloadUrl: exportRecord.status === "completed" ? downloadUrl : null,
+    createdAt: exportRecord.createdAt,
+    completedAt: exportRecord.completedAt,
+    expiresAt: exportRecord.expiresAt,
+  });
+}

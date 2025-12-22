@@ -178,6 +178,27 @@ export async function convertPdfToPng(inputPath: string, outputPath: string, dpi
   }
 }
 
+// Get PDF page count using Ghostscript
+export async function getPdfPageCount(inputPath: string): Promise<number> {
+  const cmd = `gs -q -dNODISPLAY -c "(${inputPath.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}) (r) file runpdfbegin pdfpagecount = quit"`;
+
+  try {
+    const { stdout } = await execAsync(cmd, { timeout: 10000 });
+    const pageCount = parseInt(stdout.trim(), 10);
+    return isNaN(pageCount) ? 1 : pageCount;
+  } catch (error) {
+    // Fallback: try with pdfinfo if available
+    try {
+      const { stdout } = await execAsync(`pdfinfo "${inputPath}" | grep Pages`, { timeout: 5000 });
+      const match = stdout.match(/Pages:\s*(\d+)/);
+      return match ? parseInt(match[1], 10) : 1;
+    } catch {
+      console.warn("[Preflight] Could not determine PDF page count, assuming 1");
+      return 1;
+    }
+  }
+}
+
 // Convert AI/EPS to PNG using Ghostscript
 export async function convertEpsToPng(inputPath: string, outputPath: string, dpi: number = 300): Promise<void> {
   const cmd = `gs -dSAFER -dBATCH -dNOPAUSE -dNOCACHE -dNOPLATFONTS -dPARANOIDSAFER -sDEVICE=png16m -r${dpi} -dEPSCrop -dMaxBitmap=500000000 -dBufferSpace=1000000 -sOutputFile="${outputPath}" "${inputPath}"`;

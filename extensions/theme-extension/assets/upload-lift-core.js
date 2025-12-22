@@ -15,6 +15,7 @@
 
   const CONFIG = {
     apiBase: '', // Set from data attribute
+    shopDomain: '', // Set from data attribute
     allowedMimeTypes: [
       'image/png', 'image/jpeg', 'image/webp',
       'application/pdf', 'application/postscript',
@@ -75,6 +76,7 @@
     state.mode = container.dataset.mode || 'classic';
     state.maxSizeMB = parseInt(container.dataset.maxSize) || 25;
     CONFIG.apiBase = container.dataset.appUrl || 'https://customizerapp.dev';
+    CONFIG.shopDomain = container.dataset.shopDomain || window.Shopify?.shop || '';
 
     // Cache DOM elements
     cacheElements();
@@ -82,7 +84,7 @@
     // Bind events
     bindEvents();
 
-    console.log('[Upload Lift] Initialized', { productId: state.productId, mode: state.mode });
+    console.log('[Upload Lift] Initialized', { productId: state.productId, mode: state.mode, shopDomain: CONFIG.shopDomain });
   }
 
   function cacheElements() {
@@ -249,6 +251,10 @@
   async function processFile(file) {
     console.log('[Upload Lift] Processing file:', file.name, file.type, file.size);
 
+    // Clear previous error state
+    hideError();
+    lastFailedFile = null;
+
     // Validate file
     const validation = validateFile(file);
     if (!validation.valid) {
@@ -294,7 +300,8 @@
     } catch (error) {
       console.error('[Upload Lift] Upload failed:', error);
       showProgress(false);
-      showError('Upload failed: ' + (error.message || 'Unknown error'));
+      lastFailedFile = file; // Store for retry
+      showError('Upload failed: ' + (error.message || 'Unknown error'), true);
     }
   }
 
@@ -320,7 +327,7 @@
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
       body: JSON.stringify({
-        shopDomain: window.Shopify?.shop || CONFIG.shopDomain,
+        shopDomain: CONFIG.shopDomain || window.Shopify?.shop,
         productId: state.productId,
         variantId: state.variantId,
         mode: state.mode,
@@ -358,7 +365,7 @@
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
       body: JSON.stringify({
-        shopDomain: window.Shopify?.shop || CONFIG.shopDomain,
+        shopDomain: CONFIG.shopDomain || window.Shopify?.shop,
         uploadId: state.uploadId,
         items: [{
           itemId: state.itemId,
@@ -381,7 +388,7 @@
 
   async function pollPreflightStatus() {
     let attempts = 0;
-    const shopDomain = window.Shopify?.shop || CONFIG.shopDomain;
+    const shopDomain = CONFIG.shopDomain || window.Shopify?.shop;
 
     while (attempts < CONFIG.maxPollAttempts) {
       const response = await fetch(`${CONFIG.apiBase}/api/upload/status/${state.uploadId}?shopDomain=${encodeURIComponent(shopDomain)}`, {
@@ -628,24 +635,201 @@
 
     const productId = item.dataset.productId;
     const variantId = item.dataset.variantId;
+    const statusEl = item.querySelector('.ul-quick-status');
+    const btnEl = item.querySelector('.ul-quick-upload-btn');
 
-    // Similar flow to classic but auto-add to cart
-    console.log('[Upload Lift] Quick upload for product:', productId);
+    // Validate file
+    const validation = validateFile(file);
+    if (!validation.valid) {
+      if (statusEl) {
+        statusEl.textContent = validation.error;
+        statusEl.className = 'ul-quick-status ul-status-error';
+      }
+      return;
+    }
 
-    // TODO: Implement quick upload flow
+    // Show uploading status
+    if (statusEl) {
+      statusEl.textContent = 'Uploading...';
+      statusEl.className = 'ul-quick-status ul-status-progress';
+    }
+    if (btnEl) btnEl.disabled = true;
+
+    try {
+      const shopDomain = CONFIG.shopDomain || window.Shopify?.shop || '';
+
+      // Step 1: Get upload intent
+      const intentRes = await fetch(`${CONFIG.apiBase}/api/upload/intent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          shopDomain,
+          productId,
+          variantId,
+          mode: 'quick_upload',
+          contentType: file.type || 'application/octet-stream',
+          fileName: file.name,
+          fileSize: file.size,
+        }),
+      });
+
+      if (!intentRes.ok) throw new Error('Failed to get upload URL');
+      const intent = await intentRes.json();
+
+      // Step 2: Upload to storage
+      await fetch(intent.uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type || 'application/octet-stream' },
+        body: file,
+      });
+
+      // Step 3: Complete upload
+      const completeRes = await fetch(`${CONFIG.apiBase}/api/upload/complete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          shopDomain,
+          uploadId: intent.uploadId,
+          items: [{
+            itemId: intent.itemId,
+            location: 'front',
+            transform: { width: 8, height: 8 }, // Default size for quick upload
+          }],
+        }),
+      });
+
+      if (!completeRes.ok) throw new Error('Failed to complete upload');
+      const completeData = await completeRes.json();
+
+      // Step 4: Poll for preflight completion
+      if (statusEl) statusEl.textContent = 'Processing...';
+      await pollQuickUploadStatus(intent.uploadId, shopDomain);
+
+      // Success - Show add to cart button
+      if (statusEl) {
+        statusEl.textContent = 'Ready!';
+        statusEl.className = 'ul-quick-status ul-status-success';
+      }
+
+      // Create Add to Cart button
+      if (btnEl) {
+        btnEl.textContent = 'Add to Cart';
+        btnEl.disabled = false;
+        btnEl.onclick = () => addQuickUploadToCart(intent.uploadId, productId, variantId);
+      }
+
+    } catch (error) {
+      console.error('[Upload Lift] Quick upload failed:', error);
+      if (statusEl) {
+        statusEl.textContent = 'Upload failed: ' + (error.message || 'Unknown error');
+        statusEl.className = 'ul-quick-status ul-status-error';
+      }
+      if (btnEl) btnEl.disabled = false;
+    }
+
+    // Reset file input
+    e.target.value = '';
+  }
+
+  async function pollQuickUploadStatus(uploadId, shopDomain) {
+    const maxAttempts = 30;
+    let attempts = 0;
+
+    while (attempts < maxAttempts) {
+      const response = await fetch(`${CONFIG.apiBase}/api/upload/status/${uploadId}?shopDomain=${encodeURIComponent(shopDomain)}`, {
+        credentials: 'include',
+      });
+
+      if (!response.ok) throw new Error('Failed to get status');
+      const data = await response.json();
+
+      if (data.status === 'ready' || data.status === 'completed') {
+        return data;
+      } else if (data.status === 'failed' || data.status === 'error') {
+        throw new Error(data.error || 'Preflight failed');
+      }
+
+      attempts++;
+      await new Promise(r => setTimeout(r, 1000));
+    }
+
+    throw new Error('Timeout waiting for processing');
+  }
+
+  async function addQuickUploadToCart(uploadId, productId, variantId) {
+    // Add customized product to cart using Shopify Cart API
+    const formData = {
+      items: [{
+        id: parseInt(variantId, 10),
+        quantity: 1,
+        properties: {
+          '_uploadId': uploadId,
+          '_customized': 'true',
+        },
+      }],
+    };
+
+    try {
+      const response = await fetch('/cart/add.js', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+
+      if (!response.ok) throw new Error('Failed to add to cart');
+
+      // Refresh cart or show success
+      window.location.href = '/cart';
+    } catch (error) {
+      console.error('[Upload Lift] Add to cart failed:', error);
+      alert('Failed to add to cart');
+    }
   }
 
   // ══════════════════════════════════════════════════════════════
   // ERROR HANDLING
   // ══════════════════════════════════════════════════════════════
 
-  function showError(message) {
+  let lastFailedFile = null; // Store for retry
+
+  function showError(message, canRetry = false) {
     if (elements.errorBanner && elements.errorText) {
       elements.errorText.textContent = message;
       elements.errorBanner.style.display = 'flex';
+
+      // Show/hide retry button
+      let retryBtn = elements.errorBanner.querySelector('.ul-retry-btn');
+      if (canRetry && lastFailedFile) {
+        if (!retryBtn) {
+          retryBtn = document.createElement('button');
+          retryBtn.className = 'ul-retry-btn';
+          retryBtn.textContent = 'Retry';
+          retryBtn.type = 'button';
+          retryBtn.addEventListener('click', handleRetry);
+          elements.errorBanner.appendChild(retryBtn);
+        }
+        retryBtn.style.display = 'inline-block';
+      } else if (retryBtn) {
+        retryBtn.style.display = 'none';
+      }
     } else {
       alert(message);
     }
+  }
+
+  function hideError() {
+    if (elements.errorBanner) {
+      elements.errorBanner.style.display = 'none';
+    }
+  }
+
+  function handleRetry() {
+    if (!lastFailedFile) return;
+
+    hideError();
+    processFile(lastFailedFile);
   }
 
   // ══════════════════════════════════════════════════════════════

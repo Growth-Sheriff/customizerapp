@@ -31,11 +31,14 @@
     Change to false in production
   endcomment
   assign debug_mode = false
-  assign should_show = upload_enabled and upload_mode == 'classic'
-  if debug_mode
-    assign should_show = true
-  endif
 %}
+
+{% assign should_show = false %}
+{% if debug_mode %}
+  {% assign should_show = true %}
+{% elsif upload_enabled == true and upload_mode == 'classic' %}
+  {% assign should_show = true %}
+{% endif %}
 
 {% if should_show %}
 <div
@@ -47,6 +50,7 @@
   data-max-size="{{ max_size_mb }}"
   data-allowed-formats="{{ allowed_formats }}"
   data-app-url="{{ shop.metafields.upload_lift.app_url | default: 'https://customizerapp.dev' }}"
+  data-shop-domain="{{ shop.permanent_domain }}"
   data-debug="{{ debug_mode }}"
 >
   <!-- Step 1: Size Selection -->

@@ -11,53 +11,107 @@
 (function() {
   'use strict';
 
-  // Check for Three.js
-  if (typeof THREE === 'undefined') {
-    // Load Three.js dynamically
-    const script = document.createElement('script');
-    script.src = 'https://unpkg.com/three@0.160.0/build/three.min.js';
-    script.onload = () => {
-      loadOrbitControls().then(init3D);
-    };
-    document.head.appendChild(script);
-    return;
+  // CDN URLs with fallbacks
+  const THREE_CDNS = [
+    'https://unpkg.com/three@0.160.0/build/three.min.js',
+    'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.min.js',
+  ];
+
+  const ORBIT_CDNS = [
+    'https://unpkg.com/three@0.160.0/examples/js/controls/OrbitControls.js',
+    'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/controls/OrbitControls.js',
+  ];
+
+  const GLTF_CDNS = [
+    'https://unpkg.com/three@0.160.0/examples/js/loaders/GLTFLoader.js',
+    'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/loaders/GLTFLoader.js',
+  ];
+
+  const DECAL_CDNS = [
+    'https://unpkg.com/three@0.160.0/examples/js/geometries/DecalGeometry.js',
+    'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/geometries/DecalGeometry.js',
+  ];
+
+  // Load script with fallback CDNs
+  async function loadScriptWithFallback(cdnUrls, checkFn) {
+    for (const url of cdnUrls) {
+      try {
+        await loadScript(url);
+        if (checkFn && checkFn()) return true;
+        return true;
+      } catch (e) {
+        console.warn(`[Upload Lift 3D] Failed to load from ${url}, trying next...`);
+      }
+    }
+    throw new Error('All CDN sources failed');
+  }
+
+  function loadScript(url) {
+    return new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = url;
+      script.onload = resolve;
+      script.onerror = reject;
+      document.head.appendChild(script);
+    });
+  }
+
+  // Check for Three.js and load if needed
+  async function initializeThreeJS() {
+    try {
+      if (typeof THREE === 'undefined') {
+        await loadScriptWithFallback(THREE_CDNS, () => typeof THREE !== 'undefined');
+      }
+      await Promise.all([
+        loadOrbitControls(),
+        loadGLTFLoader(),
+        loadDecalGeometry(),
+      ]);
+      init3D();
+    } catch (error) {
+      console.error('[Upload Lift 3D] Failed to load Three.js dependencies:', error);
+      show2DFallback();
+    }
+  }
+
+  // If THREE already loaded, just initialize
+  if (typeof THREE !== 'undefined') {
+    loadOrbitControls().then(() => loadGLTFLoader()).then(() => loadDecalGeometry()).then(init3D);
+  } else {
+    initializeThreeJS();
   }
 
   function loadOrbitControls() {
-    return new Promise((resolve) => {
+    return new Promise(async (resolve) => {
       if (typeof THREE.OrbitControls !== 'undefined') {
         resolve();
         return;
       }
-      const script = document.createElement('script');
-      script.src = 'https://unpkg.com/three@0.160.0/examples/js/controls/OrbitControls.js';
-      script.onload = resolve;
-      document.head.appendChild(script);
+      await loadScriptWithFallback(ORBIT_CDNS, () => typeof THREE.OrbitControls !== 'undefined');
+      resolve();
     });
   }
 
   function loadGLTFLoader() {
-    return new Promise((resolve) => {
+    return new Promise(async (resolve) => {
       if (typeof THREE.GLTFLoader !== 'undefined') {
         resolve();
         return;
       }
-      const script = document.createElement('script');
-      script.src = 'https://unpkg.com/three@0.160.0/examples/js/loaders/GLTFLoader.js';
-      script.onload = resolve;
-      document.head.appendChild(script);
+      await loadScriptWithFallback(GLTF_CDNS, () => typeof THREE.GLTFLoader !== 'undefined');
+      resolve();
     });
   }
 
   function loadDecalGeometry() {
-    return new Promise((resolve) => {
+    return new Promise(async (resolve) => {
       if (typeof THREE.DecalGeometry !== 'undefined') {
         resolve();
         return;
       }
-      const script = document.createElement('script');
-      script.src = 'https://unpkg.com/three@0.160.0/examples/js/geometries/DecalGeometry.js';
-      script.onload = resolve;
+      await loadScriptWithFallback(DECAL_CDNS, () => typeof THREE.DecalGeometry !== 'undefined');
+      resolve();
       document.head.appendChild(script);
     });
   }
@@ -82,6 +136,8 @@
     isWebGL2: true,
     animationId: null,
     uploadId: null,
+    shopDomain: '', // Shop domain for API calls
+    lastFailedFile: null, // Store for retry
   };
 
   // Default print locations - based on kt946/ai-threejs-products-app-yt-jsm
@@ -131,6 +187,9 @@
     if (!container) return;
 
     state.container = container;
+
+    // Read shop domain from data attribute (priority) or fallback to Shopify global
+    state.shopDomain = container.dataset.shopDomain || window.Shopify?.shop || '';
 
     // Check WebGL2 support
     state.isWebGL2 = checkWebGL2Support();
@@ -392,6 +451,15 @@
       if (transform.rotation !== undefined) {
         rotation.z = THREE.MathUtils.degToRad(transform.rotation);
       }
+      // Apply X/Y position offset (normalized to model space)
+      if (transform.positionX !== undefined) {
+        const offsetX = (transform.positionX / 50) * 0.1; // Max ±0.1 units
+        position.x += offsetX;
+      }
+      if (transform.positionY !== undefined) {
+        const offsetY = (transform.positionY / 50) * 0.1; // Max ±0.1 units
+        position.y += offsetY;
+      }
 
       // Use stored shirtMesh or find it
       let targetMesh = state.shirtMesh;
@@ -596,6 +664,8 @@
     // Transform sliders
     const scaleSlider = document.getElementById('ul-scale-slider');
     const rotationSlider = document.getElementById('ul-rotation-slider');
+    const positionXSlider = document.getElementById('ul-position-x-slider');
+    const positionYSlider = document.getElementById('ul-position-y-slider');
 
     if (scaleSlider) {
       scaleSlider.addEventListener('input', (e) => {
@@ -613,12 +683,32 @@
       });
     }
 
+    if (positionXSlider) {
+      positionXSlider.addEventListener('input', (e) => {
+        const x = parseInt(e.target.value);
+        document.getElementById('ul-position-x-value').textContent = `${x}`;
+        updateCurrentDecalTransform();
+      });
+    }
+
+    if (positionYSlider) {
+      positionYSlider.addEventListener('input', (e) => {
+        const y = parseInt(e.target.value);
+        document.getElementById('ul-position-y-value').textContent = `${y}`;
+        updateCurrentDecalTransform();
+      });
+    }
+
     // Reset/center buttons
     document.getElementById('ul-center-design')?.addEventListener('click', () => {
       document.getElementById('ul-scale-slider').value = 50;
       document.getElementById('ul-rotation-slider').value = 0;
+      document.getElementById('ul-position-x-slider').value = 0;
+      document.getElementById('ul-position-y-slider').value = 0;
       document.getElementById('ul-scale-value').textContent = '50%';
       document.getElementById('ul-rotation-value').textContent = '0°';
+      document.getElementById('ul-position-x-value').textContent = '0';
+      document.getElementById('ul-position-y-value').textContent = '0';
       updateCurrentDecalTransform();
     });
 
@@ -647,7 +737,9 @@
   function updateCurrentDecalTransform() {
     const scale = parseInt(document.getElementById('ul-scale-slider')?.value || 50);
     const rotation = parseInt(document.getElementById('ul-rotation-slider')?.value || 0);
-    updateDecalTransform(state.currentLocation, { scale, rotation });
+    const positionX = parseInt(document.getElementById('ul-position-x-slider')?.value || 0);
+    const positionY = parseInt(document.getElementById('ul-position-y-slider')?.value || 0);
+    updateDecalTransform(state.currentLocation, { scale, rotation, positionX, positionY });
   }
 
   // ══════════════════════════════════════════════════════════════
@@ -670,7 +762,7 @@
     try {
       // Get upload intent
       updateProgress(10);
-      const shopDomain = window.Shopify?.shop || '';
+      const shopDomain = state.shopDomain || window.Shopify?.shop || '';
       const intentResponse = await fetch(`${appUrl}/api/upload/intent`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -739,7 +831,8 @@
 
     } catch (error) {
       console.error('[Upload Lift 3D] Upload failed:', error);
-      showPreflightStatus('error', 'Upload failed: ' + error.message);
+      state.lastFailedFile = file; // Store for retry
+      showPreflightStatus('error', 'Upload failed: ' + error.message, true);
       document.getElementById('ul-3d-dropzone').style.display = 'block';
     } finally {
       document.getElementById('ul-upload-progress').style.display = 'none';
@@ -756,7 +849,7 @@
   async function pollUploadStatus(uploadId, appUrl) {
     const maxAttempts = 30;
     let attempts = 0;
-    const shopDomain = window.Shopify?.shop || '';
+    const shopDomain = state.shopDomain || window.Shopify?.shop || '';
 
     while (attempts < maxAttempts) {
       const response = await fetch(`${appUrl}/api/upload/status/${uploadId}?shopDomain=${encodeURIComponent(shopDomain)}`, {
@@ -789,7 +882,7 @@
     if (dropzone) dropzone.style.display = 'none';
   }
 
-  function showPreflightStatus(status, message) {
+  function showPreflightStatus(status, message, canRetry = false) {
     const statusEl = document.getElementById('ul-preflight-status');
     const messageEl = document.getElementById('ul-preflight-message');
     const iconEl = document.getElementById('ul-preflight-icon');
@@ -813,6 +906,27 @@
 
     if (iconEl) iconEl.textContent = icons[status] || '•';
     if (messageEl) messageEl.textContent = messages[status];
+
+    // Handle retry button
+    let retryBtn = statusEl.querySelector('.ul-retry-btn');
+    if (canRetry && state.lastFailedFile) {
+      if (!retryBtn) {
+        retryBtn = document.createElement('button');
+        retryBtn.className = 'ul-retry-btn';
+        retryBtn.textContent = 'Retry';
+        retryBtn.type = 'button';
+        retryBtn.addEventListener('click', () => {
+          if (state.lastFailedFile) {
+            statusEl.style.display = 'none';
+            handleFileUpload(state.lastFailedFile);
+          }
+        });
+        statusEl.appendChild(retryBtn);
+      }
+      retryBtn.style.display = 'inline-block';
+    } else if (retryBtn) {
+      retryBtn.style.display = 'none';
+    }
   }
 
   // ══════════════════════════════════════════════════════════════

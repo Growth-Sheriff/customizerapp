@@ -12,7 +12,7 @@
   assign debug_mode = false
 %}
 
-<div id="upload-lift-quick" class="ul-quick-grid" data-app-url="{{ shop.metafields.upload_lift.app_url | default: 'https://customizerapp.dev' }}" data-debug="{{ debug_mode }}">
+<div id="upload-lift-quick" class="ul-quick-grid" data-app-url="{{ shop.metafields.upload_lift.app_url | default: 'https://customizerapp.dev' }}" data-shop-domain="{{ shop.permanent_domain }}" data-debug="{{ debug_mode }}">
   {% for product in collection.products %}
     {% assign upload_config = product.metafields.upload_lift.config.value %}
 
@@ -24,8 +24,10 @@
       {% assign upload_mode = 'classic' %}
     {% endif %}
 
-    {% assign should_show = upload_enabled and upload_mode == 'quick' %}
+    {% assign should_show = false %}
     {% if debug_mode %}
+      {% assign should_show = true %}
+    {% elsif upload_enabled == true and upload_mode == 'quick' %}
       {% assign should_show = true %}
     {% endif %}
 

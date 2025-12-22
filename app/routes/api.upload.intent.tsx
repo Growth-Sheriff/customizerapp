@@ -1,9 +1,10 @@
-import type { ActionFunctionArgs } from "@remix-run/node";
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { nanoid } from "nanoid";
 import { getStorageConfig, getUploadSignedUrl, buildStorageKey } from "~/lib/storage.server";
 import { rateLimitGuard, getIdentifier } from "~/lib/rateLimit.server";
 import { checkUploadAllowed } from "~/lib/billing.server";
+import { handleCorsOptions, corsJson } from "~/lib/cors.server";
 import prisma from "~/lib/prisma.server";
 
 // Plan limits
@@ -14,12 +15,25 @@ const PLAN_LIMITS = {
   enterprise: { maxSizeMB: 150, uploadsPerMonth: -1 },
 };
 
+// OPTIONS handler for CORS preflight
+export async function loader({ request }: LoaderFunctionArgs) {
+  if (request.method === "OPTIONS") {
+    return handleCorsOptions(request);
+  }
+  return corsJson({ error: "Method not allowed" }, request, { status: 405 });
+}
+
 // POST /api/upload/intent
 // Request: { shopDomain, productId?, variantId?, mode, contentType, fileName }
 // Response: { uploadId, itemId, uploadUrl, key, expiresIn }
 export async function action({ request }: ActionFunctionArgs) {
+  // Handle CORS preflight
+  if (request.method === "OPTIONS") {
+    return handleCorsOptions(request);
+  }
+
   if (request.method !== "POST") {
-    return json({ error: "Method not allowed" }, { status: 405 });
+    return corsJson({ error: "Method not allowed" }, request, { status: 405 });
   }
 
   // Parse request body first to get shopDomain
@@ -27,18 +41,18 @@ export async function action({ request }: ActionFunctionArgs) {
   try {
     body = await request.json();
   } catch {
-    return json({ error: "Invalid JSON body" }, { status: 400 });
+    return corsJson({ error: "Invalid JSON body" }, request, { status: 400 });
   }
 
   const { shopDomain, productId, variantId, mode, contentType, fileName, fileSize } = body;
 
   // Validate required fields
   if (!shopDomain) {
-    return json({ error: "Missing required field: shopDomain" }, { status: 400 });
+    return corsJson({ error: "Missing required field: shopDomain" }, request, { status: 400 });
   }
 
   if (!mode || !contentType || !fileName) {
-    return json({ error: "Missing required fields: mode, contentType, fileName" }, { status: 400 });
+    return corsJson({ error: "Missing required fields: mode, contentType, fileName" }, request, { status: 400 });
   }
 
   // Rate limit check (10/min per customer)
@@ -54,13 +68,13 @@ export async function action({ request }: ActionFunctionArgs) {
   });
 
   if (!shop) {
-    return json({ error: "Shop not found" }, { status: 404 });
+    return corsJson({ error: "Shop not found" }, request, { status: 404 });
   }
 
 
   // Validate mode
   if (!["3d_designer", "classic", "quick"].includes(mode)) {
-    return json({ error: "Invalid mode" }, { status: 400 });
+    return corsJson({ error: "Invalid mode" }, request, { status: 400 });
   }
 
   // Check billing / plan limits
@@ -68,10 +82,10 @@ export async function action({ request }: ActionFunctionArgs) {
   const billingCheck = await checkUploadAllowed(shop.id, mode, fileSizeMB);
 
   if (!billingCheck.allowed) {
-    return json({
+    return corsJson({
       error: billingCheck.error,
       code: "BILLING_LIMIT",
-    }, { status: 403 });
+    }, request, { status: 403 });
   }
 
   // Validate content type
@@ -81,7 +95,7 @@ export async function action({ request }: ActionFunctionArgs) {
     "image/svg+xml",
   ];
   if (!allowedTypes.includes(contentType)) {
-    return json({ error: "Unsupported file type" }, { status: 400 });
+    return corsJson({ error: "Unsupported file type" }, request, { status: 400 });
   }
 
   // Check plan limits
@@ -90,11 +104,11 @@ export async function action({ request }: ActionFunctionArgs) {
 
   // Check file size
   if (fileSize && fileSize > limits.maxSizeMB * 1024 * 1024) {
-    return json({
+    return corsJson({
       error: `File too large. Max size for ${shop.plan} plan: ${limits.maxSizeMB}MB`,
       code: "FILE_TOO_LARGE",
       maxSizeMB: limits.maxSizeMB,
-    }, { status: 413 });
+    }, request, { status: 413 });
   }
 
   // Check monthly upload limit
@@ -111,12 +125,12 @@ export async function action({ request }: ActionFunctionArgs) {
     });
 
     if (monthlyUploads >= limits.uploadsPerMonth) {
-      return json({
+      return corsJson({
         error: `Monthly upload limit reached (${limits.uploadsPerMonth})`,
         code: "LIMIT_REACHED",
         limit: limits.uploadsPerMonth,
         used: monthlyUploads,
-      }, { status: 429 });
+      }, request, { status: 429 });
     }
   }
 
@@ -160,16 +174,16 @@ export async function action({ request }: ActionFunctionArgs) {
     // Generate signed upload URL
     const { url: uploadUrl } = await getUploadSignedUrl(storageConfig, key, contentType);
 
-    return json({
+    return corsJson({
       uploadId,
       itemId,
       uploadUrl,
       key,
       expiresIn: 900, // 15 minutes
-    });
+    }, request);
   } catch (error) {
     console.error("[Upload Intent] Error:", error);
-    return json({ error: "Failed to create upload intent" }, { status: 500 });
+    return corsJson({ error: "Failed to create upload intent" }, request, { status: 500 });
   }
 }
 

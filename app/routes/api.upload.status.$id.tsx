@@ -1,14 +1,25 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
-import { json } from "@remix-run/node";
+import { handleCorsOptions, corsJson } from "~/lib/cors.server";
+import { rateLimitGuard, getIdentifier } from "~/lib/rateLimit.server";
 import prisma from "~/lib/prisma.server";
 
 // GET /api/upload/status/:id?shopDomain=xxx
 export async function loader({ request, params }: LoaderFunctionArgs) {
+  // Handle CORS preflight
+  if (request.method === "OPTIONS") {
+    return handleCorsOptions(request);
+  }
+
+  // Rate limiting (using admin limit for status checks)
+  const identifier = getIdentifier(request, "customer");
+  const rateLimitResponse = await rateLimitGuard(identifier, "adminApi");
+  if (rateLimitResponse) return rateLimitResponse;
+
   const url = new URL(request.url);
   const shopDomain = url.searchParams.get("shopDomain");
 
   if (!shopDomain) {
-    return json({ error: "Missing shopDomain" }, { status: 400 });
+    return corsJson({ error: "Missing shopDomain" }, request, { status: 400 });
   }
 
   const shop = await prisma.shop.findUnique({
@@ -16,12 +27,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   });
 
   if (!shop) {
-    return json({ error: "Shop not found" }, { status: 404 });
+    return corsJson({ error: "Shop not found" }, request, { status: 404 });
   }
 
   const uploadId = params.id;
   if (!uploadId) {
-    return json({ error: "Missing uploadId" }, { status: 400 });
+    return corsJson({ error: "Missing uploadId" }, request, { status: 400 });
   }
 
   const upload = await prisma.upload.findFirst({
@@ -45,7 +56,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   });
 
   if (!upload) {
-    return json({ error: "Upload not found" }, { status: 404 });
+    return corsJson({ error: "Upload not found" }, request, { status: 404 });
   }
 
   // Determine overall status based on items
@@ -60,7 +71,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     overallPreflight = "warning";
   }
 
-  return json({
+  return corsJson({
     uploadId: upload.id,
     status: upload.status,
     mode: upload.mode,
@@ -71,6 +82,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     items: upload.items,
     createdAt: upload.createdAt,
     updatedAt: upload.updatedAt,
-  });
+  }, request);
 }
 

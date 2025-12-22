@@ -1,6 +1,8 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { triggerUploadReceived } from "~/lib/flow.server";
+import { handleCorsOptions, corsJson } from "~/lib/cors.server";
+import { rateLimitGuard, getIdentifier } from "~/lib/rateLimit.server";
 import prisma from "~/lib/prisma.server";
 import { Queue } from "bullmq";
 import Redis from "ioredis";
@@ -15,25 +17,35 @@ const getRedisConnection = () => {
 // POST /api/upload/complete
 // Request: { shopDomain, uploadId, items: [{ itemId, location, transform? }] }
 export async function action({ request }: ActionFunctionArgs) {
-  if (request.method !== "POST") {
-    return json({ error: "Method not allowed" }, { status: 405 });
+  // Handle CORS preflight
+  if (request.method === "OPTIONS") {
+    return handleCorsOptions(request);
   }
+
+  if (request.method !== "POST") {
+    return corsJson({ error: "Method not allowed" }, request, { status: 405 });
+  }
+
+  // Rate limiting
+  const identifier = getIdentifier(request, "customer");
+  const rateLimitResponse = await rateLimitGuard(identifier, "preflight");
+  if (rateLimitResponse) return rateLimitResponse;
 
   let body: any;
   try {
     body = await request.json();
   } catch {
-    return json({ error: "Invalid JSON body" }, { status: 400 });
+    return corsJson({ error: "Invalid JSON body" }, request, { status: 400 });
   }
 
   const { shopDomain, uploadId, items } = body;
 
   if (!shopDomain) {
-    return json({ error: "Missing required field: shopDomain" }, { status: 400 });
+    return corsJson({ error: "Missing required field: shopDomain" }, request, { status: 400 });
   }
 
   if (!uploadId || !items || !Array.isArray(items)) {
-    return json({ error: "Missing required fields: uploadId, items" }, { status: 400 });
+    return corsJson({ error: "Missing required fields: uploadId, items" }, request, { status: 400 });
   }
 
   const shop = await prisma.shop.findUnique({
@@ -41,7 +53,7 @@ export async function action({ request }: ActionFunctionArgs) {
   });
 
   if (!shop) {
-    return json({ error: "Shop not found" }, { status: 404 });
+    return corsJson({ error: "Shop not found" }, request, { status: 404 });
   }
 
 
@@ -52,11 +64,11 @@ export async function action({ request }: ActionFunctionArgs) {
   });
 
   if (!upload) {
-    return json({ error: "Upload not found" }, { status: 404 });
+    return corsJson({ error: "Upload not found" }, request, { status: 404 });
   }
 
   if (upload.status !== "draft") {
-    return json({ error: "Upload already completed" }, { status: 400 });
+    return corsJson({ error: "Upload already completed" }, request, { status: 400 });
   }
 
   try {
@@ -103,30 +115,35 @@ export async function action({ request }: ActionFunctionArgs) {
       items: upload.items.map((i: { location: string }) => ({ location: i.location })),
     });
 
-    return json({
+    return corsJson({
       success: true,
       uploadId,
       status: "processing",
       message: "Upload complete. Preflight checks started.",
-    });
+    }, request);
   } catch (error) {
     console.error("[Upload Complete] Error:", error);
-    return json({ error: "Failed to complete upload" }, { status: 500 });
+    return corsJson({ error: "Failed to complete upload" }, request, { status: 500 });
   }
 }
 
 // GET /api/upload/complete?uploadId=xxx&shopDomain=xxx (get upload status)
 export async function loader({ request }: LoaderFunctionArgs) {
+  // Handle CORS preflight
+  if (request.method === "OPTIONS") {
+    return handleCorsOptions(request);
+  }
+
   const url = new URL(request.url);
   const uploadId = url.searchParams.get("uploadId");
   const shopDomain = url.searchParams.get("shopDomain");
 
   if (!shopDomain) {
-    return json({ error: "Missing shopDomain" }, { status: 400 });
+    return corsJson({ error: "Missing shopDomain" }, request, { status: 400 });
   }
 
   if (!uploadId) {
-    return json({ error: "Missing uploadId" }, { status: 400 });
+    return corsJson({ error: "Missing uploadId" }, request, { status: 400 });
   }
 
   const shop = await prisma.shop.findUnique({
@@ -134,7 +151,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   });
 
   if (!shop) {
-    return json({ error: "Shop not found" }, { status: 404 });
+    return corsJson({ error: "Shop not found" }, request, { status: 404 });
   }
 
 
@@ -155,10 +172,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
   });
 
   if (!upload) {
-    return json({ error: "Upload not found" }, { status: 404 });
+    return corsJson({ error: "Upload not found" }, request, { status: 404 });
   }
 
-  return json({
+  return corsJson({
     uploadId: upload.id,
     status: upload.status,
     mode: upload.mode,
@@ -166,6 +183,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
     items: upload.items,
     createdAt: upload.createdAt,
     updatedAt: upload.updatedAt,
-  });
+  }, request);
 }
 

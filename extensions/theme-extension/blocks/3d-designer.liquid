@@ -37,11 +37,14 @@
     Change to false in production
   endcomment
   assign debug_mode = false
-  assign should_show = upload_enabled and upload_mode == '3d_designer'
-  if debug_mode
-    assign should_show = true
-  endif
 %}
+
+{% assign should_show = false %}
+{% if debug_mode %}
+  {% assign should_show = true %}
+{% elsif upload_enabled == true and upload_mode == '3d_designer' %}
+  {% assign should_show = true %}
+{% endif %}
 
 {% if should_show %}
 <div
@@ -53,6 +56,7 @@
   data-asset-set-id="{{ asset_set_id }}"
   data-max-size="{{ max_size_mb }}"
   data-app-url="{{ shop.metafields.upload_lift.app_url | default: 'https://customizerapp.dev' }}"
+  data-shop-domain="{{ shop.permanent_domain }}"
   data-debug="{{ debug_mode }}"
 >
   <!-- Header -->
@@ -203,6 +207,18 @@
           <label>Rotation</label>
           <input type="range" id="ul-rotation-slider" min="-180" max="180" value="0">
           <span id="ul-rotation-value">0°</span>
+        </div>
+
+        <div class="ul-transform-control">
+          <label>Position X</label>
+          <input type="range" id="ul-position-x-slider" min="-50" max="50" value="0">
+          <span id="ul-position-x-value">0</span>
+        </div>
+
+        <div class="ul-transform-control">
+          <label>Position Y</label>
+          <input type="range" id="ul-position-y-slider" min="-50" max="50" value="0">
+          <span id="ul-position-y-value">0</span>
         </div>
 
         <div class="ul-transform-buttons">
@@ -712,6 +728,9 @@
     }
   }
 </style>
+
+<!-- Preload Three.js for better performance -->
+<link rel="preload" href="https://unpkg.com/three@0.160.0/build/three.min.js" as="script" crossorigin>
 
 <!-- Load core widget first, then 3D module -->
 <script src="{{ 'upload-lift-core.js' | asset_url }}" defer></script>
