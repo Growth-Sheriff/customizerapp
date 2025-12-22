@@ -21,7 +21,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       data: {
         shopDomain,
         accessToken: session.accessToken || "",
-        plan: "free",
+        plan: "starter",
         billingStatus: "active",
         storageProvider: "r2",
         settings: {},

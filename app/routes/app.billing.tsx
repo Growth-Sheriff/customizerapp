@@ -1,64 +1,59 @@
 import type { LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node";
-import { json, redirect } from "@remix-run/node";
+import { json } from "@remix-run/node";
 import { useLoaderData, Form, useNavigation } from "@remix-run/react";
 import {
   Page, Layout, Card, Text, BlockStack, InlineStack,
-  Button, Banner, Badge, Box
+  Button, Banner, Badge, Box, Divider, Icon, ProgressBar
 } from "@shopify/polaris";
+import { CheckCircleIcon, XCircleIcon } from "@shopify/polaris-icons";
 import { authenticate } from "~/shopify.server";
 import prisma from "~/lib/prisma.server";
+import { calculateEstimatedBill } from "~/lib/billing.server";
 
+// Plan data for UI
 const PLANS = [
-  {
-    id: "free",
-    name: "Free",
-    price: 0,
-    features: [
-      "100 uploads/month",
-      "1 mode (Classic Upload)",
-      "25MB max file size",
-      "Basic preflight",
-      "Watermark on previews",
-    ],
-  },
   {
     id: "starter",
     name: "Starter",
-    price: 19,
+    price: 9,
+    freeOrders: 20,
+    extraOrderPrice: 0.05,
+    popular: false,
     features: [
-      "1,000 uploads/month",
-      "2 modes (Classic + Quick)",
-      "50MB max file size",
-      "No watermark",
-      "R2/S3 storage choice",
-      "Basic analytics",
+      { name: "20 free orders/month", included: true },
+      { name: "$0.05 per extra order", included: true },
+      { name: "DTF Transfer mode", included: true },
+      { name: "Quick Upload mode", included: true },
+      { name: "50MB file uploads", included: true },
+      { name: "Analytics dashboard", included: true },
+      { name: "Export to PDF/PNG", included: true },
+      { name: "3D Designer mode", included: false },
+      { name: "Team collaboration", included: false },
+      { name: "API access", included: false },
+      { name: "White-label branding", included: false },
+      { name: "Priority support", included: false },
     ],
   },
   {
     id: "pro",
     name: "Pro",
-    price: 49,
+    price: 19,
+    freeOrders: 30,
+    extraOrderPrice: 0.06,
+    popular: true,
     features: [
-      "Unlimited uploads",
-      "All 3 modes including 3D",
-      "150MB max file size",
-      "Production queue",
-      "Batch export",
-      "Flow triggers",
-      "Priority support",
-    ],
-  },
-  {
-    id: "enterprise",
-    name: "Enterprise",
-    price: 199,
-    features: [
-      "Everything in Pro",
-      "Team RBAC",
-      "White-label branding",
-      "Public API access",
-      "Custom SLA",
-      "Dedicated support",
+      { name: "30 free orders/month", included: true },
+      { name: "$0.06 per extra order", included: true },
+      { name: "DTF Transfer mode", included: true },
+      { name: "Quick Upload mode", included: true },
+      { name: "150MB file uploads", included: true },
+      { name: "Analytics dashboard", included: true },
+      { name: "Export to PDF/PNG", included: true },
+      { name: "3D Designer mode", included: true },
+      { name: "Team collaboration", included: true },
+      { name: "API access", included: true },
+      { name: "White-label branding", included: true },
+      { name: "Priority support", included: true },
     ],
   },
 ];
@@ -76,7 +71,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       data: {
         shopDomain,
         accessToken: session.accessToken || "",
-        plan: "free",
+        plan: "starter",
         billingStatus: "active",
         storageProvider: "r2",
         settings: {},
@@ -84,25 +79,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
     });
   }
 
-  // Get current month usage
-  const startOfMonth = new Date();
-  startOfMonth.setDate(1);
-  startOfMonth.setHours(0, 0, 0, 0);
-
-  const uploadCount = await prisma.upload.count({
-    where: {
-      shopId: shop.id,
-      createdAt: { gte: startOfMonth },
-    },
-  });
+  // Calculate current billing
+  const billing = await calculateEstimatedBill(shop.id);
 
   return json({
-    currentPlan: shop.plan,
+    currentPlan: shop.plan as "starter" | "pro",
     billingStatus: shop.billingStatus,
-    usage: {
-      uploads: uploadCount,
-      limit: shop.plan === "free" ? 100 : shop.plan === "starter" ? 1000 : null,
-    },
+    billing,
     plans: PLANS,
   });
 }
@@ -115,23 +98,20 @@ export async function action({ request }: ActionFunctionArgs) {
   const planId = formData.get("planId") as string;
 
   const planDetails = PLANS.find((p) => p.id === planId);
-  if (!planDetails || planDetails.price === 0) {
+  if (!planDetails) {
     return json({ error: "Invalid plan" }, { status: 400 });
   }
 
   const planName = planId.toUpperCase();
 
-  // Request billing subscription from Shopify
-  // This will redirect to Shopify's billing approval page
   try {
-    // First check if already subscribed to this plan
+    // Check if already subscribed
     const hasSubscription = await billing.check({
       plans: [planName],
       isTest: true, // Set to false in production
     });
 
     if (hasSubscription) {
-      // Already subscribed, just update database
       await prisma.shop.update({
         where: { shopDomain },
         data: { plan: planId, billingStatus: "active" },
@@ -139,14 +119,13 @@ export async function action({ request }: ActionFunctionArgs) {
       return json({ success: true, message: `Already on ${planDetails.name} plan` });
     }
 
-    // Request new subscription - this throws a Response redirect
+    // Request subscription
     return await billing.request({
       plan: planName,
       isTest: true, // Set to false in production
       returnUrl: `https://customizerapp.dev/app?shop=${shopDomain}&billing=success`,
     });
   } catch (error: any) {
-    // If it's a redirect response, return it
     if (error instanceof Response) {
       return error;
     }
@@ -156,11 +135,12 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function BillingPage() {
-  const { currentPlan, billingStatus, usage, plans } = useLoaderData<typeof loader>();
+  const { currentPlan, billingStatus, billing, plans } = useLoaderData<typeof loader>();
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
 
   const currentPlanDetails = plans.find((p) => p.id === currentPlan);
+  const usagePercentage = Math.min((billing.usedOrders / billing.freeOrders) * 100, 100);
 
   return (
     <Page title="Billing & Plans" backAction={{ content: "Dashboard", url: "/app" }}>
@@ -173,94 +153,194 @@ export default function BillingPage() {
           </Layout.Section>
         )}
 
+        {/* Current Usage Card */}
         <Layout.Section>
           <Card>
             <BlockStack gap="400">
-              <Text as="h2" variant="headingMd">Current Plan</Text>
               <InlineStack align="space-between">
-                <BlockStack gap="200">
+                <BlockStack gap="100">
+                  <Text as="h2" variant="headingMd">Current Usage</Text>
                   <InlineStack gap="200" align="center">
-                    <Text as="span" variant="headingLg">{currentPlanDetails?.name}</Text>
-                    <Badge tone="success">Active</Badge>
+                    <Badge tone="success">{currentPlanDetails?.name} Plan</Badge>
+                    <Text as="span" variant="bodySm" tone="subdued">
+                      ${currentPlanDetails?.price}/month base
+                    </Text>
                   </InlineStack>
-                  <Text as="p" variant="bodyMd" tone="subdued">
-                    ${currentPlanDetails?.price}/month
+                </BlockStack>
+                <BlockStack gap="100" inlineAlign="end">
+                  <Text as="p" variant="headingLg">
+                    ${billing.estimatedTotal.toFixed(2)}
+                  </Text>
+                  <Text as="p" variant="bodySm" tone="subdued">
+                    Estimated this month
                   </Text>
                 </BlockStack>
-                {usage.limit && (
-                  <Box>
-                    <Text as="p" variant="bodySm">
-                      {usage.uploads} / {usage.limit} uploads this month
-                    </Text>
-                    <div style={{
-                      width: 200,
-                      height: 8,
-                      backgroundColor: "#e4e5e7",
-                      borderRadius: 4,
-                      marginTop: 8,
-                    }}>
-                      <div style={{
-                        width: `${Math.min((usage.uploads / usage.limit) * 100, 100)}%`,
-                        height: "100%",
-                        backgroundColor: usage.uploads / usage.limit > 0.9 ? "#d72c0d" : "#008060",
-                        borderRadius: 4,
-                      }} />
-                    </div>
-                  </Box>
-                )}
               </InlineStack>
+
+              <Divider />
+
+              {/* Usage Progress */}
+              <BlockStack gap="200">
+                <InlineStack align="space-between">
+                  <Text as="p" variant="bodyMd">
+                    Orders this month
+                  </Text>
+                  <Text as="p" variant="bodyMd">
+                    {billing.usedOrders} / {billing.freeOrders} free
+                  </Text>
+                </InlineStack>
+                <ProgressBar 
+                  progress={usagePercentage} 
+                  tone={usagePercentage >= 100 ? "critical" : usagePercentage >= 80 ? "warning" : "primary"}
+                  size="small"
+                />
+              </BlockStack>
+
+              {/* Cost Breakdown */}
+              {billing.extraOrders > 0 && (
+                <Box background="bg-surface-secondary" padding="300" borderRadius="200">
+                  <BlockStack gap="200">
+                    <InlineStack align="space-between">
+                      <Text as="p" variant="bodySm">Base subscription</Text>
+                      <Text as="p" variant="bodySm">${billing.basePrice.toFixed(2)}</Text>
+                    </InlineStack>
+                    <InlineStack align="space-between">
+                      <Text as="p" variant="bodySm">
+                        Extra orders ({billing.extraOrders} × ${billing.extraOrderPrice})
+                      </Text>
+                      <Text as="p" variant="bodySm">+${billing.extraOrdersCost.toFixed(2)}</Text>
+                    </InlineStack>
+                    <Divider />
+                    <InlineStack align="space-between">
+                      <Text as="p" variant="bodyMd" fontWeight="semibold">Total</Text>
+                      <Text as="p" variant="bodyMd" fontWeight="semibold">
+                        ${billing.estimatedTotal.toFixed(2)}
+                      </Text>
+                    </InlineStack>
+                  </BlockStack>
+                </Box>
+              )}
+            </BlockStack>
+          </Card>
+        </Layout.Section>
+
+        {/* Plan Comparison */}
+        <Layout.Section>
+          <Text as="h2" variant="headingMd">Choose Your Plan</Text>
+        </Layout.Section>
+
+        <Layout.Section>
+          <InlineStack gap="400" align="start" wrap={false}>
+            {plans.map((plan) => (
+              <Box key={plan.id} width="50%">
+                <Card>
+                  <BlockStack gap="400">
+                    {/* Header */}
+                    <InlineStack align="space-between" blockAlign="start">
+                      <BlockStack gap="100">
+                        <InlineStack gap="200">
+                          <Text as="h3" variant="headingLg">{plan.name}</Text>
+                          {plan.popular && <Badge tone="info">Most Popular</Badge>}
+                        </InlineStack>
+                        <Text as="p" variant="headingXl">
+                          ${plan.price}
+                          <Text as="span" variant="bodySm" tone="subdued">/month</Text>
+                        </Text>
+                      </BlockStack>
+                      {plan.id === currentPlan && (
+                        <Badge tone="success">Current Plan</Badge>
+                      )}
+                    </InlineStack>
+
+                    {/* Pricing Details */}
+                    <Box background="bg-surface-secondary" padding="300" borderRadius="200">
+                      <BlockStack gap="100">
+                        <Text as="p" variant="bodySm" fontWeight="semibold">
+                          {plan.freeOrders} free orders/month
+                        </Text>
+                        <Text as="p" variant="bodySm" tone="subdued">
+                          Then ${plan.extraOrderPrice.toFixed(2)} per additional order
+                        </Text>
+                      </BlockStack>
+                    </Box>
+
+                    <Divider />
+
+                    {/* Features List */}
+                    <BlockStack gap="200">
+                      {plan.features.map((feature, i) => (
+                        <InlineStack key={i} gap="200" align="start">
+                          <Box>
+                            <Icon
+                              source={feature.included ? CheckCircleIcon : XCircleIcon}
+                              tone={feature.included ? "success" : "subdued"}
+                            />
+                          </Box>
+                          <Text 
+                            as="p" 
+                            variant="bodySm"
+                            tone={feature.included ? undefined : "subdued"}
+                          >
+                            {feature.name}
+                          </Text>
+                        </InlineStack>
+                      ))}
+                    </BlockStack>
+
+                    {/* Action Button */}
+                    {plan.id !== currentPlan && (
+                      <Form method="post">
+                        <input type="hidden" name="planId" value={plan.id} />
+                        <Button
+                          variant={plan.price > (currentPlanDetails?.price || 0) ? "primary" : undefined}
+                          submit
+                          loading={isSubmitting}
+                          fullWidth
+                        >
+                          {plan.price > (currentPlanDetails?.price || 0) ? "Upgrade to Pro" : "Switch to Starter"}
+                        </Button>
+                      </Form>
+                    )}
+                    {plan.id === currentPlan && (
+                      <Button disabled fullWidth>Current Plan</Button>
+                    )}
+                  </BlockStack>
+                </Card>
+              </Box>
+            ))}
+          </InlineStack>
+        </Layout.Section>
+
+        {/* FAQ / Info */}
+        <Layout.Section>
+          <Card>
+            <BlockStack gap="400">
+              <Text as="h3" variant="headingMd">How Usage-Based Billing Works</Text>
+              <BlockStack gap="200">
+                <Text as="p" variant="bodyMd">
+                  1. <strong>Base subscription</strong> - Fixed monthly fee for your plan
+                </Text>
+                <Text as="p" variant="bodyMd">
+                  2. <strong>Free orders included</strong> - Each plan includes free orders per month
+                </Text>
+                <Text as="p" variant="bodyMd">
+                  3. <strong>Pay as you grow</strong> - Only pay for extra orders beyond your free limit
+                </Text>
+                <Text as="p" variant="bodyMd">
+                  4. <strong>Billed at end of cycle</strong> - Usage charges are calculated and billed monthly
+                </Text>
+              </BlockStack>
             </BlockStack>
           </Card>
         </Layout.Section>
 
         <Layout.Section>
-          <Text as="h2" variant="headingMd">Available Plans</Text>
-        </Layout.Section>
-
-        <Layout.Section>
-          <InlineStack gap="400" wrap>
-            {plans.map((plan) => (
-              <Card key={plan.id}>
-                <BlockStack gap="400">
-                  <InlineStack align="space-between">
-                    <Text as="h3" variant="headingMd">{plan.name}</Text>
-                    {plan.id === currentPlan && <Badge>Current</Badge>}
-                  </InlineStack>
-                  <Text as="p" variant="headingLg">
-                    ${plan.price}
-                    <Text as="span" variant="bodySm" tone="subdued">/month</Text>
-                  </Text>
-                  <BlockStack gap="100">
-                    {plan.features.map((feature, i) => (
-                      <Text key={i} as="p" variant="bodySm">✓ {feature}</Text>
-                    ))}
-                  </BlockStack>
-                  {plan.id !== currentPlan && plan.price > 0 && (
-                    <Form method="post">
-                      <input type="hidden" name="planId" value={plan.id} />
-                      <Button
-                        variant={plan.price > (currentPlanDetails?.price || 0) ? "primary" : undefined}
-                        submit
-                        loading={isSubmitting}
-                      >
-                        {plan.price > (currentPlanDetails?.price || 0) ? "Upgrade" : "Downgrade"}
-                      </Button>
-                    </Form>
-                  )}
-                </BlockStack>
-              </Card>
-            ))}
-          </InlineStack>
-        </Layout.Section>
-
-        <Layout.Section>
           <Banner tone="info">
-            Plan changes will take effect on your next billing cycle.
-            Contact support for Enterprise plan inquiries.
+            Plan changes take effect immediately. You can upgrade or downgrade anytime.
+            Questions? Contact support@customizerapp.dev
           </Banner>
         </Layout.Section>
       </Layout>
     </Page>
   );
 }
-

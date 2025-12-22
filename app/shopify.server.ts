@@ -14,25 +14,24 @@ const redisSessionStorage = new RedisSessionStorage(
   process.env.REDIS_URL || "redis://localhost:6379"
 );
 
-// Billing plans configuration
+// ===== BILLING PLANS v2.0 =====
+// Two-tier usage-based pricing model
 const BILLING_PLANS = {
   STARTER: {
+    amount: 9,
+    currencyCode: "USD",
+    interval: BillingInterval.Every30Days,
+    trialDays: 7,
+    // Usage charges handled via AppUsageRecord API
+    // 20 free orders, then $0.05/order
+  },
+  PRO: {
     amount: 19,
     currencyCode: "USD",
     interval: BillingInterval.Every30Days,
     trialDays: 7,
-  },
-  PRO: {
-    amount: 49,
-    currencyCode: "USD",
-    interval: BillingInterval.Every30Days,
-    trialDays: 7,
-  },
-  ENTERPRISE: {
-    amount: 199,
-    currencyCode: "USD",
-    interval: BillingInterval.Every30Days,
-    trialDays: 14,
+    // Usage charges handled via AppUsageRecord API
+    // 30 free orders, then $0.06/order
   },
 };
 
@@ -98,7 +97,7 @@ const shopify = shopifyApp({
         create: {
           shopDomain: session.shop,
           accessToken: session.accessToken || "",
-          plan: "free",
+          plan: "starter",
           billingStatus: "active",
           storageProvider: "r2",
           settings: {},

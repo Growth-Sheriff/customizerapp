@@ -24,7 +24,7 @@ export async function action({ request }: ActionFunctionArgs) {
       data: {
         shopDomain,
         accessToken: session.accessToken || "",
-        plan: "free",
+        plan: "starter",
         billingStatus: "active",
         storageProvider: "r2",
         settings: {},

@@ -22,7 +22,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       data: {
         shopDomain,
         accessToken: session.accessToken || "",
-        plan: "free",
+        plan: "starter",
         billingStatus: "active",
         storageProvider: "shopify", // Default to Shopify Files (recommended)
         settings: {},
@@ -52,7 +52,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       shopName: settings.shopName || "",
       notificationEmail: settings.notificationEmail || "",
       autoApprove: settings.autoApprove || false,
-      watermarkEnabled: shop.plan === "free",
+      watermarkEnabled: false, // No watermark for any plan
       redisEnabled: settings.redisEnabled || false,
     },
   });
@@ -428,16 +428,14 @@ export default function SettingsPage() {
                       {shop.plan.toUpperCase()}
                     </Text>
                     <Text as="p" variant="bodySm" tone="subdued">
-                      {shop.plan === "free" && "100 uploads/month, watermark enabled"}
-                      {shop.plan === "starter" && "1,000 uploads/month, no watermark"}
-                      {shop.plan === "pro" && "Unlimited uploads, all features"}
-                      {shop.plan === "enterprise" && "Custom limits, priority support"}
+                      {shop.plan === "starter" && "20 free orders/month, then $0.05/order"}
+                      {shop.plan === "pro" && "30 free orders/month, then $0.06/order, all features"}
                     </Text>
                   </Box>
 
-                  {shop.plan !== "enterprise" && (
+                  {shop.plan === "starter" && (
                     <Button url="/app/billing">
-                      Upgrade Plan
+                      Upgrade to Pro
                     </Button>
                   )}
                 </InlineStack>

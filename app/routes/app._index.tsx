@@ -30,7 +30,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       data: {
         shopDomain,
         accessToken: session.accessToken || "",
-        plan: "free",
+        plan: "starter",
         billingStatus: "active",
         storageProvider: "r2",
         settings: {},
@@ -293,13 +293,13 @@ export default function AppDashboard() {
                     </Badge>
                   </InlineStack>
                   <Divider />
-                  {shop.plan === "free" ? (
+                  {shop.plan === "starter" ? (
                     <BlockStack gap="200">
                       <Text as="p" variant="bodySm" tone="subdued">
-                        Upgrade for 3D Designer, team management, and API access.
+                        Upgrade to Pro for 3D Designer, team management, and API access.
                       </Text>
                       <Button onClick={() => navigate("/app/billing")}>
-                        Upgrade Now
+                        Upgrade to Pro
                       </Button>
                     </BlockStack>
                   ) : (
