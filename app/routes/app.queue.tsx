@@ -391,15 +391,14 @@ export default function ProductionQueuePage() {
   ]);
 
   return (
-    <AppProvider i18n={enTranslations}>
-      <Page
-        title="Production Queue"
-        backAction={{ content: "Dashboard", url: "/app" }}
-        secondaryActions={[
-          { content: "Export Selected", disabled: selectedUploads.length === 0, onAction: () => {} },
-          { content: "Analytics", url: "/app/analytics" },
-        ]}
-      >
+    <Page
+      title="Production Queue"
+      backAction={{ content: "Dashboard", url: "/app" }}
+      secondaryActions={[
+        { content: "Export Selected", disabled: selectedUploads.length === 0, onAction: () => {} },
+        { content: "Analytics", url: "/app/analytics" },
+      ]}
+    >
         <Layout>
           {/* Action result banner */}
           {actionData && "success" in actionData && (
@@ -636,7 +635,6 @@ export default function ProductionQueuePage() {
           </Modal.Section>
         </Modal>
       </Page>
-    </AppProvider>
   );
 }
 

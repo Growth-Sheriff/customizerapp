@@ -115,11 +115,9 @@ export default function UploadsPage() {
 
   if ("error" in data) {
     return (
-      <AppProvider i18n={enTranslations}>
-        <Page title="Error">
-          <Card><Text as="p">{data.error}</Text></Card>
-        </Page>
-      </AppProvider>
+      <Page title="Error">
+        <Card><Text as="p">{data.error}</Text></Card>
+      </Page>
     );
   }
 
@@ -180,8 +178,7 @@ export default function UploadsPage() {
   }
 
   return (
-    <AppProvider i18n={enTranslations}>
-      <Page title="Uploads" backAction={{ content: "Dashboard", url: "/app" }}>
+    <Page title="Uploads" backAction={{ content: "Dashboard", url: "/app" }}>
         <Layout>
           <Layout.Section>
             <Card>
@@ -280,7 +277,6 @@ export default function UploadsPage() {
           </Layout.Section>
         </Layout>
       </Page>
-    </AppProvider>
   );
 }
 

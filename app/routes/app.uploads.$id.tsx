@@ -157,11 +157,9 @@ export default function UploadDetail() {
 
   if ("error" in data) {
     return (
-      <AppProvider i18n={enTranslations}>
-        <Page title="Error">
-          <Banner tone="critical">{data.error}</Banner>
-        </Page>
-      </AppProvider>
+      <Page title="Error">
+        <Banner tone="critical">{data.error}</Banner>
+      </Page>
     );
   }
 
@@ -171,9 +169,8 @@ export default function UploadDetail() {
   const hasErrors = upload.items.some(i => i.preflightStatus === "error");
 
   return (
-    <AppProvider i18n={enTranslations}>
-      <Page
-        title={`Upload: ${upload.id.slice(0, 8)}...`}
+    <Page
+      title={`Upload: ${upload.id.slice(0, 8)}...`}
         backAction={{ content: "Uploads", url: "/app/uploads" }}
         primaryAction={
           upload.status === "needs_review" && !hasErrors
@@ -350,7 +347,6 @@ export default function UploadDetail() {
           </Modal.Section>
         </Modal>
       </Page>
-    </AppProvider>
   );
 }
 

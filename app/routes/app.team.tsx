@@ -307,16 +307,15 @@ export default function TeamPage() {
   ]);
 
   return (
-    <AppProvider i18n={enTranslations}>
-      <Page
-        title="Team Management"
-        backAction={{ content: "Dashboard", url: "/app" }}
-        primaryAction={
-          canManageTeam
-            ? { content: "Invite Member", onAction: () => setInviteModalOpen(true) }
-            : undefined
-        }
-      >
+    <Page
+      title="Team Management"
+      backAction={{ content: "Dashboard", url: "/app" }}
+      primaryAction={
+        canManageTeam
+          ? { content: "Invite Member", onAction: () => setInviteModalOpen(true) }
+          : undefined
+      }
+    >
         <Layout>
           {/* Action result banner */}
           {actionData && "success" in actionData && (
@@ -484,7 +483,6 @@ export default function TeamPage() {
           </Modal.Section>
         </Modal>
       </Page>
-    </AppProvider>
   );
 }
 

@@ -130,11 +130,10 @@ export default function WhiteLabelPage() {
   const canUseWhiteLabel = plan === "enterprise";
 
   return (
-    <AppProvider i18n={enTranslations}>
-      <Page
-        title="White-Label Settings"
-        backAction={{ content: "Settings", url: "/app/settings" }}
-      >
+    <Page
+      title="White-Label Settings"
+      backAction={{ content: "Settings", url: "/app/settings" }}
+    >
         <Layout>
           {/* Action result banner */}
           {actionData && "success" in actionData && (
@@ -351,7 +350,6 @@ export default function WhiteLabelPage() {
           </Form>
         </Layout>
       </Page>
-    </AppProvider>
   );
 }
 

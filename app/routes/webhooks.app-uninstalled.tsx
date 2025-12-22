@@ -10,12 +10,20 @@ export async function action({ request }: ActionFunctionArgs) {
   console.log(`[Webhook] ${topic} for shop: ${shop}`);
 
   try {
-    // Delete shop and all related data (cascade)
-    await prisma.shop.delete({
+    // Check if shop exists before deleting
+    const existingShop = await prisma.shop.findUnique({
       where: { shopDomain: shop },
     });
 
-    console.log(`[Webhook] Cleaned up data for shop: ${shop}`);
+    if (existingShop) {
+      // Delete shop and all related data (cascade)
+      await prisma.shop.delete({
+        where: { shopDomain: shop },
+      });
+      console.log(`[Webhook] Cleaned up data for shop: ${shop}`);
+    } else {
+      console.log(`[Webhook] Shop ${shop} not found in database, nothing to clean up`);
+    }
   } catch (error) {
     console.error(`[Webhook] Error cleaning up shop ${shop}:`, error);
   }

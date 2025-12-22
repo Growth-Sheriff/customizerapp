@@ -190,8 +190,7 @@ export default function SettingsPage() {
   }, []);
 
   return (
-    <AppProvider i18n={enTranslations}>
-      <Page title="Settings" backAction={{ content: "Dashboard", url: "/app" }}>
+    <Page title="Settings" backAction={{ content: "Dashboard", url: "/app" }}>
         <Layout>
           {/* Success/Error Banner */}
           {actionData && "success" in actionData && (
@@ -395,7 +394,6 @@ export default function SettingsPage() {
           </Layout.Section>
         </Layout>
       </Page>
-    </AppProvider>
   );
 }
 

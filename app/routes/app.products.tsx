@@ -64,7 +64,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     orderBy: { createdAt: "desc" },
   });
 
-  // Fetch products from Shopify
+    // Fetch products from Shopify using admin.graphql()
   let shopifyProducts: Array<{
     id: string;
     title: string;
@@ -72,30 +72,22 @@ export async function loader({ request }: LoaderFunctionArgs) {
     image: string | null;
   }> = [];
 
-  if (shop.accessToken) {
-    try {
-      const result = await shopifyGraphQL<{
-        products: {
-          edges: Array<{
-            node: {
-              id: string;
-              title: string;
-              status: string;
-              featuredImage: { url: string } | null;
-            };
-          }>;
-        };
-      }>(shopDomain, shop.accessToken, PRODUCTS_QUERY, { first: 50 });
+  try {
+    const response = await admin.graphql(PRODUCTS_QUERY, {
+      variables: { first: 50 },
+    });
+    const result = await response.json();
 
-      shopifyProducts = result.products.edges.map(edge => ({
+    if (result.data?.products?.edges) {
+      shopifyProducts = result.data.products.edges.map((edge: any) => ({
         id: edge.node.id,
         title: edge.node.title,
         status: edge.node.status,
         image: edge.node.featuredImage?.url || null,
       }));
-    } catch (error) {
-      console.error("Failed to fetch products:", error);
     }
+  } catch (error) {
+    console.error("Failed to fetch products:", error);
   }
 
   // Get asset sets for dropdown
@@ -267,12 +259,11 @@ export default function ProductsPage() {
   ]);
 
   return (
-    <AppProvider i18n={enTranslations}>
-      <Page
-        title="Products"
-        backAction={{ content: "Dashboard", url: "/app" }}
-        primaryAction={{ content: "Manage Asset Sets", url: "/app/asset-sets" }}
-      >
+    <Page
+      title="Products"
+      backAction={{ content: "Dashboard", url: "/app" }}
+      primaryAction={{ content: "Manage Asset Sets", url: "/app/asset-sets" }}
+    >
         <Layout>
           {/* Action result banner */}
           {actionData && "success" in actionData && (
@@ -391,7 +382,6 @@ export default function ProductsPage() {
           </Modal.Section>
         </Modal>
       </Page>
-    </AppProvider>
   );
 }
 

@@ -6,7 +6,7 @@ export const shopifyConfig = {
   apiSecret: process.env.SHOPIFY_API_SECRET || "",
   scopes: process.env.SHOPIFY_SCOPES || "read_products,write_products,read_orders,write_orders",
   hostName: process.env.HOST || "https://customizerapp.dev",
-  apiVersion: "2025-01",
+  apiVersion: "2025-10",
 };
 
 // Generate OAuth authorization URL
