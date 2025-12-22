@@ -24,7 +24,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         accessToken: session.accessToken || "",
         plan: "free",
         billingStatus: "active",
-        storageProvider: "local", // Default to local (no config needed)
+        storageProvider: "shopify", // Default to Shopify Files (recommended)
         settings: {},
       },
     });
@@ -39,14 +39,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
       plan: shop.plan,
     },
     storageConfig: {
-      provider: shop.storageProvider || "local",
+      provider: shop.storageProvider || "shopify",
       bucket: storageConfig.bucket || "",
       region: storageConfig.region || "auto",
       accountId: storageConfig.accountId || "",
       accessKeyId: storageConfig.accessKeyId ? "••••••••" : "",
       secretAccessKey: storageConfig.secretAccessKey ? "••••••••" : "",
       publicUrl: storageConfig.publicUrl || "",
-      isConfigured: !!(storageConfig.accessKeyId && storageConfig.bucket),
+      isConfigured: shop.storageProvider === "shopify" || !!(storageConfig.accessKeyId && storageConfig.bucket),
     },
     settings: {
       shopName: settings.shopName || "",
@@ -175,7 +175,7 @@ export default function SettingsPage() {
 
   const [provider, setProvider] = useState(storageConfig.provider);
   const [showStorageConfig, setShowStorageConfig] = useState(
-    storageConfig.provider !== "local" && storageConfig.isConfigured
+    storageConfig.provider !== "shopify" && storageConfig.provider !== "local"
   );
 
   // Form state for general settings
@@ -192,7 +192,7 @@ export default function SettingsPage() {
 
   const handleProviderChange = useCallback((value: string) => {
     setProvider(value);
-    if (value === "local") {
+    if (value === "shopify" || value === "local") {
       setShowStorageConfig(false);
     }
   }, []);
@@ -200,7 +200,7 @@ export default function SettingsPage() {
   const handleToggleCloudStorage = useCallback((checked: boolean) => {
     setShowStorageConfig(checked);
     if (!checked) {
-      setProvider("local");
+      setProvider("shopify");
     } else {
       setProvider("r2");
     }
@@ -271,7 +271,9 @@ export default function SettingsPage() {
                 <BlockStack gap="400">
                   <InlineStack align="space-between">
                     <Text as="h2" variant="headingMd">Storage Configuration</Text>
-                    {storageConfig.provider === "local" ? (
+                    {storageConfig.provider === "shopify" ? (
+                      <Badge tone="success">Shopify Files (Recommended)</Badge>
+                    ) : storageConfig.provider === "local" ? (
                       <Badge tone="attention">Local Storage</Badge>
                     ) : storageConfig.isConfigured ? (
                       <Badge tone="success">Cloud Connected</Badge>
@@ -280,18 +282,18 @@ export default function SettingsPage() {
                     )}
                   </InlineStack>
 
-                  <Banner tone="info">
+                  <Banner tone="success">
                     <p>
-                      <strong>Optional:</strong> By default, files are stored on the server locally. 
-                      For better performance and scalability, you can configure cloud storage (Cloudflare R2 or Amazon S3).
+                      <strong>Shopify Files (Default):</strong> Customer uploads are stored in your Shopify admin. 
+                      This is free, unlimited, and requires no configuration.
                     </p>
                   </Banner>
 
                   <Checkbox
-                    label="Use Cloud Storage (R2/S3)"
+                    label="Use External Cloud Storage (Advanced)"
                     checked={showStorageConfig}
                     onChange={handleToggleCloudStorage}
-                    helpText="Enable this to configure external cloud storage for customer files"
+                    helpText="Only enable if you need to use your own Cloudflare R2 or Amazon S3 bucket"
                   />
 
                   {showStorageConfig && (
@@ -379,7 +381,7 @@ export default function SettingsPage() {
                   )}
 
                   {!showStorageConfig && (
-                    <input type="hidden" name="provider" value="local" />
+                    <input type="hidden" name="provider" value="shopify" />
                   )}
 
                   <Divider />

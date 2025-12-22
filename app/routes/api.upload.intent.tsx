@@ -139,8 +139,9 @@ export async function action({ request }: ActionFunctionArgs) {
   const itemId = nanoid(8);
 
   // Get storage config - merge storageProvider with storageConfig
+  // Priority: shopify (default) > local > r2/s3
   const shopStorageConfig = {
-    provider: shop.storageProvider || 'local',
+    provider: shop.storageProvider || 'shopify',
     ...((shop.storageConfig as Record<string, unknown>) || {}),
   };
   const storageConfig = getStorageConfig(shopStorageConfig as any);
@@ -176,15 +177,19 @@ export async function action({ request }: ActionFunctionArgs) {
     });
 
     // Generate signed upload URL
-    const { url: uploadUrl, isLocal } = await getUploadSignedUrl(storageConfig, key, contentType);
+    const { url: uploadUrl, isLocal, isShopify } = await getUploadSignedUrl(storageConfig, key, contentType);
 
     return corsJson({
       uploadId,
       itemId,
       uploadUrl,
       key,
+      fileName,
+      fileSize,
+      mimeType: contentType,
       expiresIn: 900, // 15 minutes
-      isLocal: isLocal || false, // Indicates if using local storage
+      isLocal: isLocal || false,
+      isShopify: isShopify || false,
       storageProvider: storageConfig.provider,
     }, request);
   } catch (error) {

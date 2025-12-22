@@ -4,7 +4,14 @@ import { writeFile, mkdir, readFile, unlink } from "fs/promises";
 import { join, dirname } from "path";
 import { existsSync } from "fs";
 
-export type StorageProvider = "r2" | "s3" | "local" | "none";
+/**
+ * Storage Provider Priority:
+ * 1. shopify - Shopify Files API (FREE, RECOMMENDED)
+ * 2. local - Server local storage (fallback)
+ * 3. r2 - Cloudflare R2 (optional, advanced)
+ * 4. s3 - Amazon S3 (optional, advanced)
+ */
+export type StorageProvider = "shopify" | "local" | "r2" | "s3" | "none";
 
 export interface StorageConfig {
   provider: StorageProvider;
@@ -20,6 +27,7 @@ export interface StorageConfig {
 // Check if storage is configured
 export function isStorageConfigured(config: StorageConfig): boolean {
   if (config.provider === "none") return false;
+  if (config.provider === "shopify") return true; // Always available with Shopify
   if (config.provider === "local") return true;
   
   // For R2/S3, check if credentials are set
@@ -28,12 +36,22 @@ export function isStorageConfigured(config: StorageConfig): boolean {
 
 // Get storage config from environment or shop settings
 export function getStorageConfig(shopConfig?: Partial<StorageConfig>): StorageConfig {
-  const provider = (shopConfig?.provider ?? process.env.STORAGE_PROVIDER ?? "none") as StorageProvider;
+  const provider = (shopConfig?.provider ?? process.env.STORAGE_PROVIDER ?? "shopify") as StorageProvider;
 
-  // No storage configured - use local fallback
-  if (provider === "none" || provider === "local") {
+  // Shopify Files API - recommended default
+  if (provider === "shopify" || provider === "none") {
     return {
-      provider: provider === "none" ? "local" : provider,
+      provider: "shopify",
+      bucket: "",
+      accessKeyId: "",
+      secretAccessKey: "",
+    };
+  }
+
+  // Local storage fallback
+  if (provider === "local") {
+    return {
+      provider: "local",
       bucket: "",
       accessKeyId: "",
       secretAccessKey: "",
@@ -90,16 +108,26 @@ export function createStorageClient(config: StorageConfig): S3Client | null {
   });
 }
 
-// Generate upload signed URL (or local upload endpoint)
+// Generate upload signed URL (or local/shopify upload endpoint)
 export async function getUploadSignedUrl(
   config: StorageConfig,
   key: string,
   contentType: string,
   expiresIn: number = 900 // 15 minutes
-): Promise<{ url: string; key: string; isLocal?: boolean }> {
+): Promise<{ url: string; key: string; isLocal?: boolean; isShopify?: boolean }> {
+  const host = process.env.HOST || "https://customizerapp.dev";
+
+  // Shopify Files API - uses dedicated endpoint
+  if (config.provider === "shopify") {
+    return {
+      url: `${host}/api/upload/shopify`,
+      key,
+      isShopify: true,
+    };
+  }
+
   // Local storage - return local upload endpoint
-  if (config.provider === "local" || config.provider === "none") {
-    const host = process.env.HOST || "https://customizerapp.dev";
+  if (config.provider === "local") {
     return {
       url: `${host}/api/upload/local`,
       key,
@@ -129,9 +157,16 @@ export async function getDownloadSignedUrl(
   key: string,
   expiresIn: number = 3600 // 1 hour
 ): Promise<string> {
+  const host = process.env.HOST || "https://customizerapp.dev";
+
+  // Shopify Files - URL is already public CDN
+  if (config.provider === "shopify") {
+    // For Shopify, the key IS the URL
+    return key;
+  }
+
   // Local storage - return local file URL
-  if (config.provider === "local" || config.provider === "none") {
-    const host = process.env.HOST || "https://customizerapp.dev";
+  if (config.provider === "local") {
     return `${host}/api/files/${encodeURIComponent(key)}`;
   }
 
