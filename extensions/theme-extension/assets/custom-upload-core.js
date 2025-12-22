@@ -1,5 +1,5 @@
 /**
- * Upload Lift Pro - Core Widget (Vanilla JS + Lit-like patterns)
+ * Custom Upload for Products Design - Core Widget (Vanilla JS + Lit-like patterns)
  * Handles: Classic Upload (Mod-2), Quick Upload (Mod-3)
  * 3D Designer (Mod-1) loads separate React bundle
  *
@@ -69,7 +69,7 @@
         // Set CONFIG from quick upload container
         CONFIG.apiBase = container.dataset.appUrl || 'https://customizerapp.dev';
         CONFIG.shopDomain = container.dataset.shopDomain || window.Shopify?.shop || '';
-        console.log('[Upload Lift] Quick Upload initialized', { shopDomain: CONFIG.shopDomain });
+        console.log('[Custom Upload] Quick Upload initialized', { shopDomain: CONFIG.shopDomain });
         initQuickUpload();
       }
       return;
@@ -89,7 +89,7 @@
     // Bind events
     bindEvents();
 
-    console.log('[Upload Lift] Initialized', { productId: state.productId, mode: state.mode, shopDomain: CONFIG.shopDomain });
+    console.log('[Custom Upload] Initialized', { productId: state.productId, mode: state.mode, shopDomain: CONFIG.shopDomain });
   }
 
   function cacheElements() {
@@ -211,7 +211,7 @@
     // Unlock step 2
     unlockStep(2);
 
-    console.log('[Upload Lift] Size selected:', state.selectedSize, state.customWidth, state.customHeight);
+    console.log('[Custom Upload] Size selected:', state.selectedSize, state.customWidth, state.customHeight);
   }
 
   function handleCustomSize() {
@@ -254,7 +254,7 @@
   }
 
   async function processFile(file) {
-    console.log('[Upload Lift] Processing file:', file.name, file.type, file.size);
+    console.log('[Custom Upload] Processing file:', file.name, file.type, file.size);
 
     // Clear previous error state
     hideError();
@@ -303,7 +303,7 @@
       unlockStep(3);
 
     } catch (error) {
-      console.error('[Upload Lift] Upload failed:', error);
+      console.error('[Custom Upload] Upload failed:', error);
       showProgress(false);
       lastFailedFile = file; // Store for retry
       showError('Upload failed: ' + (error.message || 'Unknown error'), true);
@@ -531,7 +531,7 @@
 
   function handleContinueWithWarnings() {
     // User acknowledged warnings, proceed to step 4
-    console.log('[Upload Lift] Continuing with warnings');
+    console.log('[Custom Upload] Continuing with warnings');
 
     // Hide warning banner
     if (elements.warningBanner) {
@@ -598,7 +598,7 @@
       // Redirect to cart or show success
       window.location.href = '/cart';
     } catch (error) {
-      console.error('[Upload Lift] Add to cart failed:', error);
+      console.error('[Custom Upload] Add to cart failed:', error);
       showError('Failed to add to cart. Please try again.');
     }
   }
@@ -735,7 +735,7 @@
       }, 500);
 
     } catch (error) {
-      console.error('[Upload Lift] Quick upload failed:', error);
+      console.error('[Custom Upload] Quick upload failed:', error);
       // Hide progress, show overlay again
       if (progressEl) progressEl.style.display = 'none';
       if (overlayEl) overlayEl.style.display = 'flex';
@@ -797,7 +797,7 @@
       // Refresh cart or show success
       window.location.href = '/cart';
     } catch (error) {
-      console.error('[Upload Lift] Add to cart failed:', error);
+      console.error('[Custom Upload] Add to cart failed:', error);
       alert('Failed to add to cart');
     }
   }

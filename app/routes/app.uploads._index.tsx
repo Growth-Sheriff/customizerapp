@@ -178,7 +178,14 @@ export default function UploadsPage() {
   }
 
   return (
-    <Page title="Uploads" backAction={{ content: "Dashboard", url: "/app" }}>
+    <Page 
+      title="Uploads" 
+      subtitle={`${pagination.total} total uploads`}
+      primaryAction={{
+        content: "Export All",
+        url: "/app/exports",
+      }}
+    >
         <Layout>
           <Layout.Section>
             <Card>

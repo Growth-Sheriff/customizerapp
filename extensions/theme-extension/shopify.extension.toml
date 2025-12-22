@@ -3,7 +3,7 @@ api_version = "2025-10"
 [[extensions]]
 uid = "a15fda35-486a-d53f-7288-b233dc6fe3900fa8210e"
 type = "theme"
-name = "Upload Lift Theme Extension"
-handle = "upload-lift-theme"
+name = "Custom Upload Theme Extension"
+handle = "custom-upload-theme"
 
 

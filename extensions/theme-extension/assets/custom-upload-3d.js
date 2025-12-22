@@ -1,9 +1,9 @@
 /**
- * Upload Lift Pro - 3D Designer Module
+ * Custom Upload for Products Design - 3D Designer Module
  * Three.js based 3D preview with multi-location decal support
  *
  * Based on: kt946/ai-threejs-products-app-yt-jsm
- * Adapted for Upload Lift Pro
+ * Adapted for Custom Upload for Products Design
  *
  * @version 1.0.0
  */
@@ -41,7 +41,7 @@
         if (checkFn && checkFn()) return true;
         return true;
       } catch (e) {
-        console.warn(`[Upload Lift 3D] Failed to load from ${url}, trying next...`);
+        console.warn(`[Custom Upload 3D] Failed to load from ${url}, trying next...`);
       }
     }
     throw new Error('All CDN sources failed');
@@ -70,7 +70,7 @@
       ]);
       init3D();
     } catch (error) {
-      console.error('[Upload Lift 3D] Failed to load Three.js dependencies:', error);
+      console.error('[Custom Upload 3D] Failed to load Three.js dependencies:', error);
       show2DFallback();
     }
   }
@@ -224,7 +224,7 @@
     // Start render loop
     animate();
 
-    console.log('[Upload Lift 3D] Initialized');
+    console.log('[Custom Upload 3D] Initialized');
   }
 
   function checkWebGL2Support() {
@@ -243,7 +243,7 @@
     if (canvas3d) canvas3d.style.display = 'none';
     if (fallback) fallback.style.display = 'flex';
 
-    console.log('[Upload Lift 3D] Using 2D fallback (WebGL2 not supported)');
+    console.log('[Custom Upload 3D] Using 2D fallback (WebGL2 not supported)');
   }
 
   async function loadAssetSet(assetSetId) {
@@ -257,7 +257,7 @@
         state.assetSet = await response.json();
       }
     } catch (error) {
-      console.error('[Upload Lift 3D] Failed to load asset set:', error);
+      console.error('[Custom Upload 3D] Failed to load asset set:', error);
     }
   }
 
@@ -365,7 +365,7 @@
       modelUrl = state.assetSet.model.url;
     }
 
-    console.log('[Upload Lift 3D] Loading model from:', modelUrl);
+    console.log('[Custom Upload 3D] Loading model from:', modelUrl);
 
     return new Promise((resolve, reject) => {
       loader.load(
@@ -383,7 +383,7 @@
               if (child.name === 'T_Shirt_male' || child.geometry) {
                 state.shirtMesh = child;
                 child.userData.isMainMesh = true;
-                console.log('[Upload Lift 3D] Found shirt mesh:', child.name);
+                console.log('[Custom Upload 3D] Found shirt mesh:', child.name);
               }
             }
           });
@@ -403,15 +403,15 @@
 
           state.scene.add(state.model);
 
-          console.log('[Upload Lift 3D] Model loaded successfully');
+          console.log('[Custom Upload 3D] Model loaded successfully');
           resolve();
         },
         (progress) => {
           const percent = (progress.loaded / progress.total) * 100;
-          console.log(`[Upload Lift 3D] Loading model: ${percent.toFixed(0)}%`);
+          console.log(`[Custom Upload 3D] Loading model: ${percent.toFixed(0)}%`);
         },
         (error) => {
-          console.error('[Upload Lift 3D] Model load error:', error);
+          console.error('[Custom Upload 3D] Model load error:', error);
           reject(error);
         }
       );
@@ -471,11 +471,11 @@
       }
 
       if (!targetMesh) {
-        console.warn('[Upload Lift 3D] No mesh found for decal');
+        console.warn('[Custom Upload 3D] No mesh found for decal');
         return;
       }
 
-      console.log('[Upload Lift 3D] Applying decal to:', targetMesh.name, 'at position:', position);
+      console.log('[Custom Upload 3D] Applying decal to:', targetMesh.name, 'at position:', position);
 
       // Create decal material - matching kt946 style
       const decalMaterial = new THREE.MeshPhongMaterial({
@@ -512,7 +512,7 @@
       updateLocationButtons();
       updateDesignSummary();
 
-      console.log(`[Upload Lift 3D] Decal applied: ${location}`);
+      console.log(`[Custom Upload 3D] Decal applied: ${location}`);
     });
   }
 
@@ -746,7 +746,7 @@
   // ══════════════════════════════════════════════════════════════
 
   async function handleFileUpload(file) {
-    console.log('[Upload Lift 3D] Uploading:', file.name);
+    console.log('[Custom Upload 3D] Uploading:', file.name);
 
     const container = state.container;
     const appUrl = container.dataset.appUrl || 'https://customizerapp.dev';
@@ -829,7 +829,7 @@
       showPreflightStatus(statusData.items?.[0]?.preflightStatus || 'ok');
 
     } catch (error) {
-      console.error('[Upload Lift 3D] Upload failed:', error);
+      console.error('[Custom Upload 3D] Upload failed:', error);
       state.lastFailedFile = file; // Store for retry
       showPreflightStatus('error', 'Upload failed: ' + error.message, true);
       document.getElementById('ul-3d-dropzone').style.display = 'block';
@@ -1025,7 +1025,7 @@
       // Redirect to cart
       window.location.href = '/cart';
     } catch (error) {
-      console.error('[Upload Lift 3D] Add to cart failed:', error);
+      console.error('[Custom Upload 3D] Add to cart failed:', error);
       alert('Failed to add to cart. Please try again.');
     }
   }

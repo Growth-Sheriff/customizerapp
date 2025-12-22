@@ -733,8 +733,8 @@
 <link rel="preload" href="https://unpkg.com/three@0.160.0/build/three.min.js" as="script" crossorigin>
 
 <!-- Load core widget first, then 3D module -->
-<script src="{{ 'upload-lift-core.js' | asset_url }}" defer></script>
-<script src="{{ 'upload-lift-3d.js' | asset_url }}" defer></script>
+<script src="{{ 'custom-upload-core.js' | asset_url }}" defer></script>
+<script src="{{ 'custom-upload-3d.js' | asset_url }}" defer></script>
 
 {% else %}
   <!-- 3D Designer not enabled for this product -->
@@ -771,4 +771,5 @@
   ]
 }
 {% endschema %}
+
 

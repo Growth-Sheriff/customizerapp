@@ -1,19 +1,19 @@
 [Unit]
-Description=Upload Lift Pro - Preflight Worker
-After=network.target postgresql.service redis-server.service upload-lift.service
+Description=Custom Upload for Products Design - Preflight Worker
+After=network.target postgresql.service redis-server.service custom-upload.service
 
 [Service]
 Type=simple
 User=root
 Group=root
-WorkingDirectory=/var/www/upload-lift
+WorkingDirectory=/var/www/3d-customizer
 Environment=NODE_ENV=production
 ExecStart=/usr/bin/pnpm worker:preflight:prod
 Restart=always
 RestartSec=10
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=upload-lift-worker
+SyslogIdentifier=custom-upload-worker
 
 # Security
 NoNewPrivileges=true

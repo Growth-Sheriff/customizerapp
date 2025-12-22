@@ -1,12 +1,12 @@
 [Unit]
-Description=Upload Lift Pro - Shopify Customizer App
+Description=Custom Upload for Products Design - Shopify App
 After=network.target postgresql.service redis-server.service
 
 [Service]
 Type=simple
 User=root
 Group=root
-WorkingDirectory=/var/www/upload-lift
+WorkingDirectory=/var/www/3d-customizer
 Environment=NODE_ENV=production
 Environment=PORT=3000
 ExecStart=/usr/bin/pnpm start
@@ -14,13 +14,13 @@ Restart=always
 RestartSec=10
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=upload-lift
+SyslogIdentifier=custom-upload
 
 # Security
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/var/www/upload-lift
+ReadWritePaths=/var/www/3d-customizer
 
 [Install]
 WantedBy=multi-user.target

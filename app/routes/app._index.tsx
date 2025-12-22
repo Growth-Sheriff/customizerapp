@@ -1,10 +1,17 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useLoaderData } from "@remix-run/react";
+import { useLoaderData, useNavigate } from "@remix-run/react";
 import {
   Page, Layout, Card, Text, BlockStack, Banner,
-  DataTable, Badge, Button, InlineStack, Box
+  DataTable, Badge, Button, InlineStack, Box,
+  Grid, ProgressBar, Divider, Icon,
 } from "@shopify/polaris";
+import {
+  OrderIcon,
+  CheckCircleIcon,
+  ProductIcon,
+  ClockIcon,
+} from "@shopify/polaris-icons";
 import { authenticate } from "~/shopify.server";
 import { getUsageAlerts } from "~/lib/billing.server";
 import prisma from "~/lib/prisma.server";
@@ -122,127 +129,212 @@ function StatusBadge({ status }: { status: string }) {
 
 export default function AppDashboard() {
   const { shop, stats, uploads, usageAlerts } = useLoaderData<typeof loader>();
+  const navigate = useNavigate();
 
-  const rows = uploads.map((upload: any) => [
+  const rows = uploads.slice(0, 5).map((upload: any) => [
     upload.id.slice(0, 8) + "...",
-    upload.mode,
+    <Badge key={upload.id + "-mode"} tone="info">{upload.mode === "3d_designer" ? "3D" : upload.mode}</Badge>,
     <StatusBadge key={upload.id + "-status"} status={upload.status} />,
     <StatusBadge key={upload.id + "-preflight"} status={upload.preflightStatus} />,
-    upload.itemCount,
     new Date(upload.createdAt).toLocaleDateString(),
   ]);
 
+  // Calculate success rate
+  const successRate = stats.totalUploads > 0 
+    ? Math.round((stats.totalUploads - (stats.failedUploads || 0)) / stats.totalUploads * 100) 
+    : 100;
+
   return (
-    <Page title="Upload Lift Pro Dashboard">
-      <Layout>
-          {/* Usage Alerts */}
-          {usageAlerts && usageAlerts.length > 0 && usageAlerts.map((alert, idx) => (
-            <Layout.Section key={idx}>
-              <Banner tone={alert.type === "critical" ? "critical" : "warning"}>
-                <p>{alert.message}</p>
-                {alert.action && (
-                  <Button url={alert.action.url}>{alert.action.label}</Button>
-                )}
-              </Banner>
-            </Layout.Section>
-          ))}
+    <Page
+      title="Dashboard"
+      subtitle="Welcome to Custom Upload for Products Design"
+      primaryAction={{
+        content: "Configure Product",
+        onAction: () => navigate("/app/products"),
+      }}
+    >
+      <BlockStack gap="500">
+        {/* Usage Alerts */}
+        {usageAlerts && usageAlerts.length > 0 && usageAlerts.map((alert: any, idx: number) => (
+          <Banner key={idx} tone={alert.type === "critical" ? "critical" : "warning"}>
+            <p>{alert.message}</p>
+            {alert.action && (
+              <Button url={alert.action.url}>{alert.action.label}</Button>
+            )}
+          </Banner>
+        ))}
 
-          {/* Welcome Banner */}
-          <Layout.Section>
-            <Banner title={`Welcome, ${(shop.settings as any)?.shopName || shop.domain}`} tone="success">
-              <p>Your customizer is ready. Configure products to enable upload functionality.</p>
-            </Banner>
-          </Layout.Section>
-
-          {/* Stats Cards */}
-          <Layout.Section variant="oneThird">
+        {/* Stats Cards */}
+        <Grid>
+          <Grid.Cell columnSpan={{ xs: 6, sm: 3, md: 3, lg: 3, xl: 3 }}>
             <Card>
               <BlockStack gap="200">
-                <Text as="h2" variant="headingMd">Plan</Text>
-                <Text as="p" variant="headingLg">{shop.plan.toUpperCase()}</Text>
+                <InlineStack align="space-between">
+                  <Text as="h3" variant="headingSm" tone="subdued">Uploads This Month</Text>
+                  <Icon source={OrderIcon} tone="base" />
+                </InlineStack>
+                <Text as="p" variant="heading2xl">{stats.monthlyUploads}</Text>
+                {stats.monthlyLimit > 0 && (
+                  <BlockStack gap="100">
+                    <ProgressBar progress={(stats.monthlyUploads / stats.monthlyLimit) * 100} size="small" />
+                    <Text as="p" variant="bodySm" tone="subdued">
+                      {stats.monthlyLimit - stats.monthlyUploads} remaining
+                    </Text>
+                  </BlockStack>
+                )}
+              </BlockStack>
+            </Card>
+          </Grid.Cell>
+
+          <Grid.Cell columnSpan={{ xs: 6, sm: 3, md: 3, lg: 3, xl: 3 }}>
+            <Card>
+              <BlockStack gap="200">
+                <InlineStack align="space-between">
+                  <Text as="h3" variant="headingSm" tone="subdued">Success Rate</Text>
+                  <Icon source={CheckCircleIcon} tone="success" />
+                </InlineStack>
+                <Text as="p" variant="heading2xl">{successRate}%</Text>
                 <Text as="p" variant="bodySm" tone="subdued">
-                  {stats.monthlyLimit > 0
-                    ? `${stats.monthlyUploads}/${stats.monthlyLimit} uploads this month`
-                    : `${stats.monthlyUploads} uploads this month (unlimited)`
-                  }
+                  {stats.totalUploads} total uploads
                 </Text>
               </BlockStack>
             </Card>
-          </Layout.Section>
+          </Grid.Cell>
 
-          <Layout.Section variant="oneThird">
+          <Grid.Cell columnSpan={{ xs: 6, sm: 3, md: 3, lg: 3, xl: 3 }}>
             <Card>
               <BlockStack gap="200">
-                <Text as="h2" variant="headingMd">Total Uploads</Text>
-                <Text as="p" variant="headingLg">{stats.totalUploads}</Text>
-                <Text as="p" variant="bodySm" tone="subdued">All time</Text>
-              </BlockStack>
-            </Card>
-          </Layout.Section>
-
-          <Layout.Section variant="oneThird">
-            <Card>
-              <BlockStack gap="200">
-                <Text as="h2" variant="headingMd">Products</Text>
-                <Text as="p" variant="headingLg">{stats.productsConfigured}</Text>
-                <Text as="p" variant="bodySm" tone="subdued">Configured for upload</Text>
-              </BlockStack>
-            </Card>
-          </Layout.Section>
-
-          {/* Quick Actions */}
-          <Layout.Section>
-            <Card>
-              <BlockStack gap="400">
-                <Text as="h2" variant="headingMd">Quick Actions</Text>
-                <InlineStack gap="300" wrap>
-                  <Button url="/app/products">Configure Products</Button>
-                  <Button url="/app/asset-sets">Asset Sets (3D)</Button>
-                  <Button url="/app/queue">Production Queue</Button>
-                  <Button url="/app/analytics">Analytics</Button>
-                  <Button url="/app/exports">Exports</Button>
-                  <Button url="/app/team">Team</Button>
-                  <Button url="/app/api-keys">API Keys</Button>
-                  <Button url="/app/settings">Settings</Button>
+                <InlineStack align="space-between">
+                  <Text as="h3" variant="headingSm" tone="subdued">Products Configured</Text>
+                  <Icon source={ProductIcon} tone="base" />
                 </InlineStack>
+                <Text as="p" variant="heading2xl">{stats.productsConfigured}</Text>
+                <Text as="p" variant="bodySm" tone="subdued">
+                  Ready for customization
+                </Text>
               </BlockStack>
             </Card>
-          </Layout.Section>
+          </Grid.Cell>
 
-          {/* Plan features info */}
-          {shop.plan === "free" && (
-            <Layout.Section>
-              <Banner title="Upgrade for more features" tone="info">
-                <p>Unlock 3D Designer, team management, API access, and more with Pro or Enterprise.</p>
-                <Button url="/app/settings">View Plans</Button>
-              </Banner>
-            </Layout.Section>
-          )}
+          <Grid.Cell columnSpan={{ xs: 6, sm: 3, md: 3, lg: 3, xl: 3 }}>
+            <Card>
+              <BlockStack gap="200">
+                <InlineStack align="space-between">
+                  <Text as="h3" variant="headingSm" tone="subdued">Pending Review</Text>
+                  <Icon source={ClockIcon} tone="warning" />
+                </InlineStack>
+                <Text as="p" variant="heading2xl">{stats.pendingQueue || 0}</Text>
+                <Button variant="plain" onClick={() => navigate("/app/queue")}>
+                  View Queue
+                </Button>
+              </BlockStack>
+            </Card>
+          </Grid.Cell>
+        </Grid>
 
-          {/* Recent Uploads Table */}
-          <Layout.Section>
+        {/* Main Content Grid */}
+        <Grid>
+          {/* Recent Uploads */}
+          <Grid.Cell columnSpan={{ xs: 6, sm: 6, md: 8, lg: 8, xl: 8 }}>
             <Card>
               <BlockStack gap="400">
                 <InlineStack align="space-between">
                   <Text as="h2" variant="headingMd">Recent Uploads</Text>
-                  <Button variant="plain" url="/app/uploads">View All</Button>
+                  <Button variant="plain" onClick={() => navigate("/app/uploads")}>View All</Button>
                 </InlineStack>
-
+                <Divider />
                 {uploads.length > 0 ? (
                   <DataTable
-                    columnContentTypes={["text", "text", "text", "text", "numeric", "text"]}
-                    headings={["ID", "Mode", "Status", "Preflight", "Items", "Date"]}
+                    columnContentTypes={["text", "text", "text", "text", "text"]}
+                    headings={["ID", "Mode", "Status", "Preflight", "Date"]}
                     rows={rows}
                   />
                 ) : (
                   <Box padding="400">
-                    <Text as="p" tone="subdued">No uploads yet. Configure a product to get started.</Text>
+                    <BlockStack gap="200" align="center">
+                      <Text as="p" tone="subdued">No uploads yet</Text>
+                      <Button onClick={() => navigate("/app/products")}>Configure a Product</Button>
+                    </BlockStack>
                   </Box>
                 )}
               </BlockStack>
             </Card>
-          </Layout.Section>
-        </Layout>
+          </Grid.Cell>
+
+          {/* Sidebar */}
+          <Grid.Cell columnSpan={{ xs: 6, sm: 6, md: 4, lg: 4, xl: 4 }}>
+            <BlockStack gap="400">
+              {/* Quick Actions */}
+              <Card>
+                <BlockStack gap="300">
+                  <Text as="h2" variant="headingMd">Quick Actions</Text>
+                  <Divider />
+                  <BlockStack gap="200">
+                    <Button fullWidth onClick={() => navigate("/app/products")}>
+                      Configure Products
+                    </Button>
+                    <Button fullWidth onClick={() => navigate("/app/asset-sets")}>
+                      Manage 3D Assets
+                    </Button>
+                    <Button fullWidth onClick={() => navigate("/app/exports")}>
+                      Export Designs
+                    </Button>
+                  </BlockStack>
+                </BlockStack>
+              </Card>
+
+              {/* Plan Info */}
+              <Card>
+                <BlockStack gap="300">
+                  <InlineStack align="space-between">
+                    <Text as="h2" variant="headingMd">Your Plan</Text>
+                    <Badge tone={shop.plan === "pro" || shop.plan === "enterprise" ? "success" : "info"}>
+                      {shop.plan.toUpperCase()}
+                    </Badge>
+                  </InlineStack>
+                  <Divider />
+                  {shop.plan === "free" ? (
+                    <BlockStack gap="200">
+                      <Text as="p" variant="bodySm" tone="subdued">
+                        Upgrade for 3D Designer, team management, and API access.
+                      </Text>
+                      <Button onClick={() => navigate("/app/billing")}>
+                        Upgrade Now
+                      </Button>
+                    </BlockStack>
+                  ) : (
+                    <Text as="p" variant="bodySm" tone="subdued">
+                      {stats.monthlyLimit > 0 
+                        ? `${stats.monthlyLimit} uploads/month included`
+                        : "Unlimited uploads included"
+                      }
+                    </Text>
+                  )}
+                </BlockStack>
+              </Card>
+
+              {/* News/Updates */}
+              <Card>
+                <BlockStack gap="300">
+                  <Text as="h2" variant="headingMd">What's New</Text>
+                  <Divider />
+                  <BlockStack gap="200">
+                    <Text as="p" variant="bodySm">
+                      🎨 <strong>3D Designer</strong> - Real-time product preview
+                    </Text>
+                    <Text as="p" variant="bodySm">
+                      📊 <strong>Analytics</strong> - Track your upload performance
+                    </Text>
+                    <Text as="p" variant="bodySm">
+                      🔗 <strong>API v1</strong> - Integrate with your systems
+                    </Text>
+                  </BlockStack>
+                </BlockStack>
+              </Card>
+            </BlockStack>
+          </Grid.Cell>
+        </Grid>
+      </BlockStack>
     </Page>
   );
 }
