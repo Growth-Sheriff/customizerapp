@@ -1,15 +1,22 @@
 {% comment %}
-  DTF Uploader Snippet
-  =====================
+  DTF Uploader Snippet v4.0.0
+  ============================
+  FAZ 1: Core DTF Upload Widget
+  
+  Features:
+  - Drag & Drop file upload
+  - Shopify Variants for size selection (NOT manual input)
+  - Quantity with +/- buttons
+  - Extra questions from merchant config
+  - T-Shirt addon button (if tshirtEnabled)
+  - Add to Cart with line item properties
+  - Price display
+  
+  Prepared for:
+  - FAZ 2: T-Shirt Modal integration (openTShirtModal event)
+  - FAZ 3: Confirmation Screen
+  
   Usage: {% render 'dtf-uploader', product: product %}
-  
-  This snippet provides:
-  - File upload with drag & drop
-  - Extra questions from Merchant config
-  - T-Shirt addon button (if enabled)
-  - Proper cart integration with line item properties
-  
-  Version: 3.0.0
 {% endcomment %}
 
 {% liquid
@@ -19,438 +26,215 @@
   assign current_variant = product.selected_or_first_available_variant
 %}
 
-<style>
-  :root {
-    --dtf-primary: #6366f1;
-    --dtf-primary-hover: #5558e3;
-    --dtf-bg: #ffffff;
-    --dtf-border: #e5e7eb;
-    --dtf-text: #1f2937;
-    --dtf-text-muted: #6b7280;
-    --dtf-success: #10b981;
-    --dtf-error: #ef4444;
-    --dtf-radius: 12px;
-  }
-
-  .dtf-uploader {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background: var(--dtf-bg);
-    border: 1px solid var(--dtf-border);
-    border-radius: var(--dtf-radius);
-    padding: 20px;
-    margin: 16px 0;
-  }
-
-  .dtf-section {
-    margin-bottom: 20px;
-  }
-
-  .dtf-section:last-child {
-    margin-bottom: 0;
-  }
-
-  .dtf-section-header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 12px;
-  }
-
-  .dtf-step-number {
-    width: 24px;
-    height: 24px;
-    background: var(--dtf-primary);
-    color: white;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 12px;
-    font-weight: 600;
-  }
-
-  .dtf-section-title {
-    font-size: 15px;
-    font-weight: 600;
-    color: var(--dtf-text);
-  }
-
-  /* Dropzone */
-  .dtf-dropzone {
-    border: 2px dashed var(--dtf-border);
-    border-radius: var(--dtf-radius);
-    padding: 32px 20px;
-    text-align: center;
-    cursor: pointer;
-    transition: all 0.2s;
-    background: #fafafa;
-  }
-
-  .dtf-dropzone:hover,
-  .dtf-dropzone.dragover {
-    border-color: var(--dtf-primary);
-    background: rgba(99, 102, 241, 0.05);
-  }
-
-  .dtf-dropzone-icon {
-    width: 48px;
-    height: 48px;
-    margin: 0 auto 12px;
-    opacity: 0.5;
-  }
-
-  .dtf-dropzone-text {
-    font-size: 14px;
-    color: var(--dtf-text);
-    margin-bottom: 4px;
-  }
-
-  .dtf-dropzone-hint {
-    font-size: 12px;
-    color: var(--dtf-text-muted);
-  }
-
-  .dtf-dropzone input[type="file"] {
-    display: none;
-  }
-
-  /* Upload preview */
-  .dtf-preview {
-    display: none;
-    align-items: center;
-    gap: 12px;
-    padding: 12px;
-    background: #f0fdf4;
-    border: 1px solid #86efac;
-    border-radius: var(--dtf-radius);
-  }
-
-  .dtf-preview.active {
-    display: flex;
-  }
-
-  .dtf-preview img {
-    width: 60px;
-    height: 60px;
-    object-fit: cover;
-    border-radius: 8px;
-    border: 1px solid var(--dtf-border);
-  }
-
-  .dtf-preview-info {
-    flex: 1;
-  }
-
-  .dtf-preview-name {
-    font-size: 14px;
-    font-weight: 500;
-    color: var(--dtf-text);
-    margin-bottom: 2px;
-  }
-
-  .dtf-preview-size {
-    font-size: 12px;
-    color: var(--dtf-text-muted);
-  }
-
-  .dtf-preview-status {
-    font-size: 12px;
-    color: var(--dtf-success);
-    display: flex;
-    align-items: center;
-    gap: 4px;
-  }
-
-  .dtf-preview-remove {
-    background: none;
-    border: none;
-    color: var(--dtf-error);
-    cursor: pointer;
-    padding: 4px;
-  }
-
-  /* Progress */
-  .dtf-progress {
-    display: none;
-    margin-top: 12px;
-  }
-
-  .dtf-progress.active {
-    display: block;
-  }
-
-  .dtf-progress-bar {
-    height: 4px;
-    background: var(--dtf-border);
-    border-radius: 2px;
-    overflow: hidden;
-  }
-
-  .dtf-progress-fill {
-    height: 100%;
-    background: var(--dtf-primary);
-    transition: width 0.3s;
-    width: 0%;
-  }
-
-  .dtf-progress-text {
-    font-size: 12px;
-    color: var(--dtf-text-muted);
-    margin-top: 4px;
-    text-align: center;
-  }
-
-  /* Form fields */
-  .dtf-field {
-    margin-bottom: 16px;
-  }
-
-  .dtf-field label {
-    display: block;
-    font-size: 14px;
-    font-weight: 500;
-    color: var(--dtf-text);
-    margin-bottom: 6px;
-  }
-
-  .dtf-field label .required {
-    color: var(--dtf-error);
-  }
-
-  .dtf-field input[type="text"],
-  .dtf-field input[type="number"],
-  .dtf-field textarea,
-  .dtf-field select {
-    width: 100%;
-    padding: 10px 12px;
-    border: 1px solid var(--dtf-border);
-    border-radius: 8px;
-    font-size: 14px;
-    box-sizing: border-box;
-  }
-
-  .dtf-field input:focus,
-  .dtf-field textarea:focus,
-  .dtf-field select:focus {
-    outline: none;
-    border-color: var(--dtf-primary);
-  }
-
-  .dtf-field textarea {
-    min-height: 80px;
-    resize: vertical;
-  }
-
-  .dtf-checkbox-field {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .dtf-checkbox-field input[type="checkbox"] {
-    width: 18px;
-    height: 18px;
-    cursor: pointer;
-  }
-
-  /* Size grid */
-  .dtf-size-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 12px;
-  }
-
-  /* T-Shirt button */
-  .dtf-tshirt-btn {
-    width: 100%;
-    padding: 14px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border: none;
-    border-radius: var(--dtf-radius);
-    color: white;
-    font-size: 15px;
-    font-weight: 600;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    transition: transform 0.2s, box-shadow 0.2s;
-  }
-
-  .dtf-tshirt-btn:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-  }
-
-  .dtf-tshirt-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    transform: none;
-    box-shadow: none;
-  }
-
-  /* Divider */
-  .dtf-divider {
-    height: 1px;
-    background: var(--dtf-border);
-    margin: 20px 0;
-  }
-
-  /* Error */
-  .dtf-error {
-    display: none;
-    padding: 12px;
-    background: #fef2f2;
-    border: 1px solid #fecaca;
-    border-radius: var(--dtf-radius);
-    color: var(--dtf-error);
-    font-size: 13px;
-    margin-bottom: 16px;
-  }
-
-  .dtf-error.active {
-    display: block;
-  }
-
-  /* Loading overlay */
-  .dtf-loading {
-    display: none;
-    text-align: center;
-    padding: 20px;
-    color: var(--dtf-text-muted);
-  }
-
-  .dtf-loading.active {
-    display: block;
-  }
-
-  /* Responsive */
-  @media (max-width: 480px) {
-    .dtf-size-grid {
-      grid-template-columns: 1fr 1fr;
-    }
-  }
-</style>
+{{ 'dtf-uploader.css' | asset_url | stylesheet_tag }}
 
 <div 
-  id="dtf-uploader-{{ product.id }}"
-  class="dtf-uploader"
+  id="ul-dtf-{{ product.id }}"
+  class="ul-dtf-uploader"
   data-api-base="{{ api_base }}"
   data-shop-domain="{{ shop_domain }}"
-  data-product-id="{{ product_id }}"
-  data-variant-id="{{ current_variant.id }}"
+  data-product-id="{{ product.id }}"
+  data-product-title="{{ product.title | escape }}"
 >
-  <!-- Loading state -->
-  <div class="dtf-loading" id="dtf-loading-{{ product.id }}">
-    Loading configuration...
+  <!-- Loading State -->
+  <div class="ul-loading active" id="ul-loading-{{ product.id }}">
+    <div class="ul-loading-spinner"></div>
+    <div>Loading configuration...</div>
   </div>
 
-  <!-- Main content (hidden until config loaded) -->
-  <div id="dtf-content-{{ product.id }}" style="display: none;">
+  <!-- Error Display -->
+  <div class="ul-error" id="ul-error-{{ product.id }}">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <circle cx="12" cy="12" r="10"/>
+      <path d="M12 8v4m0 4h.01"/>
+    </svg>
+    <span id="ul-error-text-{{ product.id }}"></span>
+  </div>
+
+  <!-- Main Content -->
+  <div id="ul-content-{{ product.id }}" style="display: none;">
     
-    <!-- Error Display -->
-    <div class="dtf-error" id="dtf-error-{{ product.id }}"></div>
-
-    <!-- Step 1: Upload -->
-    <div class="dtf-section">
-      <div class="dtf-section-header">
-        <span class="dtf-step-number">1</span>
-        <span class="dtf-section-title">Upload Your Design</span>
+    <!-- STEP 1: Upload Design -->
+    <div class="ul-section" id="ul-upload-section-{{ product.id }}">
+      <div class="ul-section-header">
+        <span class="ul-step-badge" id="ul-step-1-{{ product.id }}">1</span>
+        <span class="ul-section-title">Upload Your Design</span>
       </div>
 
-      <div class="dtf-dropzone" id="dtf-dropzone-{{ product.id }}">
-        <input type="file" id="dtf-file-{{ product.id }}" accept=".png,.jpg,.jpeg,.pdf,.svg,.webp">
-        <svg class="dtf-dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path d="M12 16V4m0 0l-4 4m4-4l4 4M4 20h16" stroke-linecap="round" stroke-linejoin="round"/>
+      <!-- Dropzone -->
+      <div class="ul-dropzone" id="ul-dropzone-{{ product.id }}">
+        <input type="file" id="ul-file-input-{{ product.id }}" accept=".png,.jpg,.jpeg,.pdf,.svg,.webp,.ai,.eps">
+        <svg class="ul-dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M12 16V4m0 0L8 8m4-4l4 4" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
-        <div class="dtf-dropzone-text">Drag your design here</div>
-        <div class="dtf-dropzone-hint">or click to browse (PNG, JPG, PDF, SVG)</div>
+        <div class="ul-dropzone-text">Drag & drop your design here</div>
+        <div class="ul-dropzone-hint">or click to browse • PNG, JPG, SVG, PDF, AI, EPS • Max 50MB</div>
       </div>
 
-      <div class="dtf-preview" id="dtf-preview-{{ product.id }}">
-        <img id="dtf-preview-img-{{ product.id }}" src="" alt="Preview" width="60" height="60" loading="lazy">
-        <div class="dtf-preview-info">
-          <div class="dtf-preview-name" id="dtf-filename-{{ product.id }}">design.png</div>
-          <div class="dtf-preview-size" id="dtf-filesize-{{ product.id }}">2.4 MB</div>
-          <div class="dtf-preview-status">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <!-- Upload Progress -->
+      <div class="ul-upload-progress" id="ul-progress-{{ product.id }}">
+        <div class="ul-progress-bar">
+          <div class="ul-progress-fill" id="ul-progress-fill-{{ product.id }}"></div>
+        </div>
+        <div class="ul-progress-text" id="ul-progress-text-{{ product.id }}">Uploading...</div>
+      </div>
+
+      <!-- File Preview -->
+      <div class="ul-file-preview" id="ul-preview-{{ product.id }}">
+        <img class="ul-file-thumb" id="ul-thumb-{{ product.id }}" src="" alt="Preview">
+        <div class="ul-file-info">
+          <div class="ul-file-name" id="ul-filename-{{ product.id }}">design.png</div>
+          <div class="ul-file-meta" id="ul-filemeta-{{ product.id }}">2400 x 3200 px • 300 DPI • 2.4 MB</div>
+          <div class="ul-file-status" id="ul-filestatus-{{ product.id }}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
-            <span>Uploaded</span>
+            <span>Ready for print</span>
           </div>
         </div>
-        <button class="dtf-preview-remove" id="dtf-remove-{{ product.id }}" type="button">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/>
+        <button type="button" class="ul-file-remove" id="ul-remove-{{ product.id }}" aria-label="Remove file">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
           </svg>
         </button>
       </div>
+    </div>
 
-      <div class="dtf-progress" id="dtf-progress-{{ product.id }}">
-        <div class="dtf-progress-bar">
-          <div class="dtf-progress-fill" id="dtf-progress-fill-{{ product.id }}"></div>
-        </div>
-        <div class="dtf-progress-text" id="dtf-progress-text-{{ product.id }}">Uploading...</div>
+    <!-- STEP 2: Select Size (Shopify Variants) -->
+    <div class="ul-section" id="ul-size-section-{{ product.id }}">
+      <div class="ul-section-header">
+        <span class="ul-step-badge" id="ul-step-2-{{ product.id }}">2</span>
+        <span class="ul-section-title">Select Size</span>
+        <span class="ul-section-subtitle" id="ul-size-hint-{{ product.id }}"></span>
+      </div>
+
+      <div class="ul-size-grid" id="ul-size-grid-{{ product.id }}">
+        {% for variant in product.variants %}
+          <label class="ul-size-option">
+            <input 
+              type="radio" 
+              name="ul-variant-{{ product.id }}" 
+              value="{{ variant.id }}"
+              data-price="{{ variant.price | money_without_trailing_zeros }}"
+              data-price-raw="{{ variant.price }}"
+              data-title="{{ variant.title | escape }}"
+              {% if variant.available == false %}disabled{% endif %}
+              {% if forloop.first and variant.available %}checked{% endif %}
+            >
+            <div class="ul-size-card">
+              <span class="ul-size-name">{{ variant.title }}</span>
+              <span class="ul-size-price">{{ variant.price | money_without_trailing_zeros }}</span>
+            </div>
+            {% unless variant.available %}
+              <span class="ul-size-badge">Sold Out</span>
+            {% endunless %}
+          </label>
+        {% endfor %}
       </div>
     </div>
 
-    <!-- Step 2: Extra Questions (dynamically added) -->
-    <div class="dtf-section" id="dtf-questions-section-{{ product.id }}" style="display: none;">
-      <div class="dtf-section-header">
-        <span class="dtf-step-number">2</span>
-        <span class="dtf-section-title">Additional Options</span>
-      </div>
-      <div id="dtf-questions-container-{{ product.id }}"></div>
-    </div>
-
-    <!-- Step 3: Size & Quantity -->
-    <div class="dtf-section" id="dtf-size-section-{{ product.id }}">
-      <div class="dtf-section-header">
-        <span class="dtf-step-number" id="dtf-size-step-{{ product.id }}">2</span>
-        <span class="dtf-section-title">Size & Quantity</span>
+    <!-- STEP 3: Quantity -->
+    <div class="ul-section" id="ul-qty-section-{{ product.id }}">
+      <div class="ul-section-header">
+        <span class="ul-step-badge" id="ul-step-3-{{ product.id }}">3</span>
+        <span class="ul-section-title">Quantity</span>
       </div>
 
-      <div class="dtf-size-grid">
-        <div class="dtf-field">
-          <label for="dtf-width-{{ product.id }}">Width (inch)</label>
-          <input type="number" id="dtf-width-{{ product.id }}" value="9" min="1" max="22" step="0.1">
+      <div class="ul-quantity-row">
+        <div class="ul-quantity-control">
+          <button type="button" class="ul-qty-btn" id="ul-qty-minus-{{ product.id }}" aria-label="Decrease quantity">−</button>
+          <input type="number" class="ul-qty-input" id="ul-qty-input-{{ product.id }}" value="1" min="1" max="999" aria-label="Quantity">
+          <button type="button" class="ul-qty-btn" id="ul-qty-plus-{{ product.id }}" aria-label="Increase quantity">+</button>
         </div>
-        <div class="dtf-field">
-          <label for="dtf-height-{{ product.id }}">Height (inch)</label>
-          <input type="number" id="dtf-height-{{ product.id }}" value="9" min="1" max="22" step="0.1">
-        </div>
-        <div class="dtf-field">
-          <label for="dtf-qty-{{ product.id }}">Quantity</label>
-          <input type="number" id="dtf-qty-{{ product.id }}" value="1" min="1" max="999">
+        <div class="ul-bulk-hint" id="ul-bulk-hint-{{ product.id }}" style="display: none;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+            <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/>
+          </svg>
+          <span>Bulk discount applied!</span>
         </div>
       </div>
     </div>
 
-    <!-- T-Shirt Button (conditionally shown) -->
-    <div class="dtf-section" id="dtf-tshirt-section-{{ product.id }}" style="display: none;">
-      <div class="dtf-divider"></div>
-      <button type="button" class="dtf-tshirt-btn" id="dtf-tshirt-btn-{{ product.id }}" disabled>
-        👕 I want this on a T-Shirt too!
+    <!-- STEP 4: Extra Questions (Dynamic from API) -->
+    <div class="ul-section" id="ul-questions-section-{{ product.id }}" style="display: none;">
+      <div class="ul-section-header">
+        <span class="ul-step-badge" id="ul-step-4-{{ product.id }}">4</span>
+        <span class="ul-section-title">Additional Options</span>
+      </div>
+      <div class="ul-questions-container" id="ul-questions-{{ product.id }}"></div>
+    </div>
+
+    <div class="ul-divider"></div>
+
+    <!-- Price Summary -->
+    <div class="ul-price-summary" id="ul-price-summary-{{ product.id }}">
+      <div class="ul-price-row">
+        <span class="ul-price-label">Size (<span id="ul-selected-size-{{ product.id }}">-</span>)</span>
+        <span class="ul-price-value" id="ul-unit-price-{{ product.id }}">$0.00</span>
+      </div>
+      <div class="ul-price-row">
+        <span class="ul-price-label">Quantity</span>
+        <span class="ul-price-value">× <span id="ul-qty-display-{{ product.id }}">1</span></span>
+      </div>
+      <div class="ul-price-row ul-price-total">
+        <span class="ul-price-label">Total</span>
+        <span class="ul-price-value ul-price-total" id="ul-total-price-{{ product.id }}">$0.00</span>
+      </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="ul-buttons-stack">
+      <!-- T-Shirt Button (conditional) -->
+      <button 
+        type="button" 
+        class="ul-btn ul-btn-secondary" 
+        id="ul-tshirt-btn-{{ product.id }}"
+        style="display: none;"
+        disabled
+      >
+        <span>👕</span>
+        <span class="ul-btn-text">I want this on a T-Shirt too!</span>
+      </button>
+
+      <!-- Add to Cart Button -->
+      <button 
+        type="button" 
+        class="ul-btn ul-btn-primary" 
+        id="ul-add-cart-{{ product.id }}"
+        disabled
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="9" cy="21" r="1"/>
+          <circle cx="20" cy="21" r="1"/>
+          <path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6"/>
+        </svg>
+        <span class="ul-btn-text">Add to Cart</span>
+        <span class="ul-btn-price" id="ul-btn-price-{{ product.id }}"></span>
       </button>
     </div>
 
-    <!-- Hidden inputs for cart -->
-    <input type="hidden" id="dtf-upload-id-{{ product.id }}" name="properties[_upload_id]" value="">
-    <input type="hidden" id="dtf-upload-url-{{ product.id }}" name="properties[_upload_url]" value="">
-    <input type="hidden" id="dtf-upload-name-{{ product.id }}" name="properties[_upload_name]" value="">
-    <input type="hidden" id="dtf-width-hidden-{{ product.id }}" name="properties[_design_width]" value="9">
-    <input type="hidden" id="dtf-height-hidden-{{ product.id }}" name="properties[_design_height]" value="9">
-    
   </div>
+
+  <!-- Hidden Form Fields for Cart -->
+  <input type="hidden" id="ul-upload-id-{{ product.id }}" value="">
+  <input type="hidden" id="ul-upload-url-{{ product.id }}" value="">
+  <input type="hidden" id="ul-thumbnail-url-{{ product.id }}" value="">
+</div>
+
+<!-- Toast Notification -->
+<div class="ul-toast" id="ul-toast">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+    <path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
+  <span id="ul-toast-text">Added to cart!</span>
 </div>
 
 <script src="{{ 'dtf-uploader.js' | asset_url }}" defer></script>
 <script>
-  // Initialize when DOM ready
   document.addEventListener('DOMContentLoaded', function() {
-    if (window.DTFUploader) {
-      window.DTFUploader.init('{{ product.id }}');
+    if (typeof ULDTFUploader !== 'undefined') {
+      ULDTFUploader.init('{{ product.id }}');
     }
   });
 </script>

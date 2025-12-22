@@ -1,79 +1,182 @@
 /**
- * DTF Uploader Widget
- * ====================
- * Handles file upload, form submission, and cart integration
+ * UL DTF Uploader v4.0.0
+ * ======================
+ * FAZ 1: Core DTF Upload Widget
  * 
- * Version: 3.0.0
+ * Features:
+ * - File upload with drag & drop
+ * - Shopify Variants for size selection
+ * - Quantity control
+ * - Extra questions from merchant config
+ * - Add to Cart with line item properties
+ * - T-Shirt modal integration (FAZ 2)
+ * 
+ * State Management Architecture:
+ * - Each product has its own isolated state
+ * - State changes trigger UI updates
+ * - Events dispatched for external integrations
+ * 
+ * Prepared for:
+ * - FAZ 2: T-Shirt Modal (event: ul:openTShirtModal)
+ * - FAZ 3: Confirmation Screen
+ * - FAZ 4: Global State sync
  */
 
 (function() {
   'use strict';
 
-  const DTFUploader = {
+  // ===== CONSTANTS =====
+  const ALLOWED_TYPES = [
+    'image/png', 'image/jpeg', 'image/jpg', 'image/webp', 
+    'image/svg+xml', 'application/pdf',
+    'application/postscript', // AI, EPS
+    'application/illustrator'
+  ];
+  const ALLOWED_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp', 'svg', 'pdf', 'ai', 'eps'];
+  const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+  const POLL_INTERVAL = 1000; // 1 second
+  const MAX_POLLS = 60; // 60 seconds max wait
+
+  // ===== GLOBAL NAMESPACE =====
+  const ULDTFUploader = {
     instances: {},
-    
+    version: '4.0.0',
+
     /**
      * Initialize uploader for a product
+     * @param {string} productId - Shopify product ID
      */
     init(productId) {
-      const container = document.getElementById(`dtf-uploader-${productId}`);
-      if (!container) {
-        console.error(`[DTF] Container not found for product ${productId}`);
+      if (this.instances[productId]) {
+        console.warn(`[UL] Uploader already initialized for product ${productId}`);
         return;
       }
 
-      // Get config from data attributes
-      const apiBase = container.dataset.apiBase;
-      const shopDomain = container.dataset.shopDomain;
-      const variantId = container.dataset.variantId;
+      const container = document.getElementById(`ul-dtf-${productId}`);
+      if (!container) {
+        console.error(`[UL] Container not found for product ${productId}`);
+        return;
+      }
 
-      // Create instance
-      this.instances[productId] = {
+      // Create instance with initial state
+      const instance = {
         productId,
-        apiBase,
-        shopDomain,
-        variantId,
-        config: null,
-        uploadData: null,
-        elements: this.getElements(productId)
+        container,
+        apiBase: container.dataset.apiBase,
+        shopDomain: container.dataset.shopDomain,
+        productTitle: container.dataset.productTitle,
+        
+        // FAZ 1 State (matches architecture doc)
+        state: {
+          upload: {
+            status: 'idle', // idle | uploading | processing | ready | error
+            progress: 0,
+            uploadId: null,
+            file: { name: '', size: 0, type: '' },
+            result: {
+              thumbnailUrl: '',
+              originalUrl: '',
+              width: 0,
+              height: 0,
+              dpi: 0,
+              colorMode: '',
+              qualityScore: 0,
+              warnings: []
+            },
+            error: null
+          },
+          form: {
+            selectedVariantId: null,
+            selectedVariantTitle: '',
+            selectedVariantPrice: 0,
+            quantity: 1,
+            extraAnswers: {},
+            isValid: false
+          },
+          config: {
+            uploadEnabled: true,
+            tshirtEnabled: false,
+            allowedFileTypes: ALLOWED_EXTENSIONS,
+            maxFileSizeMB: 50,
+            minDPI: 150,
+            extraQuestions: [],
+            bulkDiscountThreshold: 10,
+            bulkDiscountPercent: 10
+          }
+        },
+        
+        elements: null,
+        pollCount: 0
       };
 
-      // Load configuration from API
+      // Get DOM elements
+      instance.elements = this.getElements(productId);
+      this.instances[productId] = instance;
+
+      // Load config and initialize
       this.loadConfig(productId);
     },
 
     /**
-     * Get all DOM elements
+     * Get all DOM elements for a product
      */
     getElements(productId) {
+      const $ = (id) => document.getElementById(`ul-${id}-${productId}`);
       return {
-        container: document.getElementById(`dtf-uploader-${productId}`),
-        loading: document.getElementById(`dtf-loading-${productId}`),
-        content: document.getElementById(`dtf-content-${productId}`),
-        error: document.getElementById(`dtf-error-${productId}`),
-        dropzone: document.getElementById(`dtf-dropzone-${productId}`),
-        fileInput: document.getElementById(`dtf-file-${productId}`),
-        preview: document.getElementById(`dtf-preview-${productId}`),
-        previewImg: document.getElementById(`dtf-preview-img-${productId}`),
-        filename: document.getElementById(`dtf-filename-${productId}`),
-        filesize: document.getElementById(`dtf-filesize-${productId}`),
-        removeBtn: document.getElementById(`dtf-remove-${productId}`),
-        progress: document.getElementById(`dtf-progress-${productId}`),
-        progressFill: document.getElementById(`dtf-progress-fill-${productId}`),
-        progressText: document.getElementById(`dtf-progress-text-${productId}`),
-        questionsSection: document.getElementById(`dtf-questions-section-${productId}`),
-        questionsContainer: document.getElementById(`dtf-questions-container-${productId}`),
-        sizeStep: document.getElementById(`dtf-size-step-${productId}`),
-        widthInput: document.getElementById(`dtf-width-${productId}`),
-        heightInput: document.getElementById(`dtf-height-${productId}`),
-        qtyInput: document.getElementById(`dtf-qty-${productId}`),
-        tshirtSection: document.getElementById(`dtf-tshirt-section-${productId}`),
-        tshirtBtn: document.getElementById(`dtf-tshirt-btn-${productId}`),
-        uploadId: document.getElementById(`dtf-upload-id-${productId}`),
-        uploadUrl: document.getElementById(`dtf-upload-url-${productId}`),
-        uploadName: document.getElementById(`dtf-upload-name-${productId}`),
-        widthHidden: document.getElementById(`dtf-width-hidden-${productId}`),
-        heightHidden: document.getElementById(`dtf-height-hidden-${productId}`)
+        container: document.getElementById(`ul-dtf-${productId}`),
+        loading: $('loading'),
+        content: $('content'),
+        error: $('error'),
+        errorText: $('error-text'),
+        
+        // Upload
+        dropzone: $('dropzone'),
+        fileInput: $('file-input'),
+        progress: $('progress'),
+        progressFill: $('progress-fill'),
+        progressText: $('progress-text'),
+        preview: $('preview'),
+        thumb: $('thumb'),
+        filename: $('filename'),
+        filemeta: $('filemeta'),
+        filestatus: $('filestatus'),
+        removeBtn: $('remove'),
+        
+        // Size
+        sizeGrid: $('size-grid'),
+        sizeHint: $('size-hint'),
+        selectedSize: $('selected-size'),
+        
+        // Quantity
+        qtyInput: $('qty-input'),
+        qtyMinus: $('qty-minus'),
+        qtyPlus: $('qty-plus'),
+        bulkHint: $('bulk-hint'),
+        qtyDisplay: $('qty-display'),
+        
+        // Questions
+        questionsSection: $('questions-section'),
+        questionsContainer: $('questions'),
+        
+        // Price
+        unitPrice: $('unit-price'),
+        totalPrice: $('total-price'),
+        btnPrice: $('btn-price'),
+        
+        // Buttons
+        tshirtBtn: $('tshirt-btn'),
+        addCartBtn: $('add-cart'),
+        
+        // Hidden fields
+        uploadIdField: $('upload-id'),
+        uploadUrlField: $('upload-url'),
+        thumbnailUrlField: $('thumbnail-url'),
+
+        // Steps
+        step1: $('step-1'),
+        step2: $('step-2'),
+        step3: $('step-3'),
+        step4: $('step-4')
       };
     },
 
@@ -82,11 +185,9 @@
      */
     async loadConfig(productId) {
       const instance = this.instances[productId];
-      const { elements, apiBase, shopDomain } = instance;
+      const { elements, apiBase, shopDomain, state } = instance;
 
       try {
-        elements.loading.classList.add('active');
-        
         const response = await fetch(
           `${apiBase}/api/product-config/${productId}?shop=${encodeURIComponent(shopDomain)}`
         );
@@ -96,22 +197,36 @@
         }
 
         const config = await response.json();
-        instance.config = config;
+        
+        // Update state with config
+        Object.assign(state.config, {
+          uploadEnabled: config.uploadEnabled !== false,
+          tshirtEnabled: config.tshirtEnabled === true,
+          extraQuestions: config.extraQuestions || []
+        });
 
-        // Check if upload is enabled
-        if (!config.uploadEnabled) {
+        if (!state.config.uploadEnabled) {
           elements.container.style.display = 'none';
           return;
         }
 
-        // Render extra questions
-        if (config.extraQuestions && config.extraQuestions.length > 0) {
-          this.renderExtraQuestions(productId, config.extraQuestions);
+        // Render extra questions if any
+        if (state.config.extraQuestions.length > 0) {
+          this.renderExtraQuestions(productId);
         }
 
         // Show T-Shirt button if enabled
-        if (config.tshirtEnabled) {
-          elements.tshirtSection.style.display = 'block';
+        if (state.config.tshirtEnabled) {
+          elements.tshirtBtn.style.display = 'flex';
+        }
+
+        // Initialize selected variant from first available
+        const firstVariant = elements.sizeGrid.querySelector('input[type="radio"]:not(:disabled):checked');
+        if (firstVariant) {
+          state.form.selectedVariantId = firstVariant.value;
+          state.form.selectedVariantTitle = firstVariant.dataset.title;
+          state.form.selectedVariantPrice = parseInt(firstVariant.dataset.priceRaw, 10);
+          this.updatePriceDisplay(productId);
         }
 
         // Bind events
@@ -122,57 +237,50 @@
         elements.content.style.display = 'block';
 
       } catch (error) {
-        console.error('[DTF] Config load error:', error);
-        elements.loading.innerHTML = 'Failed to load uploader. Please refresh the page.';
+        console.error('[UL] Config load error:', error);
+        elements.loading.innerHTML = '<div>Failed to load. Please refresh the page.</div>';
       }
     },
 
     /**
-     * Render extra questions from config (XSS-safe)
+     * Render extra questions from config
      */
-    renderExtraQuestions(productId, questions) {
+    renderExtraQuestions(productId) {
       const instance = this.instances[productId];
-      const { questionsSection, questionsContainer, sizeStep } = instance.elements;
+      const { elements, state } = instance;
+      const questions = state.config.extraQuestions;
 
-      questionsSection.style.display = 'block';
-      sizeStep.textContent = '3'; // Update step number
+      if (!questions.length) return;
 
-      // Clear container safely
-      questionsContainer.innerHTML = '';
+      elements.questionsSection.style.display = 'block';
+      elements.questionsContainer.innerHTML = '';
+
+      // Update step numbers (questions become step 4, steps 2-3 stay same)
+      if (elements.step4) elements.step4.textContent = '4';
 
       questions.forEach((q, index) => {
-        const fieldId = `dtf-q-${productId}-${q.id}`;
+        const fieldId = `ul-q-${productId}-${q.id || index}`;
         const fieldDiv = document.createElement('div');
-        fieldDiv.className = q.type === 'checkbox' ? 'dtf-field dtf-checkbox-field' : 'dtf-field';
+        fieldDiv.className = q.type === 'checkbox' ? 'ul-field checkbox' : 'ul-field';
 
         const label = document.createElement('label');
         label.setAttribute('for', fieldId);
-        label.textContent = q.label; // Safe - textContent escapes HTML
-        
+        label.textContent = q.label;
         if (q.required) {
-          const reqSpan = document.createElement('span');
-          reqSpan.className = 'required';
-          reqSpan.textContent = ' *';
-          label.appendChild(reqSpan);
+          const req = document.createElement('span');
+          req.className = 'required';
+          req.textContent = ' *';
+          label.appendChild(req);
         }
 
         let input;
         switch (q.type) {
-          case 'text':
-            input = document.createElement('input');
-            input.type = 'text';
-            input.id = fieldId;
-            input.name = `properties[${q.label}]`;
-            if (q.required) input.required = true;
-            fieldDiv.appendChild(label);
-            fieldDiv.appendChild(input);
-            break;
-
           case 'textarea':
             input = document.createElement('textarea');
             input.id = fieldId;
             input.name = `properties[${q.label}]`;
             if (q.required) input.required = true;
+            if (q.placeholder) input.placeholder = q.placeholder;
             fieldDiv.appendChild(label);
             fieldDiv.appendChild(input);
             break;
@@ -183,15 +291,15 @@
             input.name = `properties[${q.label}]`;
             if (q.required) input.required = true;
             
-            const defaultOpt = document.createElement('option');
-            defaultOpt.value = '';
-            defaultOpt.textContent = 'Select...';
-            input.appendChild(defaultOpt);
+            const defOpt = document.createElement('option');
+            defOpt.value = '';
+            defOpt.textContent = 'Select...';
+            input.appendChild(defOpt);
             
             (q.options || []).forEach(opt => {
               const option = document.createElement('option');
-              option.value = opt;
-              option.textContent = opt; // Safe
+              option.value = typeof opt === 'string' ? opt : opt.value;
+              option.textContent = typeof opt === 'string' ? opt : opt.label;
               input.appendChild(option);
             });
             fieldDiv.appendChild(label);
@@ -204,7 +312,6 @@
             input.id = fieldId;
             input.name = `properties[${q.label}]`;
             input.value = 'Yes';
-            if (q.required) input.required = true;
             fieldDiv.appendChild(input);
             fieldDiv.appendChild(label);
             break;
@@ -215,21 +322,43 @@
             input.id = fieldId;
             input.name = `properties[${q.label}]`;
             if (q.required) input.required = true;
+            if (q.min !== undefined) input.min = q.min;
+            if (q.max !== undefined) input.max = q.max;
             fieldDiv.appendChild(label);
             fieldDiv.appendChild(input);
             break;
 
-          default:
+          default: // text
             input = document.createElement('input');
             input.type = 'text';
             input.id = fieldId;
             input.name = `properties[${q.label}]`;
+            if (q.required) input.required = true;
+            if (q.placeholder) input.placeholder = q.placeholder;
             fieldDiv.appendChild(label);
             fieldDiv.appendChild(input);
         }
 
-        questionsContainer.appendChild(fieldDiv);
+        // Add change listener for validation
+        if (input) {
+          input.addEventListener('change', () => this.updateExtraAnswer(productId, q.id || index, q.label, input));
+        }
+
+        elements.questionsContainer.appendChild(fieldDiv);
       });
+    },
+
+    /**
+     * Update extra answer in state
+     */
+    updateExtraAnswer(productId, questionId, label, input) {
+      const instance = this.instances[productId];
+      if (input.type === 'checkbox') {
+        instance.state.form.extraAnswers[label] = input.checked ? 'Yes' : 'No';
+      } else {
+        instance.state.form.extraAnswers[label] = input.value;
+      }
+      this.validateForm(productId);
     },
 
     /**
@@ -237,55 +366,91 @@
      */
     bindEvents(productId) {
       const instance = this.instances[productId];
-      const { dropzone, fileInput, removeBtn, tshirtBtn, widthInput, heightInput } = instance.elements;
+      const { elements } = instance;
 
       // Dropzone click
-      dropzone.addEventListener('click', () => fileInput.click());
+      elements.dropzone.addEventListener('click', () => {
+        elements.fileInput.click();
+      });
 
       // File input change
-      fileInput.addEventListener('change', (e) => {
+      elements.fileInput.addEventListener('change', (e) => {
         if (e.target.files.length > 0) {
           this.handleFileSelect(productId, e.target.files[0]);
         }
       });
 
       // Drag & drop
-      dropzone.addEventListener('dragover', (e) => {
+      elements.dropzone.addEventListener('dragover', (e) => {
         e.preventDefault();
-        dropzone.classList.add('dragover');
+        elements.dropzone.classList.add('dragover');
       });
 
-      dropzone.addEventListener('dragleave', () => {
-        dropzone.classList.remove('dragover');
+      elements.dropzone.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        elements.dropzone.classList.remove('dragover');
       });
 
-      dropzone.addEventListener('drop', (e) => {
+      elements.dropzone.addEventListener('drop', (e) => {
         e.preventDefault();
-        dropzone.classList.remove('dragover');
+        elements.dropzone.classList.remove('dragover');
         if (e.dataTransfer.files.length > 0) {
           this.handleFileSelect(productId, e.dataTransfer.files[0]);
         }
       });
 
       // Remove file
-      removeBtn.addEventListener('click', () => {
+      elements.removeBtn.addEventListener('click', () => {
         this.clearUpload(productId);
       });
 
-      // Size sync
-      widthInput.addEventListener('change', () => {
-        instance.elements.widthHidden.value = widthInput.value;
+      // Size selection
+      elements.sizeGrid.querySelectorAll('input[type="radio"]').forEach(radio => {
+        radio.addEventListener('change', () => {
+          instance.state.form.selectedVariantId = radio.value;
+          instance.state.form.selectedVariantTitle = radio.dataset.title;
+          instance.state.form.selectedVariantPrice = parseInt(radio.dataset.priceRaw, 10);
+          this.updatePriceDisplay(productId);
+          this.validateForm(productId);
+        });
       });
-      heightInput.addEventListener('change', () => {
-        instance.elements.heightHidden.value = heightInput.value;
+
+      // Quantity controls
+      elements.qtyMinus.addEventListener('click', () => {
+        const current = parseInt(elements.qtyInput.value, 10) || 1;
+        if (current > 1) {
+          elements.qtyInput.value = current - 1;
+          instance.state.form.quantity = current - 1;
+          this.updatePriceDisplay(productId);
+        }
+      });
+
+      elements.qtyPlus.addEventListener('click', () => {
+        const current = parseInt(elements.qtyInput.value, 10) || 1;
+        if (current < 999) {
+          elements.qtyInput.value = current + 1;
+          instance.state.form.quantity = current + 1;
+          this.updatePriceDisplay(productId);
+        }
+      });
+
+      elements.qtyInput.addEventListener('change', () => {
+        let val = parseInt(elements.qtyInput.value, 10) || 1;
+        val = Math.max(1, Math.min(999, val));
+        elements.qtyInput.value = val;
+        instance.state.form.quantity = val;
+        this.updatePriceDisplay(productId);
       });
 
       // T-Shirt button
-      if (tshirtBtn) {
-        tshirtBtn.addEventListener('click', () => {
-          this.openTShirtModal(productId);
-        });
-      }
+      elements.tshirtBtn.addEventListener('click', () => {
+        this.openTShirtModal(productId);
+      });
+
+      // Add to Cart button
+      elements.addCartBtn.addEventListener('click', () => {
+        this.addToCart(productId);
+      });
     },
 
     /**
@@ -293,59 +458,68 @@
      */
     async handleFileSelect(productId, file) {
       const instance = this.instances[productId];
-      const { elements, apiBase, shopDomain } = instance;
+      const { elements, apiBase, shopDomain, state } = instance;
 
-      // Validate file
-      const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'application/pdf', 'image/svg+xml', 'image/webp'];
-      if (!validTypes.includes(file.type)) {
-        this.showError(productId, 'Invalid file type. Please upload PNG, JPG, PDF, SVG or WebP.');
+      // Validate file type
+      const ext = file.name.split('.').pop().toLowerCase();
+      if (!ALLOWED_EXTENSIONS.includes(ext)) {
+        this.showError(productId, `Invalid file type. Allowed: ${ALLOWED_EXTENSIONS.join(', ').toUpperCase()}`);
         return;
       }
 
-      const maxSize = 50 * 1024 * 1024; // 50MB
-      if (file.size > maxSize) {
+      // Validate file size
+      if (file.size > MAX_FILE_SIZE) {
         this.showError(productId, 'File too large. Maximum size is 50MB.');
         return;
       }
 
       this.hideError(productId);
 
-      // Show progress
+      // Update state
+      state.upload.status = 'uploading';
+      state.upload.progress = 0;
+      state.upload.file = { name: file.name, size: file.size, type: file.type };
+
+      // Show progress UI
       elements.dropzone.style.display = 'none';
       elements.progress.classList.add('active');
       elements.progressFill.style.width = '0%';
       elements.progressText.textContent = 'Preparing upload...';
+      elements.step1.classList.remove('completed');
 
       try {
-        // Step 1: Get signed URL
+        // Step 1: Get signed URL from API
         const intentResponse = await fetch(`${apiBase}/api/upload/intent`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            shopDomain: shopDomain,
-            productId: productId,
+            shopDomain,
+            productId,
             mode: 'dtf',
             fileName: file.name,
-            contentType: file.type,
+            contentType: file.type || 'application/octet-stream',
             fileSize: file.size
           })
         });
 
         if (!intentResponse.ok) {
-          throw new Error('Failed to get upload URL');
+          const err = await intentResponse.json().catch(() => ({}));
+          throw new Error(err.error || 'Failed to prepare upload');
         }
 
         const intentData = await intentResponse.json();
-        elements.progressFill.style.width = '20%';
+        state.upload.uploadId = intentData.uploadId;
+
+        elements.progressFill.style.width = '15%';
         elements.progressText.textContent = 'Uploading...';
 
-        // Step 2: Upload to storage
-        await this.uploadFile(productId, file, intentData);
+        // Step 2: Upload file directly to storage
+        await this.uploadToStorage(productId, file, intentData);
+
+        elements.progressFill.style.width = '80%';
+        elements.progressText.textContent = 'Processing...';
 
         // Step 3: Complete upload
-        elements.progressFill.style.width = '90%';
-        elements.progressText.textContent = 'Finalizing...';
-
         const completeResponse = await fetch(`${apiBase}/api/upload/complete`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -356,60 +530,39 @@
         });
 
         if (!completeResponse.ok) {
-          throw new Error('Failed to complete upload');
+          throw new Error('Failed to finalize upload');
         }
 
-        const completeData = await completeResponse.json();
-        
-        // Store upload data
-        instance.uploadData = {
-          id: intentData.uploadId,
-          url: completeData.url || intentData.downloadUrl,
-          name: file.name
-        };
-
-        // Update hidden fields
-        elements.uploadId.value = instance.uploadData.id;
-        elements.uploadUrl.value = instance.uploadData.url;
-        elements.uploadName.value = instance.uploadData.name;
-
-        // Show preview
-        elements.progressFill.style.width = '100%';
-        elements.progressText.textContent = 'Done!';
-        
-        setTimeout(() => {
-          elements.progress.classList.remove('active');
-          this.showPreview(productId, file);
-        }, 500);
-
-        // Enable T-Shirt button
-        if (elements.tshirtBtn) {
-          elements.tshirtBtn.disabled = false;
-        }
+        // Step 4: Poll for processing status
+        state.upload.status = 'processing';
+        elements.progressText.textContent = 'Analyzing file...';
+        await this.pollUploadStatus(productId, intentData.uploadId);
 
       } catch (error) {
-        console.error('[DTF] Upload error:', error);
+        console.error('[UL] Upload error:', error);
+        state.upload.status = 'error';
+        state.upload.error = error.message;
         elements.progress.classList.remove('active');
         elements.dropzone.style.display = 'block';
-        this.showError(productId, 'Upload failed. Please try again.');
+        this.showError(productId, error.message || 'Upload failed. Please try again.');
       }
     },
 
     /**
-     * Upload file to storage with progress
+     * Upload file to storage with progress tracking
      */
-    async uploadFile(productId, file, intentData) {
+    uploadToStorage(productId, file, intentData) {
       const instance = this.instances[productId];
       const { elements } = instance;
 
       return new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
-        
+
         xhr.upload.addEventListener('progress', (e) => {
           if (e.lengthComputable) {
-            const percent = 20 + ((e.loaded / e.total) * 60); // 20-80%
+            const percent = 15 + ((e.loaded / e.total) * 60); // 15% to 75%
             elements.progressFill.style.width = `${percent}%`;
-            elements.progressText.textContent = `Uploading... ${Math.round(e.loaded / e.total * 100)}%`;
+            elements.progressText.textContent = `Uploading... ${Math.round((e.loaded / e.total) * 100)}%`;
           }
         });
 
@@ -417,191 +570,483 @@
           if (xhr.status >= 200 && xhr.status < 300) {
             resolve();
           } else {
-            reject(new Error(`Upload failed with status ${xhr.status}`));
+            reject(new Error(`Upload failed (${xhr.status})`));
           }
         });
 
-        xhr.addEventListener('error', () => reject(new Error('Network error')));
+        xhr.addEventListener('error', () => reject(new Error('Network error during upload')));
         xhr.addEventListener('abort', () => reject(new Error('Upload cancelled')));
 
         xhr.open('PUT', intentData.signedUrl);
-        xhr.setRequestHeader('Content-Type', file.type);
+        xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
         xhr.send(file);
       });
     },
 
     /**
-     * Show file preview
+     * Poll upload status until processing complete
      */
-    showPreview(productId, file) {
+    async pollUploadStatus(productId, uploadId) {
       const instance = this.instances[productId];
-      const { preview, previewImg, filename, filesize, dropzone } = instance.elements;
+      const { elements, apiBase, shopDomain, state } = instance;
 
-      filename.textContent = file.name;
-      filesize.textContent = this.formatFileSize(file.size);
+      instance.pollCount = 0;
 
-      if (file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          previewImg.src = e.target.result;
-        };
-        reader.readAsDataURL(file);
-      } else {
-        previewImg.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 24 24" fill="%236b7280"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z"/></svg>';
-      }
+      const poll = async () => {
+        try {
+          const response = await fetch(
+            `${apiBase}/api/upload/status/${uploadId}?shop=${encodeURIComponent(shopDomain)}`
+          );
+          
+          if (!response.ok) {
+            throw new Error('Failed to check status');
+          }
 
-      dropzone.style.display = 'none';
-      preview.classList.add('active');
+          const data = await response.json();
+
+          if (data.status === 'ready' || data.status === 'completed') {
+            // Success!
+            state.upload.status = 'ready';
+            state.upload.result = {
+              thumbnailUrl: data.thumbnailUrl || '',
+              originalUrl: data.downloadUrl || data.url || '',
+              width: data.metadata?.width || 0,
+              height: data.metadata?.height || 0,
+              dpi: data.metadata?.dpi || 0,
+              colorMode: data.metadata?.colorMode || '',
+              qualityScore: data.qualityScore || 100,
+              warnings: data.warnings || []
+            };
+
+            // Update hidden fields
+            elements.uploadIdField.value = uploadId;
+            elements.uploadUrlField.value = state.upload.result.originalUrl;
+            elements.thumbnailUrlField.value = state.upload.result.thumbnailUrl;
+
+            // Show preview
+            this.showPreview(productId);
+            elements.progress.classList.remove('active');
+            elements.step1.classList.add('completed');
+            
+            // Enable buttons
+            this.validateForm(productId);
+            return;
+
+          } else if (data.status === 'failed' || data.status === 'error') {
+            throw new Error(data.error || 'Processing failed');
+
+          } else {
+            // Still processing - continue polling
+            instance.pollCount++;
+            if (instance.pollCount >= MAX_POLLS) {
+              throw new Error('Processing timeout. Please try again.');
+            }
+            
+            const progress = 80 + (instance.pollCount / MAX_POLLS * 15);
+            elements.progressFill.style.width = `${Math.min(progress, 95)}%`;
+            
+            setTimeout(poll, POLL_INTERVAL);
+          }
+        } catch (error) {
+          throw error;
+        }
+      };
+
+      await poll();
     },
 
     /**
-     * Clear upload
+     * Show file preview after successful upload
+     */
+    showPreview(productId) {
+      const instance = this.instances[productId];
+      const { elements, state } = instance;
+      const { file, result } = state.upload;
+
+      // Set filename
+      elements.filename.textContent = file.name;
+
+      // Set metadata
+      const meta = [];
+      if (result.width && result.height) {
+        meta.push(`${result.width} × ${result.height} px`);
+      }
+      if (result.dpi) {
+        meta.push(`${result.dpi} DPI`);
+      }
+      meta.push(this.formatFileSize(file.size));
+      elements.filemeta.textContent = meta.join(' • ');
+
+      // Set status
+      const hasWarnings = result.warnings && result.warnings.length > 0;
+      const statusEl = elements.filestatus;
+      
+      if (hasWarnings) {
+        elements.preview.classList.add('has-warning');
+        statusEl.classList.add('warning');
+        statusEl.innerHTML = `
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+          </svg>
+          <span>${result.warnings[0]}</span>
+        `;
+      } else {
+        elements.preview.classList.remove('has-warning');
+        statusEl.classList.remove('warning');
+        statusEl.innerHTML = `
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span>Ready for print</span>
+        `;
+      }
+
+      // Set thumbnail
+      if (result.thumbnailUrl) {
+        elements.thumb.src = result.thumbnailUrl;
+      } else if (file.type.startsWith('image/')) {
+        // Create local preview for images
+        const reader = new FileReader();
+        reader.onload = (e) => { elements.thumb.src = e.target.result; };
+        reader.readAsDataURL(instance.lastFile || new Blob());
+      } else {
+        // Generic file icon
+        elements.thumb.src = 'data:image/svg+xml,' + encodeURIComponent(`
+          <svg xmlns="http://www.w3.org/2000/svg" width="72" height="72" viewBox="0 0 24 24" fill="#6b7280">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z"/>
+          </svg>
+        `);
+      }
+
+      // Show preview, hide dropzone
+      elements.dropzone.style.display = 'none';
+      elements.preview.classList.add('active');
+
+      // Enable T-Shirt button if config allows
+      if (state.config.tshirtEnabled) {
+        elements.tshirtBtn.disabled = false;
+      }
+    },
+
+    /**
+     * Clear upload and reset to initial state
      */
     clearUpload(productId) {
       const instance = this.instances[productId];
-      const { elements } = instance;
+      const { elements, state } = instance;
 
-      instance.uploadData = null;
-      elements.uploadId.value = '';
-      elements.uploadUrl.value = '';
-      elements.uploadName.value = '';
+      // Reset state
+      state.upload = {
+        status: 'idle',
+        progress: 0,
+        uploadId: null,
+        file: { name: '', size: 0, type: '' },
+        result: {
+          thumbnailUrl: '',
+          originalUrl: '',
+          width: 0,
+          height: 0,
+          dpi: 0,
+          colorMode: '',
+          qualityScore: 0,
+          warnings: []
+        },
+        error: null
+      };
+
+      // Reset hidden fields
+      elements.uploadIdField.value = '';
+      elements.uploadUrlField.value = '';
+      elements.thumbnailUrlField.value = '';
+
+      // Reset file input
       elements.fileInput.value = '';
-      elements.preview.classList.remove('active');
-      elements.dropzone.style.display = 'block';
 
-      if (elements.tshirtBtn) {
-        elements.tshirtBtn.disabled = true;
-      }
+      // Hide preview, show dropzone
+      elements.preview.classList.remove('active');
+      elements.preview.classList.remove('has-warning');
+      elements.dropzone.style.display = 'block';
+      elements.step1.classList.remove('completed');
+
+      // Disable buttons
+      elements.tshirtBtn.disabled = true;
+      this.validateForm(productId);
     },
 
     /**
-     * Open T-Shirt modal
+     * Update price display
+     */
+    updatePriceDisplay(productId) {
+      const instance = this.instances[productId];
+      const { elements, state } = instance;
+      const { form, config } = state;
+
+      // Update selected size display
+      elements.selectedSize.textContent = form.selectedVariantTitle || '-';
+      
+      // Format unit price
+      const unitPrice = form.selectedVariantPrice / 100;
+      elements.unitPrice.textContent = this.formatMoney(unitPrice);
+
+      // Update quantity display
+      elements.qtyDisplay.textContent = form.quantity;
+
+      // Calculate total (with potential bulk discount)
+      let total = unitPrice * form.quantity;
+      
+      // Check for bulk discount
+      if (form.quantity >= config.bulkDiscountThreshold) {
+        const discount = total * (config.bulkDiscountPercent / 100);
+        total = total - discount;
+        elements.bulkHint.style.display = 'flex';
+      } else {
+        elements.bulkHint.style.display = 'none';
+      }
+
+      // Update total display
+      elements.totalPrice.textContent = this.formatMoney(total);
+      elements.btnPrice.textContent = `• ${this.formatMoney(total)}`;
+    },
+
+    /**
+     * Validate form and update button states
+     */
+    validateForm(productId) {
+      const instance = this.instances[productId];
+      const { elements, state } = instance;
+      const { upload, form, config } = state;
+
+      let isValid = true;
+      const errors = [];
+
+      // Check upload
+      if (upload.status !== 'ready') {
+        isValid = false;
+        errors.push('Upload your design');
+      }
+
+      // Check variant selection
+      if (!form.selectedVariantId) {
+        isValid = false;
+        errors.push('Select a size');
+      }
+
+      // Check quantity
+      if (form.quantity < 1) {
+        isValid = false;
+        errors.push('Quantity must be at least 1');
+      }
+
+      // Check required extra questions
+      for (const q of config.extraQuestions) {
+        if (q.required) {
+          const answer = form.extraAnswers[q.label];
+          if (!answer || answer === '' || answer === 'No') {
+            isValid = false;
+            errors.push(`Fill in "${q.label}"`);
+          }
+        }
+      }
+
+      form.isValid = isValid;
+      elements.addCartBtn.disabled = !isValid;
+
+      return { valid: isValid, errors };
+    },
+
+    /**
+     * Open T-Shirt modal (FAZ 2 integration)
      */
     openTShirtModal(productId) {
       const instance = this.instances[productId];
-      
-      if (!instance.uploadData) {
+      const { state } = instance;
+
+      if (state.upload.status !== 'ready') {
         this.showError(productId, 'Please upload your design first.');
         return;
       }
 
-      // Dispatch event for tshirt-modal.js to handle
-      const event = new CustomEvent('dtf:open-tshirt-modal', {
+      // Dispatch event for tshirt-modal.js (FAZ 2)
+      const event = new CustomEvent('ul:openTShirtModal', {
         detail: {
           productId,
-          uploadData: instance.uploadData,
-          config: instance.config.tshirtConfig
-        }
+          uploadData: {
+            uploadId: state.upload.uploadId,
+            thumbnailUrl: state.upload.result.thumbnailUrl,
+            originalUrl: state.upload.result.originalUrl,
+            dimensions: {
+              width: state.upload.result.width,
+              height: state.upload.result.height,
+              dpi: state.upload.result.dpi
+            }
+          },
+          config: state.config
+        },
+        bubbles: true
       });
       document.dispatchEvent(event);
     },
 
     /**
-     * Show error message
+     * Add item to Shopify cart
      */
-    showError(productId, message) {
-      const { error } = this.instances[productId].elements;
-      error.textContent = message;
-      error.classList.add('active');
-    },
-
-    /**
-     * Hide error message
-     */
-    hideError(productId) {
-      const { error } = this.instances[productId].elements;
-      error.classList.remove('active');
-    },
-
-    /**
-     * Format file size
-     */
-    formatFileSize(bytes) {
-      if (bytes === 0) return '0 Bytes';
-      const k = 1024;
-      const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-      const i = Math.floor(Math.log(bytes) / Math.log(k));
-      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-    },
-
-    /**
-     * Get upload data for cart (called by theme's cart form)
-     */
-    getCartProperties(productId) {
+    async addToCart(productId) {
       const instance = this.instances[productId];
-      if (!instance || !instance.uploadData) return null;
+      const { elements, state } = instance;
 
-      const { elements } = instance;
-      const properties = {
-        '_upload_id': instance.uploadData.id,
-        '_upload_url': instance.uploadData.url,
-        '_upload_name': instance.uploadData.name,
-        '_design_width': elements.widthInput.value,
-        '_design_height': elements.heightInput.value
-      };
-
-      // Add extra questions
-      if (instance.config && instance.config.extraQuestions) {
-        instance.config.extraQuestions.forEach(q => {
-          const fieldId = `dtf-q-${productId}-${q.id}`;
-          const field = document.getElementById(fieldId);
-          if (field) {
-            if (field.type === 'checkbox') {
-              properties[q.label] = field.checked ? 'Yes' : 'No';
-            } else {
-              properties[q.label] = field.value;
-            }
-          }
-        });
+      // Validate first
+      const validation = this.validateForm(productId);
+      if (!validation.valid) {
+        this.showError(productId, validation.errors[0]);
+        return;
       }
 
-      return properties;
-    },
+      const { upload, form } = state;
 
-    /**
-     * Validate form before cart add
-     */
-    validate(productId) {
-      const instance = this.instances[productId];
-      if (!instance) return { valid: false, error: 'Uploader not initialized' };
+      // Disable button and show loading
+      elements.addCartBtn.disabled = true;
+      elements.addCartBtn.classList.add('loading');
 
-      // Check upload
-      if (!instance.uploadData) {
-        return { valid: false, error: 'Please upload your design first.' };
-      }
+      try {
+        // Build cart item with properties
+        const properties = {
+          '_ul_upload_id': upload.uploadId,
+          '_ul_upload_url': upload.result.originalUrl,
+          '_ul_thumbnail': upload.result.thumbnailUrl,
+          '_ul_design_type': 'dtf',
+          '_ul_file_name': upload.file.name
+        };
 
-      // Check required questions
-      if (instance.config && instance.config.extraQuestions) {
-        for (const q of instance.config.extraQuestions) {
-          if (q.required) {
-            const fieldId = `dtf-q-${productId}-${q.id}`;
-            const field = document.getElementById(fieldId);
-            if (field) {
-              if (field.type === 'checkbox' && !field.checked) {
-                return { valid: false, error: `Please check "${q.label}"` };
-              } else if (!field.value) {
-                return { valid: false, error: `Please fill in "${q.label}"` };
-              }
-            }
+        // Add dimensions if available
+        if (upload.result.width && upload.result.height) {
+          properties['_ul_dimensions'] = `${upload.result.width}x${upload.result.height}`;
+        }
+
+        // Add extra answers
+        for (const [key, value] of Object.entries(form.extraAnswers)) {
+          if (value && value !== '') {
+            properties[key] = value;
           }
         }
-      }
 
-      return { valid: true };
+        // Add to cart via Shopify AJAX API
+        const response = await fetch('/cart/add.js', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            items: [{
+              id: parseInt(form.selectedVariantId, 10),
+              quantity: form.quantity,
+              properties
+            }]
+          })
+        });
+
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({}));
+          throw new Error(err.description || 'Failed to add to cart');
+        }
+
+        // Success!
+        elements.addCartBtn.classList.remove('loading');
+        elements.addCartBtn.classList.add('success');
+        elements.addCartBtn.querySelector('.ul-btn-text').textContent = '✓ Added!';
+
+        // Show toast
+        this.showToast('Added to cart!', 'success');
+
+        // Dispatch event for cart update (theme may listen)
+        document.dispatchEvent(new CustomEvent('ul:addedToCart', {
+          detail: { productId, quantity: form.quantity, variantId: form.selectedVariantId },
+          bubbles: true
+        }));
+
+        // Reset after 2 seconds
+        setTimeout(() => {
+          elements.addCartBtn.classList.remove('success');
+          elements.addCartBtn.querySelector('.ul-btn-text').textContent = 'Add to Cart';
+          elements.addCartBtn.disabled = false;
+          
+          // Optionally clear upload for next design
+          // this.clearUpload(productId);
+        }, 2000);
+
+      } catch (error) {
+        console.error('[UL] Add to cart error:', error);
+        elements.addCartBtn.classList.remove('loading');
+        elements.addCartBtn.disabled = false;
+        this.showError(productId, error.message || 'Failed to add to cart. Please try again.');
+      }
+    },
+
+    // ===== UTILITY METHODS =====
+
+    showError(productId, message) {
+      const { elements } = this.instances[productId];
+      elements.errorText.textContent = message;
+      elements.error.classList.add('active');
+    },
+
+    hideError(productId) {
+      const { elements } = this.instances[productId];
+      elements.error.classList.remove('active');
+    },
+
+    showToast(message, type = 'success') {
+      const toast = document.getElementById('ul-toast');
+      const text = document.getElementById('ul-toast-text');
+      if (toast && text) {
+        text.textContent = message;
+        toast.className = `ul-toast active ${type}`;
+        setTimeout(() => {
+          toast.classList.remove('active');
+        }, 3000);
+      }
+    },
+
+    formatFileSize(bytes) {
+      if (bytes === 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    },
+
+    formatMoney(amount) {
+      return '$' + amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    },
+
+    /**
+     * Get state for external access (FAZ 2, FAZ 4)
+     */
+    getState(productId) {
+      const instance = this.instances[productId];
+      return instance ? { ...instance.state } : null;
+    },
+
+    /**
+     * Get upload data for T-Shirt modal (FAZ 2)
+     */
+    getUploadData(productId) {
+      const instance = this.instances[productId];
+      if (!instance || instance.state.upload.status !== 'ready') {
+        return null;
+      }
+      return {
+        uploadId: instance.state.upload.uploadId,
+        thumbnailUrl: instance.state.upload.result.thumbnailUrl,
+        originalUrl: instance.state.upload.result.originalUrl,
+        fileName: instance.state.upload.file.name,
+        dimensions: {
+          width: instance.state.upload.result.width,
+          height: instance.state.upload.result.height,
+          dpi: instance.state.upload.result.dpi
+        }
+      };
     }
   };
 
   // Expose globally
-  window.DTFUploader = DTFUploader;
-
-  // Auto-init on page load for already rendered snippets
-  document.addEventListener('DOMContentLoaded', function() {
-    document.querySelectorAll('.dtf-uploader').forEach(container => {
-      const productId = container.dataset.productId;
-      if (productId && !DTFUploader.instances[productId]) {
-        DTFUploader.init(productId);
-      }
-    });
-  });
+  window.ULDTFUploader = ULDTFUploader;
 
 })();
