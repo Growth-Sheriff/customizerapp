@@ -154,8 +154,18 @@ export default function ProductsPage() {
     product.title.toLowerCase().includes(queryValue.toLowerCase())
   );
 
+  // Navigate using both Remix navigate and App Bridge
   const handleConfigureClick = useCallback((numericId: string) => {
-    navigate(`/app/products/${numericId}/configure`);
+    const path = `/app/products/${numericId}/configure`;
+    
+    // Try App Bridge navigation first (for embedded apps)
+    const shopify = (window as any).shopify;
+    if (shopify?.navigate) {
+      shopify.navigate(path);
+    } else {
+      // Fallback to Remix navigate
+      navigate(path);
+    }
   }, [navigate]);
 
   const resourceName = {
