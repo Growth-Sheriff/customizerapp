@@ -1,7 +1,10 @@
 import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { writeFile, mkdir, readFile, unlink } from "fs/promises";
+import { join, dirname } from "path";
+import { existsSync } from "fs";
 
-export type StorageProvider = "r2" | "s3";
+export type StorageProvider = "r2" | "s3" | "local" | "none";
 
 export interface StorageConfig {
   provider: StorageProvider;
@@ -11,11 +14,32 @@ export interface StorageConfig {
   accessKeyId: string;
   secretAccessKey: string;
   publicUrl?: string;
+  localPath?: string; // Local storage path
+}
+
+// Check if storage is configured
+export function isStorageConfigured(config: StorageConfig): boolean {
+  if (config.provider === "none") return false;
+  if (config.provider === "local") return true;
+  
+  // For R2/S3, check if credentials are set
+  return !!(config.accessKeyId && config.secretAccessKey && config.bucket);
 }
 
 // Get storage config from environment or shop settings
 export function getStorageConfig(shopConfig?: Partial<StorageConfig>): StorageConfig {
-  const provider = (shopConfig?.provider ?? process.env.STORAGE_PROVIDER ?? "r2") as StorageProvider;
+  const provider = (shopConfig?.provider ?? process.env.STORAGE_PROVIDER ?? "none") as StorageProvider;
+
+  // No storage configured - use local fallback
+  if (provider === "none" || provider === "local") {
+    return {
+      provider: provider === "none" ? "local" : provider,
+      bucket: "",
+      accessKeyId: "",
+      secretAccessKey: "",
+      localPath: shopConfig?.localPath ?? process.env.LOCAL_STORAGE_PATH ?? "./uploads",
+    };
+  }
 
   if (provider === "r2") {
     return {
@@ -40,7 +64,11 @@ export function getStorageConfig(shopConfig?: Partial<StorageConfig>): StorageCo
 }
 
 // Create S3 client (works for both R2 and S3)
-export function createStorageClient(config: StorageConfig): S3Client {
+export function createStorageClient(config: StorageConfig): S3Client | null {
+  if (config.provider === "local" || config.provider === "none") {
+    return null; // No S3 client for local storage
+  }
+
   if (config.provider === "r2") {
     return new S3Client({
       region: "auto",
@@ -62,14 +90,27 @@ export function createStorageClient(config: StorageConfig): S3Client {
   });
 }
 
-// Generate upload signed URL
+// Generate upload signed URL (or local upload endpoint)
 export async function getUploadSignedUrl(
   config: StorageConfig,
   key: string,
   contentType: string,
   expiresIn: number = 900 // 15 minutes
-): Promise<{ url: string; key: string }> {
+): Promise<{ url: string; key: string; isLocal?: boolean }> {
+  // Local storage - return local upload endpoint
+  if (config.provider === "local" || config.provider === "none") {
+    const host = process.env.HOST || "https://customizerapp.dev";
+    return {
+      url: `${host}/api/upload/local`,
+      key,
+      isLocal: true,
+    };
+  }
+
   const client = createStorageClient(config);
+  if (!client) {
+    throw new Error("Storage client not available");
+  }
 
   const command = new PutObjectCommand({
     Bucket: config.bucket,
@@ -82,13 +123,22 @@ export async function getUploadSignedUrl(
   return { url, key };
 }
 
-// Generate download signed URL
+// Generate download signed URL (or local file path)
 export async function getDownloadSignedUrl(
   config: StorageConfig,
   key: string,
   expiresIn: number = 3600 // 1 hour
 ): Promise<string> {
+  // Local storage - return local file URL
+  if (config.provider === "local" || config.provider === "none") {
+    const host = process.env.HOST || "https://customizerapp.dev";
+    return `${host}/api/files/${encodeURIComponent(key)}`;
+  }
+
   const client = createStorageClient(config);
+  if (!client) {
+    throw new Error("Storage client not available");
+  }
 
   const command = new GetObjectCommand({
     Bucket: config.bucket,
@@ -96,6 +146,42 @@ export async function getDownloadSignedUrl(
   });
 
   return getSignedUrl(client, command, { expiresIn });
+}
+
+// ============================================================
+// LOCAL STORAGE FUNCTIONS
+// ============================================================
+
+const LOCAL_STORAGE_BASE = process.env.LOCAL_STORAGE_PATH || "./uploads";
+
+// Save file to local storage
+export async function saveLocalFile(key: string, data: Buffer): Promise<string> {
+  const filePath = join(LOCAL_STORAGE_BASE, key);
+  const dir = dirname(filePath);
+  
+  // Ensure directory exists
+  if (!existsSync(dir)) {
+    await mkdir(dir, { recursive: true });
+  }
+  
+  await writeFile(filePath, data);
+  return filePath;
+}
+
+// Read file from local storage
+export async function readLocalFile(key: string): Promise<Buffer> {
+  const filePath = join(LOCAL_STORAGE_BASE, key);
+  return readFile(filePath);
+}
+
+// Delete file from local storage
+export async function deleteLocalFile(key: string): Promise<void> {
+  const filePath = join(LOCAL_STORAGE_BASE, key);
+  try {
+    await unlink(filePath);
+  } catch (e) {
+    // File may not exist, ignore
+  }
 }
 
 // Build storage key path (tenant-scoped)

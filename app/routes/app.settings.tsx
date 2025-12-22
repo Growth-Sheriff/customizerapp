@@ -3,7 +3,7 @@ import { json } from "@remix-run/node";
 import { useLoaderData, useActionData, Form, useNavigation } from "@remix-run/react";
 import {
   Page, Layout, Card, Text, BlockStack, InlineStack,
-  TextField, Select, Button, Banner, FormLayout, Divider, Box
+  TextField, Select, Button, Banner, FormLayout, Divider, Box, Checkbox, Badge
 } from "@shopify/polaris";
 import { useState, useCallback } from "react";
 import { authenticate } from "~/shopify.server";
@@ -24,7 +24,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         accessToken: session.accessToken || "",
         plan: "free",
         billingStatus: "active",
-        storageProvider: "r2",
+        storageProvider: "local", // Default to local (no config needed)
         settings: {},
       },
     });
@@ -39,19 +39,21 @@ export async function loader({ request }: LoaderFunctionArgs) {
       plan: shop.plan,
     },
     storageConfig: {
-      provider: shop.storageProvider || "r2",
+      provider: shop.storageProvider || "local",
       bucket: storageConfig.bucket || "",
       region: storageConfig.region || "auto",
       accountId: storageConfig.accountId || "",
       accessKeyId: storageConfig.accessKeyId ? "••••••••" : "",
       secretAccessKey: storageConfig.secretAccessKey ? "••••••••" : "",
       publicUrl: storageConfig.publicUrl || "",
+      isConfigured: !!(storageConfig.accessKeyId && storageConfig.bucket),
     },
     settings: {
       shopName: settings.shopName || "",
       notificationEmail: settings.notificationEmail || "",
       autoApprove: settings.autoApprove || false,
       watermarkEnabled: shop.plan === "free",
+      redisEnabled: settings.redisEnabled || false,
     },
   });
 }
@@ -172,6 +174,9 @@ export default function SettingsPage() {
   const isSubmitting = navigation.state === "submitting";
 
   const [provider, setProvider] = useState(storageConfig.provider);
+  const [showStorageConfig, setShowStorageConfig] = useState(
+    storageConfig.provider !== "local" && storageConfig.isConfigured
+  );
 
   // Form state for general settings
   const [shopName, setShopName] = useState(settings.shopName as string);
@@ -187,6 +192,18 @@ export default function SettingsPage() {
 
   const handleProviderChange = useCallback((value: string) => {
     setProvider(value);
+    if (value === "local") {
+      setShowStorageConfig(false);
+    }
+  }, []);
+
+  const handleToggleCloudStorage = useCallback((checked: boolean) => {
+    setShowStorageConfig(checked);
+    if (!checked) {
+      setProvider("local");
+    } else {
+      setProvider("r2");
+    }
   }, []);
 
   return (
@@ -252,112 +269,145 @@ export default function SettingsPage() {
               <Form method="post">
                 <input type="hidden" name="_action" value="save_storage" />
                 <BlockStack gap="400">
-                  <Text as="h2" variant="headingMd">Storage Configuration</Text>
+                  <InlineStack align="space-between">
+                    <Text as="h2" variant="headingMd">Storage Configuration</Text>
+                    {storageConfig.provider === "local" ? (
+                      <Badge tone="attention">Local Storage</Badge>
+                    ) : storageConfig.isConfigured ? (
+                      <Badge tone="success">Cloud Connected</Badge>
+                    ) : (
+                      <Badge tone="warning">Not Configured</Badge>
+                    )}
+                  </InlineStack>
 
                   <Banner tone="info">
-                    Configure where customer design files are stored. Cloudflare R2 is recommended (no egress fees).
+                    <p>
+                      <strong>Optional:</strong> By default, files are stored on the server locally. 
+                      For better performance and scalability, you can configure cloud storage (Cloudflare R2 or Amazon S3).
+                    </p>
                   </Banner>
 
-                  <FormLayout>
-                    <Select
-                      label="Storage Provider"
-                      name="provider"
-                      options={[
-                        { label: "Cloudflare R2 (Recommended)", value: "r2" },
-                        { label: "Amazon S3", value: "s3" },
-                      ]}
-                      value={provider}
-                      onChange={handleProviderChange}
-                    />
+                  <Checkbox
+                    label="Use Cloud Storage (R2/S3)"
+                    checked={showStorageConfig}
+                    onChange={handleToggleCloudStorage}
+                    helpText="Enable this to configure external cloud storage for customer files"
+                  />
 
-                    <TextField
-                      label="Bucket Name"
-                      name="bucket"
-                      value={bucket}
-                      onChange={setBucket}
-                      placeholder="upload-lift-files"
-                      autoComplete="off"
-                    />
+                  {showStorageConfig && (
+                    <>
+                      <Divider />
+                      
+                      <FormLayout>
+                        <Select
+                          label="Storage Provider"
+                          name="provider"
+                          options={[
+                            { label: "Cloudflare R2 (Recommended - No egress fees)", value: "r2" },
+                            { label: "Amazon S3", value: "s3" },
+                          ]}
+                          value={provider}
+                          onChange={handleProviderChange}
+                        />
 
-                    {provider === "r2" && (
-                      <TextField
-                        label="Cloudflare Account ID"
-                        name="accountId"
-                        value={accountId}
-                        onChange={setAccountId}
-                        helpText="Found in your Cloudflare dashboard"
-                        autoComplete="off"
-                      />
-                    )}
+                        <TextField
+                          label="Bucket Name"
+                          name="bucket"
+                          value={bucket}
+                          onChange={setBucket}
+                          placeholder="upload-lift-files"
+                          autoComplete="off"
+                        />
 
-                    {provider === "s3" && (
-                      <Select
-                        label="AWS Region"
-                        name="region"
-                        options={[
-                          { label: "US East (N. Virginia)", value: "us-east-1" },
-                          { label: "US West (Oregon)", value: "us-west-2" },
-                          { label: "EU (Ireland)", value: "eu-west-1" },
-                          { label: "EU (Frankfurt)", value: "eu-central-1" },
-                          { label: "Asia Pacific (Singapore)", value: "ap-southeast-1" },
-                        ]}
-                        value={region}
-                        onChange={setRegion}
-                      />
-                    )}
+                        {provider === "r2" && (
+                          <TextField
+                            label="Cloudflare Account ID"
+                            name="accountId"
+                            value={accountId}
+                            onChange={setAccountId}
+                            helpText="Found in your Cloudflare dashboard"
+                            autoComplete="off"
+                          />
+                        )}
 
-                    <TextField
-                      label="Access Key ID"
-                      name="accessKeyId"
-                      value={accessKeyId}
-                      onChange={setAccessKeyId}
-                      placeholder="Enter access key"
-                      autoComplete="off"
-                    />
+                        {provider === "s3" && (
+                          <Select
+                            label="AWS Region"
+                            name="region"
+                            options={[
+                              { label: "US East (N. Virginia)", value: "us-east-1" },
+                              { label: "US West (Oregon)", value: "us-west-2" },
+                              { label: "EU (Ireland)", value: "eu-west-1" },
+                              { label: "EU (Frankfurt)", value: "eu-central-1" },
+                              { label: "Asia Pacific (Singapore)", value: "ap-southeast-1" },
+                            ]}
+                            value={region}
+                            onChange={setRegion}
+                          />
+                        )}
 
-                    <TextField
-                      label="Secret Access Key"
-                      name="secretAccessKey"
-                      type="password"
-                      value={secretAccessKey}
-                      onChange={setSecretAccessKey}
-                      placeholder="Enter secret key"
-                      autoComplete="off"
-                    />
+                        <TextField
+                          label="Access Key ID"
+                          name="accessKeyId"
+                          value={accessKeyId}
+                          onChange={setAccessKeyId}
+                          placeholder="Enter access key"
+                          autoComplete="off"
+                        />
 
-                    <TextField
-                      label="Public URL (Optional)"
-                      name="publicUrl"
-                      value={publicUrl}
-                      onChange={setPublicUrl}
-                      placeholder="https://cdn.example.com"
-                      helpText="Custom domain for public file access"
-                      autoComplete="off"
-                    />
-                  </FormLayout>
+                        <TextField
+                          label="Secret Access Key"
+                          name="secretAccessKey"
+                          type="password"
+                          value={secretAccessKey}
+                          onChange={setSecretAccessKey}
+                          placeholder="Enter secret key"
+                          autoComplete="off"
+                        />
+
+                        <TextField
+                          label="Public URL (Optional)"
+                          name="publicUrl"
+                          value={publicUrl}
+                          onChange={setPublicUrl}
+                          placeholder="https://cdn.example.com"
+                          helpText="Custom domain for public file access"
+                          autoComplete="off"
+                        />
+                      </FormLayout>
+                    </>
+                  )}
+
+                  {!showStorageConfig && (
+                    <input type="hidden" name="provider" value="local" />
+                  )}
 
                   <Divider />
 
                   <InlineStack align="space-between">
-                    <Button
-                      onClick={() => {
-                        const form = document.createElement("form");
-                        form.method = "post";
-                        const input = document.createElement("input");
-                        input.type = "hidden";
-                        input.name = "_action";
-                        input.value = "test_storage";
-                        form.appendChild(input);
-                        document.body.appendChild(form);
-                        form.submit();
-                      }}
-                    >
-                      Test Connection
-                    </Button>
+                    {showStorageConfig && (
+                      <Button
+                        onClick={() => {
+                          const form = document.createElement("form");
+                          form.method = "post";
+                          const input = document.createElement("input");
+                          input.type = "hidden";
+                          input.name = "_action";
+                          input.value = "test_storage";
+                          form.appendChild(input);
+                          document.body.appendChild(form);
+                          form.submit();
+                        }}
+                      >
+                        Test Connection
+                      </Button>
+                    )}
 
-                    <Button submit variant="primary" loading={isSubmitting}>
-                      Save Storage Settings
-                    </Button>
+                    <Box>
+                      <Button submit variant="primary" loading={isSubmitting}>
+                        Save Storage Settings
+                      </Button>
+                    </Box>
                   </InlineStack>
                 </BlockStack>
               </Form>

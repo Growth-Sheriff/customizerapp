@@ -172,7 +172,7 @@ export async function action({ request }: ActionFunctionArgs) {
     });
 
     // Generate signed upload URL
-    const { url: uploadUrl } = await getUploadSignedUrl(storageConfig, key, contentType);
+    const { url: uploadUrl, isLocal } = await getUploadSignedUrl(storageConfig, key, contentType);
 
     return corsJson({
       uploadId,
@@ -180,6 +180,8 @@ export async function action({ request }: ActionFunctionArgs) {
       uploadUrl,
       key,
       expiresIn: 900, // 15 minutes
+      isLocal: isLocal || false, // Indicates if using local storage
+      storageProvider: storageConfig.provider,
     }, request);
   } catch (error) {
     console.error("[Upload Intent] Error:", error);

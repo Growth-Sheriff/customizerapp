@@ -282,9 +282,9 @@
       state.uploadId = intent.uploadId;
       state.itemId = intent.itemId;
 
-      // Step 2: Upload to storage
+      // Step 2: Upload to storage (handles both local and cloud)
       updateProgress(20);
-      await uploadToStorage(intent.uploadUrl, file);
+      await uploadToStorage(intent.uploadUrl, file, intent.isLocal, intent.key);
 
       updateProgress(60);
 
@@ -350,7 +350,25 @@
     return response.json();
   }
 
-  async function uploadToStorage(url, file) {
+  async function uploadToStorage(url, file, isLocal = false, key = '') {
+    // For local storage, use FormData
+    if (isLocal) {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('key', key);
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to upload file to local storage');
+      }
+      return;
+    }
+    
+    // For R2/S3, use PUT with raw file
     const response = await fetch(url, {
       method: 'PUT',
       headers: {

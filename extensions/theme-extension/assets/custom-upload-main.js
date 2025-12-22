@@ -273,6 +273,8 @@
         fileName: file.name,
         fileSize: file.size,
         mimeType: file.type,
+        contentType: file.type,
+        mode: CustomizerState.mode === 'tshirt_included' ? '3d_designer' : 'classic',
         productId: CustomizerState.productId,
         shopDomain: CustomizerState.shopDomain
       })
@@ -282,28 +284,39 @@
       throw new Error('Failed to get upload intent');
     }
 
-    const { uploadUrl, uploadId, fields } = await intentResponse.json();
+    const { uploadUrl, uploadId, key, isLocal, fields } = await intentResponse.json();
 
-    // Step 2: Upload to storage (direct upload)
+    // Step 2: Upload to storage (handles both local and cloud)
     if (statusEl) statusEl.textContent = 'Uploading...';
     CustomizerState.uploadProgress = 30;
 
-    // Create form data for signed upload
-    const formData = new FormData();
-    if (fields) {
-      Object.entries(fields).forEach(([key, value]) => {
-        formData.append(key, value);
+    if (isLocal) {
+      // Local storage: use FormData with POST
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('key', key);
+      
+      const uploadResponse = await fetch(uploadUrl, {
+        method: 'POST',
+        body: formData
       });
-    }
-    formData.append('file', file);
+      
+      if (!uploadResponse.ok) {
+        throw new Error('Failed to upload file');
+      }
+    } else {
+      // Cloud storage (R2/S3): use PUT with raw file
+      const uploadResponse = await fetch(uploadUrl, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': file.type || 'application/octet-stream',
+        },
+        body: file
+      });
 
-    const uploadResponse = await fetch(uploadUrl, {
-      method: 'POST',
-      body: formData
-    });
-
-    if (!uploadResponse.ok) {
-      throw new Error('Failed to upload file');
+      if (!uploadResponse.ok) {
+        throw new Error('Failed to upload file');
+      }
     }
 
     CustomizerState.uploadProgress = 70;
