@@ -1,0 +1,814 @@
+{% comment %}
+  Upload Lift Pro - DTF Transfer Block
+  Mode: dtf_transfer (Mod-1)
+  Location: Product page
+
+  Features:
+  - DTF size selection with upload
+  - Extra questions from merchant config
+  - T-Shirt addon modal with 3D preview
+  - Line item properties for cart
+{% endcomment %}
+
+{% liquid
+  assign product_id = product.id
+  assign variant_id = product.selected_or_first_available_variant.id
+  
+  comment
+    Get upload config from product metafield
+  endcomment
+  assign upload_config = product.metafields.upload_lift.config.value
+  
+  if upload_config != blank
+    assign upload_enabled = upload_config.enabled | default: false
+    assign tshirt_enabled = upload_config.tshirtEnabled | default: false
+    assign extra_questions = upload_config.extraQuestions | default: ''
+  else
+    assign upload_enabled = false
+    assign tshirt_enabled = false
+    assign extra_questions = ''
+  endif
+  
+  comment
+    Debug mode for testing - shows block even without config
+  endcomment
+  assign debug_mode = true
+  assign should_show = true
+%}
+
+{% if should_show %}
+<div 
+  id="ul-dtf-transfer-{{ product_id }}"
+  class="ul-dtf-container"
+  data-product-id="{{ product_id }}"
+  data-variant-id="{{ variant_id }}"
+  data-mode="dtf_transfer"
+  data-app-url="{{ shop.metafields.upload_lift.app_url | default: 'https://customizerapp.dev' }}"
+  data-shop-domain="{{ shop.permanent_domain }}"
+  data-tshirt-enabled="{{ tshirt_enabled }}"
+  data-debug="{{ debug_mode }}"
+>
+  <!-- Header -->
+  <div class="ul-dtf-header">
+    <h2 class="ul-dtf-title">
+      {{ block.settings.title | default: 'Upload Your Design' }}
+    </h2>
+    <p class="ul-dtf-subtitle">
+      {{ block.settings.subtitle | default: 'High-quality DTF transfers for your projects' }}
+    </p>
+  </div>
+
+  <!-- Step 1: Upload Design -->
+  <div class="ul-dtf-section">
+    <div class="ul-dtf-section-header">
+      <span class="ul-dtf-step">1</span>
+      <span class="ul-dtf-section-title">Upload Design</span>
+    </div>
+    
+    <div class="ul-dtf-dropzone" id="ul-dtf-dropzone-{{ product_id }}">
+      <svg class="ul-dtf-dropzone-icon" viewBox="0 0 24 24" width="48" height="48">
+        <path fill="currentColor" d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/>
+      </svg>
+      <p class="ul-dtf-dropzone-text">Drag & Drop your design here</p>
+      <span class="ul-dtf-dropzone-hint">or <button type="button" class="ul-dtf-browse-btn">browse files</button></span>
+      <span class="ul-dtf-dropzone-formats">PNG, JPG, PDF - Max 25MB</span>
+    </div>
+    <input type="file" id="ul-dtf-file-{{ product_id }}" accept=".png,.jpg,.jpeg,.pdf,.svg" style="display: none;">
+
+    <!-- Preview after upload -->
+    <div class="ul-dtf-preview" id="ul-dtf-preview-{{ product_id }}" style="display: none;">
+      <img id="ul-dtf-preview-img-{{ product_id }}" src="" alt="Design Preview" width="80" height="80">
+      <div class="ul-dtf-preview-info">
+        <span class="ul-dtf-preview-name" id="ul-dtf-preview-name-{{ product_id }}">design.png</span>
+        <span class="ul-dtf-preview-status" id="ul-dtf-preview-status-{{ product_id }}">Ready</span>
+      </div>
+      <button type="button" class="ul-dtf-remove-btn" id="ul-dtf-remove-{{ product_id }}">×</button>
+    </div>
+
+    <!-- Progress bar -->
+    <div class="ul-dtf-progress" id="ul-dtf-progress-{{ product_id }}" style="display: none;">
+      <div class="ul-dtf-progress-bar">
+        <div class="ul-dtf-progress-fill" id="ul-dtf-progress-fill-{{ product_id }}"></div>
+      </div>
+      <span class="ul-dtf-progress-text" id="ul-dtf-progress-text-{{ product_id }}">Uploading... 0%</span>
+    </div>
+  </div>
+
+  <!-- Step 2: Extra Questions (dynamic from merchant config) -->
+  <div class="ul-dtf-section" id="ul-dtf-questions-section-{{ product_id }}" style="display: none;">
+    <div class="ul-dtf-section-header">
+      <span class="ul-dtf-step">2</span>
+      <span class="ul-dtf-section-title">Additional Options</span>
+    </div>
+    <div class="ul-dtf-questions" id="ul-dtf-questions-{{ product_id }}">
+      <!-- Questions rendered by JS from config -->
+    </div>
+  </div>
+
+  <!-- Step 3: Size & Quantity -->
+  <div class="ul-dtf-section">
+    <div class="ul-dtf-section-header">
+      <span class="ul-dtf-step" id="ul-dtf-size-step-{{ product_id }}">2</span>
+      <span class="ul-dtf-section-title">Size & Quantity</span>
+    </div>
+    
+    <div class="ul-dtf-size-grid">
+      <div class="ul-dtf-field">
+        <label for="ul-dtf-width-{{ product_id }}">Width (inch)</label>
+        <input type="number" id="ul-dtf-width-{{ product_id }}" value="9" min="1" max="22" step="0.1">
+      </div>
+      <div class="ul-dtf-field">
+        <label for="ul-dtf-height-{{ product_id }}">Height (inch)</label>
+        <input type="number" id="ul-dtf-height-{{ product_id }}" value="9" min="1" max="22" step="0.1">
+      </div>
+      <div class="ul-dtf-field">
+        <label for="ul-dtf-qty-{{ product_id }}">Quantity</label>
+        <input type="number" id="ul-dtf-qty-{{ product_id }}" value="1" min="1" max="999">
+      </div>
+    </div>
+  </div>
+
+  <!-- T-Shirt Addon Button (conditionally shown) -->
+  <div class="ul-dtf-section ul-dtf-tshirt-section" id="ul-dtf-tshirt-section-{{ product_id }}" style="display: none;">
+    <div class="ul-dtf-divider"></div>
+    <button type="button" class="ul-dtf-tshirt-btn" id="ul-dtf-tshirt-btn-{{ product_id }}" disabled>
+      <span class="ul-dtf-tshirt-icon">👕</span>
+      <span class="ul-dtf-tshirt-text">I want this on a T-Shirt too!</span>
+      <span class="ul-dtf-tshirt-price">+$15.00</span>
+    </button>
+  </div>
+
+  <!-- Hidden inputs for cart properties -->
+  <input type="hidden" id="ul-dtf-upload-id-{{ product_id }}" name="properties[_upload_id]" value="">
+  <input type="hidden" id="ul-dtf-upload-url-{{ product_id }}" name="properties[_upload_url]" value="">
+  <input type="hidden" id="ul-dtf-upload-name-{{ product_id }}" name="properties[_upload_name]" value="">
+  <input type="hidden" id="ul-dtf-width-val-{{ product_id }}" name="properties[_design_width]" value="9">
+  <input type="hidden" id="ul-dtf-height-val-{{ product_id }}" name="properties[_design_height]" value="9">
+</div>
+
+<!-- T-Shirt Modal -->
+<div class="ul-tshirt-modal-overlay" id="ul-tshirt-modal-overlay">
+  <div class="ul-tshirt-modal">
+    <!-- Modal Header -->
+    <div class="ul-tshirt-modal-header">
+      <h3 class="ul-tshirt-modal-title">Add to T-Shirt</h3>
+      <button type="button" class="ul-tshirt-modal-close" id="ul-tshirt-modal-close">
+        <svg width="20" height="20" viewBox="0 0 24 24">
+          <path fill="currentColor" d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Modal Body -->
+    <div class="ul-tshirt-modal-body">
+      <!-- 3D Preview Area -->
+      <div class="ul-tshirt-3d-container">
+        <div class="ul-tshirt-3d-canvas" id="ul-tshirt-3d-canvas">
+          <div class="ul-tshirt-3d-loading">
+            <div class="ul-spinner"></div>
+            <p>Loading 3D Preview...</p>
+          </div>
+        </div>
+        
+        <!-- View Toggles -->
+        <div class="ul-tshirt-views">
+          <button type="button" class="ul-tshirt-view-btn active" data-view="front">Front</button>
+          <button type="button" class="ul-tshirt-view-btn" data-view="back">Back</button>
+          <button type="button" class="ul-tshirt-view-btn" data-view="left">Left</button>
+          <button type="button" class="ul-tshirt-view-btn" data-view="right">Right</button>
+        </div>
+      </div>
+
+      <!-- Options Panel -->
+      <div class="ul-tshirt-options">
+        <!-- Color Selection -->
+        <div class="ul-tshirt-option-group">
+          <label class="ul-tshirt-option-label">Color</label>
+          <div class="ul-tshirt-colors" id="ul-tshirt-colors">
+            <button type="button" class="ul-tshirt-color-btn active" data-color="white" style="background-color: #ffffff;"></button>
+            <button type="button" class="ul-tshirt-color-btn" data-color="black" style="background-color: #1a1a1a;"></button>
+            <button type="button" class="ul-tshirt-color-btn" data-color="red" style="background-color: #dc2626;"></button>
+            <button type="button" class="ul-tshirt-color-btn" data-color="blue" style="background-color: #2563eb;"></button>
+            <button type="button" class="ul-tshirt-color-btn" data-color="green" style="background-color: #16a34a;"></button>
+          </div>
+        </div>
+
+        <!-- Size Selection -->
+        <div class="ul-tshirt-option-group">
+          <label class="ul-tshirt-option-label">Size</label>
+          <div class="ul-tshirt-sizes" id="ul-tshirt-sizes">
+            <button type="button" class="ul-tshirt-size-btn" data-size="S">S</button>
+            <button type="button" class="ul-tshirt-size-btn" data-size="M">M</button>
+            <button type="button" class="ul-tshirt-size-btn active" data-size="L">L</button>
+            <button type="button" class="ul-tshirt-size-btn" data-size="XL">XL</button>
+            <button type="button" class="ul-tshirt-size-btn" data-size="XXL">XXL</button>
+          </div>
+        </div>
+
+        <!-- Position Selection -->
+        <div class="ul-tshirt-option-group">
+          <label class="ul-tshirt-option-label">Print Position</label>
+          <div class="ul-tshirt-positions" id="ul-tshirt-positions">
+            <label class="ul-tshirt-position-radio">
+              <input type="radio" name="tshirt-position" value="front" checked>
+              <span>Front</span>
+            </label>
+            <label class="ul-tshirt-position-radio">
+              <input type="radio" name="tshirt-position" value="back">
+              <span>Back</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Scale Slider -->
+        <div class="ul-tshirt-option-group">
+          <label class="ul-tshirt-option-label">Design Scale</label>
+          <div class="ul-tshirt-scale-control">
+            <input type="range" id="ul-tshirt-scale" min="30" max="100" value="70">
+            <span class="ul-tshirt-scale-value" id="ul-tshirt-scale-value">70%</span>
+          </div>
+        </div>
+
+        <!-- Price -->
+        <div class="ul-tshirt-price-display">
+          <span class="ul-tshirt-price-label">T-Shirt Addon</span>
+          <span class="ul-tshirt-price-value" id="ul-tshirt-price">+$15.00</span>
+        </div>
+
+        <!-- Add Button -->
+        <button type="button" class="ul-tshirt-add-btn" id="ul-tshirt-add-btn">
+          <span class="ul-tshirt-add-icon">✓</span>
+          Add T-Shirt to Order
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  /* DTF Transfer Container */
+  .ul-dtf-container {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 20px;
+    margin: 16px 0;
+  }
+
+  .ul-dtf-header {
+    margin-bottom: 20px;
+    text-align: center;
+  }
+
+  .ul-dtf-title {
+    font-size: 20px;
+    font-weight: 600;
+    color: #1f2937;
+    margin: 0 0 4px;
+  }
+
+  .ul-dtf-subtitle {
+    font-size: 14px;
+    color: #6b7280;
+    margin: 0;
+  }
+
+  .ul-dtf-section {
+    margin-bottom: 20px;
+  }
+
+  .ul-dtf-section-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  .ul-dtf-step {
+    width: 24px;
+    height: 24px;
+    background: #6366f1;
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .ul-dtf-section-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #1f2937;
+  }
+
+  /* Dropzone */
+  .ul-dtf-dropzone {
+    border: 2px dashed #e5e7eb;
+    border-radius: 12px;
+    padding: 32px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: #fafafa;
+  }
+
+  .ul-dtf-dropzone:hover,
+  .ul-dtf-dropzone.dragover {
+    border-color: #6366f1;
+    background: rgba(99, 102, 241, 0.05);
+  }
+
+  .ul-dtf-dropzone-icon {
+    opacity: 0.5;
+    margin-bottom: 8px;
+  }
+
+  .ul-dtf-dropzone-text {
+    font-size: 15px;
+    font-weight: 500;
+    color: #374151;
+    margin: 8px 0;
+  }
+
+  .ul-dtf-dropzone-hint {
+    font-size: 13px;
+    color: #6b7280;
+  }
+
+  .ul-dtf-browse-btn {
+    background: none;
+    border: none;
+    color: #6366f1;
+    cursor: pointer;
+    font-weight: 500;
+    text-decoration: underline;
+  }
+
+  .ul-dtf-dropzone-formats {
+    display: block;
+    font-size: 12px;
+    color: #9ca3af;
+    margin-top: 8px;
+  }
+
+  /* Preview */
+  .ul-dtf-preview {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: #f3f4f6;
+    border-radius: 8px;
+    margin-top: 12px;
+  }
+
+  .ul-dtf-preview img {
+    width: 60px;
+    height: 60px;
+    object-fit: cover;
+    border-radius: 6px;
+    border: 1px solid #e5e7eb;
+  }
+
+  .ul-dtf-preview-info {
+    flex: 1;
+  }
+
+  .ul-dtf-preview-name {
+    display: block;
+    font-weight: 500;
+    color: #1f2937;
+    font-size: 14px;
+  }
+
+  .ul-dtf-preview-status {
+    display: block;
+    font-size: 12px;
+    color: #10b981;
+  }
+
+  .ul-dtf-remove-btn {
+    width: 28px;
+    height: 28px;
+    background: #ef4444;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 18px;
+    line-height: 1;
+  }
+
+  /* Progress */
+  .ul-dtf-progress {
+    margin-top: 12px;
+  }
+
+  .ul-dtf-progress-bar {
+    height: 6px;
+    background: #e5e7eb;
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .ul-dtf-progress-fill {
+    height: 100%;
+    background: #6366f1;
+    border-radius: 3px;
+    width: 0%;
+    transition: width 0.3s;
+  }
+
+  .ul-dtf-progress-text {
+    display: block;
+    font-size: 12px;
+    color: #6b7280;
+    margin-top: 4px;
+  }
+
+  /* Size Grid */
+  .ul-dtf-size-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+
+  .ul-dtf-field label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    color: #374151;
+    margin-bottom: 4px;
+  }
+
+  .ul-dtf-field input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    font-size: 14px;
+    box-sizing: border-box;
+  }
+
+  .ul-dtf-field input:focus {
+    outline: none;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+  }
+
+  /* Divider */
+  .ul-dtf-divider {
+    height: 1px;
+    background: #e5e7eb;
+    margin: 16px 0;
+  }
+
+  /* T-Shirt Button */
+  .ul-dtf-tshirt-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 14px 20px;
+    background: linear-gradient(135deg, #8b5cf6, #6366f1);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .ul-dtf-tshirt-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+  }
+
+  .ul-dtf-tshirt-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .ul-dtf-tshirt-price {
+    background: rgba(255, 255, 255, 0.2);
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 13px;
+  }
+
+  /* T-Shirt Modal */
+  .ul-tshirt-modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 99999;
+    backdrop-filter: blur(4px);
+  }
+
+  .ul-tshirt-modal-overlay.active {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .ul-tshirt-modal {
+    background: #ffffff;
+    border-radius: 16px;
+    width: 95%;
+    max-width: 900px;
+    max-height: 90vh;
+    overflow: hidden;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  }
+
+  .ul-tshirt-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  .ul-tshirt-modal-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #1f2937;
+    margin: 0;
+  }
+
+  .ul-tshirt-modal-close {
+    background: none;
+    border: none;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #6b7280;
+  }
+
+  .ul-tshirt-modal-close:hover {
+    background: #f3f4f6;
+  }
+
+  .ul-tshirt-modal-body {
+    display: flex;
+    padding: 20px;
+    gap: 20px;
+  }
+
+  .ul-tshirt-3d-container {
+    flex: 1;
+    min-height: 400px;
+    background: #f9fafb;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .ul-tshirt-3d-canvas {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .ul-tshirt-3d-loading {
+    text-align: center;
+    color: #6b7280;
+  }
+
+  .ul-spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid #e5e7eb;
+    border-top-color: #6366f1;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 12px;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .ul-tshirt-views {
+    display: flex;
+    gap: 8px;
+    padding: 12px;
+    justify-content: center;
+  }
+
+  .ul-tshirt-view-btn {
+    padding: 8px 16px;
+    background: #e5e7eb;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .ul-tshirt-view-btn.active {
+    background: #6366f1;
+    color: white;
+  }
+
+  .ul-tshirt-options {
+    width: 280px;
+  }
+
+  .ul-tshirt-option-group {
+    margin-bottom: 20px;
+  }
+
+  .ul-tshirt-option-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 8px;
+  }
+
+  .ul-tshirt-colors {
+    display: flex;
+    gap: 8px;
+  }
+
+  .ul-tshirt-color-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 3px solid transparent;
+    cursor: pointer;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1);
+  }
+
+  .ul-tshirt-color-btn.active {
+    border-color: #6366f1;
+  }
+
+  .ul-tshirt-sizes {
+    display: flex;
+    gap: 8px;
+  }
+
+  .ul-tshirt-size-btn {
+    width: 44px;
+    height: 36px;
+    background: #f3f4f6;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+
+  .ul-tshirt-size-btn.active {
+    background: #6366f1;
+    color: white;
+    border-color: #6366f1;
+  }
+
+  .ul-tshirt-positions {
+    display: flex;
+    gap: 16px;
+  }
+
+  .ul-tshirt-position-radio {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-size: 14px;
+  }
+
+  .ul-tshirt-scale-control {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .ul-tshirt-scale-control input[type="range"] {
+    flex: 1;
+  }
+
+  .ul-tshirt-scale-value {
+    font-size: 14px;
+    font-weight: 500;
+    color: #6366f1;
+  }
+
+  .ul-tshirt-price-display {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px;
+    background: #f3f4f6;
+    border-radius: 8px;
+    margin-bottom: 16px;
+  }
+
+  .ul-tshirt-price-label {
+    font-size: 14px;
+    color: #374151;
+  }
+
+  .ul-tshirt-price-value {
+    font-size: 18px;
+    font-weight: 600;
+    color: #10b981;
+  }
+
+  .ul-tshirt-add-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 14px;
+    background: #10b981;
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .ul-tshirt-add-btn:hover {
+    background: #059669;
+  }
+
+  /* Mobile responsive */
+  @media (max-width: 768px) {
+    .ul-tshirt-modal-body {
+      flex-direction: column;
+    }
+    
+    .ul-tshirt-options {
+      width: 100%;
+    }
+    
+    .ul-dtf-size-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+</style>
+
+<script src="{{ 'dtf-uploader.js' | asset_url }}" defer></script>
+<script src="{{ 'tshirt-modal.js' | asset_url }}" defer></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const productId = '{{ product_id }}';
+    
+    // Initialize DTF uploader
+    if (window.DTFUploader) {
+      window.DTFUploader.init(productId);
+    }
+    
+    // Initialize T-Shirt modal
+    if (window.TShirtModal) {
+      window.TShirtModal.init();
+    }
+  });
+</script>
+{% endif %}
+
+{% schema %}
+{
+  "name": "UL DTF Transfer",
+  "target": "section",
+  "settings": [
+    {
+      "type": "text",
+      "id": "title",
+      "label": "Title",
+      "default": "Upload Your Design"
+    },
+    {
+      "type": "text",
+      "id": "subtitle",
+      "label": "Subtitle",
+      "default": "High-quality DTF transfers for your projects"
+    },
+    {
+      "type": "text",
+      "id": "tshirt_price",
+      "label": "T-Shirt Addon Price",
+      "default": "$15.00"
+    }
+  ]
+}
+{% endschema %}
