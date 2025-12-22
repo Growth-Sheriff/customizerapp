@@ -1,0 +1,1202 @@
+/**
+ * T-Shirt Modal Styles
+ * =====================
+ * FAZ 2: 4-Step Wizard + 3D Preview Modal
+ * 
+ * Version: 4.0.0
+ * Architecture: DTF_TSHIRT_MODAL_ARCHITECTURE.md
+ */
+
+/* =============================================================================
+   CSS Variables
+   ============================================================================= */
+:root {
+  --ul-modal-z: 9999;
+  --ul-modal-bg: rgba(0, 0, 0, 0.7);
+  --ul-modal-radius: 16px;
+  --ul-primary: #6366f1;
+  --ul-primary-hover: #4f46e5;
+  --ul-success: #10b981;
+  --ul-success-hover: #059669;
+  --ul-error: #ef4444;
+  --ul-warning: #f59e0b;
+  --ul-text: #1f2937;
+  --ul-text-secondary: #6b7280;
+  --ul-border: #e5e7eb;
+  --ul-bg-light: #f9fafb;
+  --ul-bg-canvas: linear-gradient(180deg, #f5f5f5 0%, #e0e0e0 100%);
+}
+
+/* =============================================================================
+   Modal Overlay
+   ============================================================================= */
+.ul-tshirt-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: var(--ul-modal-bg);
+  z-index: var(--ul-modal-z);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.ul-tshirt-overlay.active {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: ulFadeIn 0.25s ease-out;
+}
+
+@keyframes ulFadeIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* =============================================================================
+   Modal Container
+   ============================================================================= */
+.ul-tshirt-modal {
+  background: #fff;
+  border-radius: var(--ul-modal-radius);
+  width: 90vw;
+  max-width: 1200px;
+  height: 90vh;
+  max-height: 800px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+}
+
+/* =============================================================================
+   Modal Header
+   ============================================================================= */
+.ul-tshirt-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--ul-border);
+  background: #fff;
+  flex-shrink: 0;
+}
+
+.ul-tshirt-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--ul-text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ul-tshirt-close {
+  background: none;
+  border: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ul-text-secondary);
+  transition: all 0.2s;
+}
+
+.ul-tshirt-close:hover {
+  background: var(--ul-bg-light);
+  color: var(--ul-text);
+}
+
+/* =============================================================================
+   Step Progress Bar
+   ============================================================================= */
+.ul-tshirt-steps {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px 24px;
+  background: var(--ul-bg-light);
+  border-bottom: 1px solid var(--ul-border);
+  flex-shrink: 0;
+}
+
+.ul-step-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ul-text-secondary);
+  font-size: 14px;
+  transition: color 0.2s;
+}
+
+.ul-step-item.active {
+  color: var(--ul-primary);
+}
+
+.ul-step-item.completed {
+  color: var(--ul-success);
+}
+
+.ul-step-number {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 12px;
+  transition: all 0.2s;
+}
+
+.ul-step-item.active .ul-step-number {
+  background: var(--ul-primary);
+  border-color: var(--ul-primary);
+  color: #fff;
+}
+
+.ul-step-item.completed .ul-step-number {
+  background: var(--ul-success);
+  border-color: var(--ul-success);
+  color: #fff;
+}
+
+.ul-step-label {
+  font-weight: 500;
+}
+
+.ul-step-connector {
+  width: 60px;
+  height: 2px;
+  background: var(--ul-border);
+  margin: 0 16px;
+  transition: background 0.2s;
+}
+
+.ul-step-connector.completed {
+  background: var(--ul-success);
+}
+
+/* =============================================================================
+   Modal Body / Content Area
+   ============================================================================= */
+.ul-tshirt-body {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.ul-tshirt-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0;
+}
+
+/* =============================================================================
+   Step Panel Base
+   ============================================================================= */
+.ul-step-panel {
+  display: none;
+  height: 100%;
+  animation: ulSlideIn 0.3s ease-out;
+}
+
+.ul-step-panel.active {
+  display: flex;
+  flex-direction: column;
+}
+
+@keyframes ulSlideIn {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* =============================================================================
+   STEP 1: Upload
+   ============================================================================= */
+.ul-step1-content {
+  padding: 32px;
+  max-width: 700px;
+  margin: 0 auto;
+}
+
+.ul-step1-section-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ul-text);
+  margin-bottom: 8px;
+}
+
+.ul-step1-section-desc {
+  color: var(--ul-text-secondary);
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
+/* Inherited Design Card */
+.ul-inherited-design {
+  border: 2px solid var(--ul-border);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 24px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.ul-inherited-design.selected {
+  border-color: var(--ul-primary);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.ul-inherited-preview {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.ul-inherited-thumb {
+  width: 80px;
+  height: 80px;
+  border-radius: 8px;
+  object-fit: contain;
+  background: var(--ul-bg-light);
+  border: 1px solid var(--ul-border);
+}
+
+.ul-inherited-info {
+  flex: 1;
+}
+
+.ul-inherited-name {
+  font-weight: 600;
+  color: var(--ul-text);
+  margin-bottom: 4px;
+  word-break: break-all;
+}
+
+.ul-inherited-meta {
+  font-size: 13px;
+  color: var(--ul-text-secondary);
+}
+
+.ul-inherited-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 4px 8px;
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--ul-success);
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.ul-use-design-btn {
+  width: 100%;
+  margin-top: 16px;
+  padding: 12px 24px;
+  background: var(--ul-primary);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.ul-use-design-btn:hover {
+  background: var(--ul-primary-hover);
+}
+
+.ul-use-design-btn.selected {
+  background: var(--ul-success);
+}
+
+/* Divider */
+.ul-divider {
+  display: flex;
+  align-items: center;
+  margin: 24px 0;
+  color: var(--ul-text-secondary);
+  font-size: 14px;
+}
+
+.ul-divider::before,
+.ul-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--ul-border);
+}
+
+.ul-divider span {
+  padding: 0 16px;
+}
+
+/* Upload Zone */
+.ul-upload-zone {
+  border: 2px dashed var(--ul-border);
+  border-radius: 12px;
+  padding: 40px 32px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.ul-upload-zone:hover,
+.ul-upload-zone.dragover {
+  border-color: var(--ul-primary);
+  background: rgba(99, 102, 241, 0.03);
+}
+
+.ul-upload-zone.uploading {
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+.ul-upload-zone-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+.ul-upload-zone-text {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--ul-text);
+  margin-bottom: 4px;
+}
+
+.ul-upload-zone-hint {
+  font-size: 13px;
+  color: var(--ul-text-secondary);
+}
+
+.ul-upload-progress {
+  margin-top: 16px;
+}
+
+.ul-upload-progress-bar {
+  height: 6px;
+  background: var(--ul-border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.ul-upload-progress-fill {
+  height: 100%;
+  background: var(--ul-primary);
+  border-radius: 3px;
+  transition: width 0.3s;
+  width: 0%;
+}
+
+.ul-upload-progress-text {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--ul-text-secondary);
+}
+
+/* =============================================================================
+   STEP 2: Design (3D + Options)
+   ============================================================================= */
+.ul-step2-layout {
+  display: flex;
+  height: 100%;
+}
+
+.ul-step2-3d {
+  flex: 1;
+  min-width: 0;
+  background: var(--ul-bg-canvas);
+  position: relative;
+}
+
+.ul-step2-sidebar {
+  width: 340px;
+  border-left: 1px solid var(--ul-border);
+  background: #fff;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+/* 3D Canvas */
+.ul-3d-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.ul-3d-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--ul-bg-canvas);
+  color: var(--ul-text-secondary);
+}
+
+.ul-3d-spinner {
+  width: 44px;
+  height: 44px;
+  border: 3px solid var(--ul-border);
+  border-top-color: var(--ul-primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 12px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Quick View Buttons */
+.ul-quick-views {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  background: #fff;
+  padding: 6px;
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.ul-quick-view-btn {
+  padding: 8px 16px;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  color: var(--ul-text-secondary);
+  transition: all 0.2s;
+}
+
+.ul-quick-view-btn:hover {
+  background: var(--ul-bg-light);
+  color: var(--ul-text);
+}
+
+.ul-quick-view-btn.active {
+  background: var(--ul-primary);
+  color: #fff;
+}
+
+/* Sidebar Sections */
+.ul-sidebar-section {
+  padding: 20px;
+  border-bottom: 1px solid var(--ul-border);
+}
+
+.ul-sidebar-section:last-child {
+  border-bottom: none;
+}
+
+.ul-sidebar-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ul-text);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 12px;
+}
+
+/* Color Swatches */
+.ul-color-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ul-color-swatch {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  position: relative;
+  transition: transform 0.2s;
+}
+
+.ul-color-swatch:hover {
+  transform: scale(1.1);
+}
+
+.ul-color-swatch.active {
+  border-color: var(--ul-primary);
+}
+
+.ul-color-swatch.light {
+  border: 1px solid var(--ul-border);
+}
+
+.ul-color-swatch.active::after {
+  content: '✓';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 14px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.ul-color-swatch.light.active::after {
+  color: var(--ul-text);
+  text-shadow: none;
+}
+
+/* Size Dropdown */
+.ul-size-select {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid var(--ul-border);
+  border-radius: 8px;
+  font-size: 14px;
+  color: var(--ul-text);
+  background: #fff;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+}
+
+.ul-size-select:focus {
+  outline: none;
+  border-color: var(--ul-primary);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+/* Location Checkboxes */
+.ul-location-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ul-location-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--ul-bg-light);
+  border: 1px solid var(--ul-border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.ul-location-item:hover {
+  border-color: var(--ul-primary);
+}
+
+.ul-location-item.selected {
+  background: rgba(99, 102, 241, 0.05);
+  border-color: var(--ul-primary);
+}
+
+.ul-location-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ul-location-checkbox {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--ul-primary);
+  cursor: pointer;
+}
+
+.ul-location-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ul-text);
+}
+
+.ul-location-price {
+  font-size: 13px;
+  color: var(--ul-text-secondary);
+}
+
+.ul-location-price.free {
+  color: var(--ul-success);
+  font-weight: 500;
+}
+
+/* Location Settings */
+.ul-location-settings {
+  padding: 16px;
+  background: var(--ul-bg-light);
+  border-radius: 8px;
+  margin-top: 12px;
+  display: none;
+}
+
+.ul-location-settings.visible {
+  display: block;
+}
+
+.ul-location-settings-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ul-text-secondary);
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+
+.ul-slider-group {
+  margin-bottom: 14px;
+}
+
+.ul-slider-group:last-child {
+  margin-bottom: 0;
+}
+
+.ul-slider-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--ul-text);
+  margin-bottom: 6px;
+}
+
+.ul-slider-value {
+  font-weight: 600;
+  color: var(--ul-primary);
+}
+
+.ul-slider {
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--ul-border);
+  outline: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+
+.ul-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--ul-primary);
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.ul-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+
+/* Price Display */
+.ul-price-box {
+  background: var(--ul-bg-light);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.ul-price-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--ul-text-secondary);
+  margin-bottom: 8px;
+}
+
+.ul-price-row.total {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ul-text);
+  padding-top: 8px;
+  border-top: 1px solid var(--ul-border);
+  margin-bottom: 0;
+}
+
+/* =============================================================================
+   STEP 3: Details
+   ============================================================================= */
+.ul-step3-content {
+  padding: 32px;
+  max-width: 700px;
+  margin: 0 auto;
+}
+
+.ul-details-preview {
+  display: flex;
+  gap: 16px;
+  padding: 20px;
+  background: var(--ul-bg-light);
+  border-radius: 12px;
+  margin-bottom: 24px;
+}
+
+.ul-details-preview-thumbs {
+  display: flex;
+  gap: 8px;
+}
+
+.ul-details-preview-thumb {
+  width: 60px;
+  height: 60px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid var(--ul-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+}
+
+.ul-details-preview-info {
+  flex: 1;
+}
+
+.ul-details-preview-title {
+  font-weight: 600;
+  color: var(--ul-text);
+  margin-bottom: 4px;
+}
+
+.ul-details-preview-meta {
+  font-size: 13px;
+  color: var(--ul-text-secondary);
+}
+
+/* Extra Questions */
+.ul-question-group {
+  margin-bottom: 20px;
+}
+
+.ul-question-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ul-text);
+  margin-bottom: 8px;
+}
+
+.ul-question-label .required {
+  color: var(--ul-error);
+}
+
+.ul-question-input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid var(--ul-border);
+  border-radius: 8px;
+  font-size: 14px;
+  color: var(--ul-text);
+  transition: border-color 0.2s;
+}
+
+.ul-question-input:focus {
+  outline: none;
+  border-color: var(--ul-primary);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.ul-question-textarea {
+  resize: vertical;
+  min-height: 100px;
+}
+
+/* Quantity Control */
+.ul-quantity-control {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ul-quantity-btn {
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--ul-border);
+  background: #fff;
+  border-radius: 8px;
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ul-text);
+  transition: all 0.2s;
+}
+
+.ul-quantity-btn:hover {
+  border-color: var(--ul-primary);
+  color: var(--ul-primary);
+}
+
+.ul-quantity-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ul-quantity-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--ul-text);
+  min-width: 40px;
+  text-align: center;
+}
+
+/* =============================================================================
+   STEP 4: Review
+   ============================================================================= */
+.ul-step4-content {
+  padding: 32px;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.ul-review-card {
+  border: 1px solid var(--ul-border);
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 24px;
+}
+
+.ul-review-header {
+  background: var(--ul-bg-light);
+  padding: 16px 20px;
+  font-weight: 600;
+  color: var(--ul-text);
+  border-bottom: 1px solid var(--ul-border);
+}
+
+.ul-review-body {
+  padding: 20px;
+}
+
+/* Review Preview Grid */
+.ul-review-preview-grid {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.ul-review-preview-item {
+  flex: 1;
+  text-align: center;
+}
+
+.ul-review-preview-label {
+  font-size: 12px;
+  color: var(--ul-text-secondary);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.ul-review-preview-box {
+  width: 100px;
+  height: 100px;
+  margin: 0 auto;
+  background: var(--ul-bg-light);
+  border: 1px solid var(--ul-border);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+}
+
+/* Review Details List */
+.ul-review-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ul-review-list li {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px dashed var(--ul-border);
+  font-size: 14px;
+}
+
+.ul-review-list li:last-child {
+  border-bottom: none;
+}
+
+.ul-review-list-label {
+  color: var(--ul-text-secondary);
+}
+
+.ul-review-list-value {
+  color: var(--ul-text);
+  font-weight: 500;
+}
+
+/* Price Breakdown */
+.ul-review-price-breakdown {
+  background: var(--ul-bg-light);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.ul-review-price-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+  padding: 6px 0;
+  color: var(--ul-text-secondary);
+}
+
+.ul-review-price-row.total {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ul-text);
+  padding-top: 12px;
+  margin-top: 8px;
+  border-top: 2px solid var(--ul-border);
+}
+
+/* Confirmation Checkbox */
+.ul-confirmation {
+  background: var(--ul-bg-light);
+  border: 1px solid var(--ul-border);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 24px;
+}
+
+.ul-confirmation-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  cursor: pointer;
+}
+
+.ul-confirmation-checkbox {
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+  accent-color: var(--ul-primary);
+  flex-shrink: 0;
+}
+
+.ul-confirmation-text {
+  font-size: 14px;
+  color: var(--ul-text);
+  line-height: 1.5;
+}
+
+/* Action Buttons */
+.ul-action-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ul-action-btn {
+  width: 100%;
+  padding: 16px 24px;
+  border: none;
+  border-radius: 10px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.2s;
+}
+
+.ul-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ul-action-btn.primary {
+  background: var(--ul-success);
+  color: #fff;
+}
+
+.ul-action-btn.primary:hover:not(:disabled) {
+  background: var(--ul-success-hover);
+}
+
+.ul-action-btn.secondary {
+  background: var(--ul-primary);
+  color: #fff;
+}
+
+.ul-action-btn.secondary:hover:not(:disabled) {
+  background: var(--ul-primary-hover);
+}
+
+/* =============================================================================
+   Modal Footer (Navigation)
+   ============================================================================= */
+.ul-tshirt-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  border-top: 1px solid var(--ul-border);
+  background: #fff;
+  flex-shrink: 0;
+}
+
+.ul-nav-btn {
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s;
+}
+
+.ul-nav-btn.back {
+  background: none;
+  border: 1px solid var(--ul-border);
+  color: var(--ul-text-secondary);
+}
+
+.ul-nav-btn.back:hover {
+  border-color: var(--ul-text-secondary);
+  color: var(--ul-text);
+}
+
+.ul-nav-btn.next {
+  background: var(--ul-primary);
+  border: none;
+  color: #fff;
+}
+
+.ul-nav-btn.next:hover:not(:disabled) {
+  background: var(--ul-primary-hover);
+}
+
+.ul-nav-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ul-nav-btn.hidden {
+  visibility: hidden;
+}
+
+/* =============================================================================
+   Toast Notification
+   ============================================================================= */
+.ul-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(100px);
+  background: var(--ul-text);
+  color: #fff;
+  padding: 14px 24px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  z-index: 10000;
+  opacity: 0;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.ul-toast.show {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+}
+
+.ul-toast.success {
+  background: var(--ul-success);
+}
+
+.ul-toast.error {
+  background: var(--ul-error);
+}
+
+/* =============================================================================
+   Responsive Design
+   ============================================================================= */
+@media (max-width: 900px) {
+  .ul-tshirt-modal {
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
+    border-radius: 0;
+  }
+
+  .ul-step2-layout {
+    flex-direction: column;
+  }
+
+  .ul-step2-3d {
+    min-height: 300px;
+    flex: none;
+  }
+
+  .ul-step2-sidebar {
+    width: 100%;
+    border-left: none;
+    border-top: 1px solid var(--ul-border);
+    max-height: 50vh;
+  }
+
+  .ul-tshirt-steps {
+    padding: 12px 16px;
+    overflow-x: auto;
+  }
+
+  .ul-step-connector {
+    width: 30px;
+    margin: 0 8px;
+  }
+
+  .ul-step-label {
+    display: none;
+  }
+
+  .ul-quick-views {
+    bottom: 8px;
+    padding: 4px;
+  }
+
+  .ul-quick-view-btn {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .ul-step1-content,
+  .ul-step3-content,
+  .ul-step4-content {
+    padding: 20px;
+  }
+
+  .ul-action-buttons {
+    gap: 10px;
+  }
+
+  .ul-action-btn {
+    padding: 14px 20px;
+    font-size: 15px;
+  }
+}

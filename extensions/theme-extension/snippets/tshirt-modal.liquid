@@ -1,375 +1,416 @@
 {% comment %}
   T-Shirt Modal Snippet
   =====================
+  FAZ 2: 4-Step Wizard + 3D Preview Modal
+  
   Usage: {% render 'tshirt-modal' %}
   
-  This modal provides:
-  - 3D T-Shirt preview with uploaded design
-  - Color & Size variant selection
-  - Front/Back position toggle
-  - Add to cart with line item properties
+  Features:
+  - Step 1: Upload (inherited or new design)
+  - Step 2: 3D Preview + Options (color, size, locations)
+  - Step 3: Extra Questions
+  - Step 4: Review & Actions
   
-  Requires: three.js loaded from CDN
+  Integration:
+  - Listens for 'ul:openTShirtModal' event from DTF uploader
+  - Uses Three.js for 3D rendering
+  - Supports multi-location printing
   
-  Version: 3.0.0
+  Version: 4.0.0
+  Architecture: DTF_TSHIRT_MODAL_ARCHITECTURE.md
 {% endcomment %}
 
-<style>
-  /* Modal Overlay */
-  .tshirt-modal-overlay {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.7);
-    z-index: 9999;
-    backdrop-filter: blur(4px);
-  }
-
-  .tshirt-modal-overlay.active {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    animation: fadeIn 0.2s ease;
-  }
-
-  @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
-  }
-
-  /* Modal Container */
-  .tshirt-modal {
-    background: #ffffff;
-    border-radius: 16px;
-    width: 95%;
-    max-width: 900px;
-    max-height: 90vh;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-  }
-
-  /* Modal Header */
-  .tshirt-modal-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 16px 20px;
-    border-bottom: 1px solid #e5e7eb;
-  }
-
-  .tshirt-modal-title {
-    font-size: 18px;
-    font-weight: 600;
-    color: #1f2937;
-  }
-
-  .tshirt-modal-close {
-    background: none;
-    border: none;
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #6b7280;
-    transition: background 0.2s;
-  }
-
-  .tshirt-modal-close:hover {
-    background: #f3f4f6;
-    color: #1f2937;
-  }
-
-  /* Modal Body */
-  .tshirt-modal-body {
-    display: flex;
-    flex: 1;
-    overflow: hidden;
-  }
-
-  /* 3D Canvas Area */
-  .tshirt-3d-container {
-    flex: 1;
-    min-height: 400px;
-    background: linear-gradient(180deg, #f5f5f5 0%, #e0e0e0 100%);
-    position: relative;
-  }
-
-  .tshirt-3d-canvas {
-    width: 100%;
-    height: 100%;
-  }
-
-  .tshirt-3d-loading {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    text-align: center;
-    color: #6b7280;
-  }
-
-  .tshirt-3d-loading .spinner {
-    width: 40px;
-    height: 40px;
-    border: 3px solid #e5e7eb;
-    border-top-color: #6366f1;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-    margin: 0 auto 12px;
-  }
-
-  @keyframes spin {
-    to { transform: rotate(360deg); }
-  }
-
-  /* Position Toggle */
-  .tshirt-position-toggle {
-    position: absolute;
-    bottom: 16px;
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    gap: 8px;
-    background: white;
-    padding: 4px;
-    border-radius: 8px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-  }
-
-  .tshirt-position-btn {
-    padding: 8px 16px;
-    background: none;
-    border: none;
-    border-radius: 6px;
-    font-size: 14px;
-    cursor: pointer;
-    color: #6b7280;
-    transition: all 0.2s;
-  }
-
-  .tshirt-position-btn.active {
-    background: #6366f1;
-    color: white;
-  }
-
-  /* Sidebar */
-  .tshirt-sidebar {
-    width: 300px;
-    padding: 20px;
-    border-left: 1px solid #e5e7eb;
-    overflow-y: auto;
-    background: #fafafa;
-  }
-
-  .tshirt-section {
-    margin-bottom: 24px;
-  }
-
-  .tshirt-section-title {
-    font-size: 14px;
-    font-weight: 600;
-    color: #374151;
-    margin-bottom: 12px;
-  }
-
-  /* Color Swatches */
-  .tshirt-colors {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-
-  .tshirt-color-swatch {
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    border: 2px solid transparent;
-    cursor: pointer;
-    position: relative;
-    transition: transform 0.2s;
-  }
-
-  .tshirt-color-swatch:hover {
-    transform: scale(1.1);
-  }
-
-  .tshirt-color-swatch.active {
-    border-color: #6366f1;
-  }
-
-  .tshirt-color-swatch.active::after {
-    content: '✓';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    color: white;
-    font-size: 14px;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.3);
-  }
-
-  /* Size Buttons */
-  .tshirt-sizes {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-
-  .tshirt-size-btn {
-    min-width: 44px;
-    padding: 8px 12px;
-    background: white;
-    border: 1px solid #e5e7eb;
-    border-radius: 6px;
-    font-size: 14px;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-
-  .tshirt-size-btn:hover {
-    border-color: #6366f1;
-  }
-
-  .tshirt-size-btn.active {
-    background: #6366f1;
-    border-color: #6366f1;
-    color: white;
-  }
-
-  .tshirt-size-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  /* Price Display */
-  .tshirt-price {
-    font-size: 24px;
-    font-weight: 700;
-    color: #1f2937;
-    margin-bottom: 16px;
-  }
-
-  .tshirt-price-addon {
-    font-size: 12px;
-    color: #6b7280;
-    font-weight: 400;
-  }
-
-  /* Add to Cart Button */
-  .tshirt-add-cart {
-    width: 100%;
-    padding: 14px;
-    background: #10b981;
-    border: none;
-    border-radius: 8px;
-    color: white;
-    font-size: 16px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background 0.2s;
-  }
-
-  .tshirt-add-cart:hover {
-    background: #059669;
-  }
-
-  .tshirt-add-cart:disabled {
-    background: #9ca3af;
-    cursor: not-allowed;
-  }
-
-  /* Responsive */
-  @media (max-width: 768px) {
-    .tshirt-modal-body {
-      flex-direction: column;
-    }
-
-    .tshirt-sidebar {
-      width: 100%;
-      border-left: none;
-      border-top: 1px solid #e5e7eb;
-      max-height: 280px;
-    }
-
-    .tshirt-3d-container {
-      min-height: 300px;
-    }
-  }
-</style>
+<!-- Load Separate CSS -->
+{{ 'tshirt-modal.css' | asset_url | stylesheet_tag }}
 
 <!-- Modal HTML -->
-<div class="tshirt-modal-overlay" id="tshirt-modal-overlay">
-  <div class="tshirt-modal">
-    <div class="tshirt-modal-header">
-      <span class="tshirt-modal-title">👕 Preview on T-Shirt</span>
-      <button type="button" class="tshirt-modal-close" id="tshirt-modal-close">
+<div class="ul-tshirt-overlay" id="ul-tshirt-overlay">
+  <div class="ul-tshirt-modal">
+    
+    <!-- Header -->
+    <div class="ul-tshirt-header">
+      <span class="ul-tshirt-title">👕 T-Shirt Designer</span>
+      <button type="button" class="ul-tshirt-close" id="ul-tshirt-close" aria-label="Close">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
         </svg>
       </button>
     </div>
     
-    <div class="tshirt-modal-body">
-      <!-- 3D Preview -->
-      <div class="tshirt-3d-container">
-        <div class="tshirt-3d-loading" id="tshirt-3d-loading">
-          <div class="spinner"></div>
-          <div>Loading 3D Preview...</div>
-        </div>
-        <canvas class="tshirt-3d-canvas" id="tshirt-3d-canvas"></canvas>
-        
-        <!-- Position Toggle -->
-        <div class="tshirt-position-toggle">
-          <button type="button" class="tshirt-position-btn active" data-position="front">Front</button>
-          <button type="button" class="tshirt-position-btn" data-position="back">Back</button>
-        </div>
+    <!-- Step Progress -->
+    <div class="ul-tshirt-steps">
+      <div class="ul-step-item active" data-step="1">
+        <div class="ul-step-number">1</div>
+        <span class="ul-step-label">Upload</span>
       </div>
-
-      <!-- Sidebar -->
-      <div class="tshirt-sidebar">
-        <!-- Colors -->
-        <div class="tshirt-section">
-          <div class="tshirt-section-title">Color</div>
-          <div class="tshirt-colors" id="tshirt-colors">
-            <!-- Dynamically populated -->
-          </div>
-        </div>
-
-        <!-- Sizes -->
-        <div class="tshirt-section">
-          <div class="tshirt-section-title">Size</div>
-          <div class="tshirt-sizes" id="tshirt-sizes">
-            <!-- Dynamically populated -->
-          </div>
-        </div>
-
-        <!-- Price -->
-        <div class="tshirt-section">
-          <div class="tshirt-price" id="tshirt-price">
-            $0.00
-            <span class="tshirt-price-addon" id="tshirt-price-addon"></span>
-          </div>
-        </div>
-
-        <!-- Add to Cart -->
-        <button type="button" class="tshirt-add-cart" id="tshirt-add-cart" disabled>
-          Add T-Shirt to Cart
-        </button>
+      <div class="ul-step-connector"></div>
+      <div class="ul-step-item" data-step="2">
+        <div class="ul-step-number">2</div>
+        <span class="ul-step-label">Design</span>
+      </div>
+      <div class="ul-step-connector"></div>
+      <div class="ul-step-item" data-step="3">
+        <div class="ul-step-number">3</div>
+        <span class="ul-step-label">Details</span>
+      </div>
+      <div class="ul-step-connector"></div>
+      <div class="ul-step-item" data-step="4">
+        <div class="ul-step-number">4</div>
+        <span class="ul-step-label">Review</span>
       </div>
     </div>
+    
+    <!-- Body -->
+    <div class="ul-tshirt-body">
+      <div class="ul-tshirt-content">
+        
+        <!-- STEP 1: Upload -->
+        <div class="ul-step-panel active" id="ul-step-1">
+          <div class="ul-step1-content">
+            
+            <!-- Inherited Design (shown if coming from DTF) -->
+            <div id="ul-inherited-section" style="display: none;">
+              <div class="ul-step1-section-title">Use Your Existing Design</div>
+              <div class="ul-step1-section-desc">Your uploaded design is ready to use on a t-shirt.</div>
+              
+              <div class="ul-inherited-design" id="ul-inherited-design">
+                <div class="ul-inherited-preview">
+                  <img src="" alt="Design preview" class="ul-inherited-thumb" id="ul-inherited-thumb">
+                  <div class="ul-inherited-info">
+                    <div class="ul-inherited-name" id="ul-inherited-name">design.png</div>
+                    <div class="ul-inherited-meta" id="ul-inherited-meta">2400 x 3200 px • 300 DPI</div>
+                    <div class="ul-inherited-badge">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/>
+                      </svg>
+                      Already uploaded
+                    </div>
+                  </div>
+                </div>
+                <button type="button" class="ul-use-design-btn" id="ul-use-inherited-btn">
+                  ✓ Use This Design
+                </button>
+              </div>
+              
+              <div class="ul-divider"><span>OR</span></div>
+            </div>
+            
+            <!-- Upload New Design -->
+            <div id="ul-upload-section">
+              <div class="ul-step1-section-title">Upload New Design</div>
+              <div class="ul-step1-section-desc">Drag and drop or click to browse your files.</div>
+              
+              <div class="ul-upload-zone" id="ul-tshirt-upload-zone">
+                <input type="file" id="ul-tshirt-file-input" accept=".png,.jpg,.jpeg,.svg,.webp" hidden>
+                <div class="ul-upload-zone-icon">☁️</div>
+                <div class="ul-upload-zone-text">Drag & Drop your design here</div>
+                <div class="ul-upload-zone-hint">PNG, JPG, SVG, WEBP • Max 50MB</div>
+                
+                <div class="ul-upload-progress" id="ul-tshirt-upload-progress" style="display: none;">
+                  <div class="ul-upload-progress-bar">
+                    <div class="ul-upload-progress-fill" id="ul-tshirt-progress-fill"></div>
+                  </div>
+                  <div class="ul-upload-progress-text" id="ul-tshirt-progress-text">Uploading...</div>
+                </div>
+              </div>
+              
+              <!-- New upload preview (shown after upload) -->
+              <div id="ul-new-upload-preview" style="display: none; margin-top: 16px;">
+                <div class="ul-inherited-design selected">
+                  <div class="ul-inherited-preview">
+                    <img src="" alt="Uploaded design" class="ul-inherited-thumb" id="ul-new-upload-thumb">
+                    <div class="ul-inherited-info">
+                      <div class="ul-inherited-name" id="ul-new-upload-name">design.png</div>
+                      <div class="ul-inherited-meta" id="ul-new-upload-meta">Uploaded successfully</div>
+                      <div class="ul-inherited-badge">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        Ready to use
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+          </div>
+        </div>
+        
+        <!-- STEP 2: Design (3D + Options) -->
+        <div class="ul-step-panel" id="ul-step-2">
+          <div class="ul-step2-layout">
+            
+            <!-- 3D Preview -->
+            <div class="ul-step2-3d">
+              <div class="ul-3d-loading" id="ul-3d-loading">
+                <div class="ul-3d-spinner"></div>
+                <div>Loading 3D Preview...</div>
+              </div>
+              <canvas class="ul-3d-canvas" id="ul-3d-canvas"></canvas>
+              
+              <!-- Quick View Buttons -->
+              <div class="ul-quick-views">
+                <button type="button" class="ul-quick-view-btn active" data-view="front">Front</button>
+                <button type="button" class="ul-quick-view-btn" data-view="back">Back</button>
+                <button type="button" class="ul-quick-view-btn" data-view="left">Left</button>
+                <button type="button" class="ul-quick-view-btn" data-view="right">Right</button>
+              </div>
+            </div>
+            
+            <!-- Options Sidebar -->
+            <div class="ul-step2-sidebar">
+              
+              <!-- Color Selection -->
+              <div class="ul-sidebar-section">
+                <div class="ul-sidebar-title">T-Shirt Color</div>
+                <div class="ul-color-grid" id="ul-color-grid">
+                  <!-- Populated by JavaScript -->
+                </div>
+              </div>
+              
+              <!-- Size Selection -->
+              <div class="ul-sidebar-section">
+                <div class="ul-sidebar-title">Size</div>
+                <select class="ul-size-select" id="ul-size-select">
+                  <!-- Populated by JavaScript -->
+                </select>
+              </div>
+              
+              <!-- Print Locations -->
+              <div class="ul-sidebar-section">
+                <div class="ul-sidebar-title">Print Locations</div>
+                <div class="ul-location-list" id="ul-location-list">
+                  <label class="ul-location-item selected" data-location="front">
+                    <div class="ul-location-check">
+                      <input type="checkbox" class="ul-location-checkbox" data-location="front" checked>
+                      <span class="ul-location-name">Front</span>
+                    </div>
+                    <span class="ul-location-price free">Included</span>
+                  </label>
+                  <label class="ul-location-item" data-location="back">
+                    <div class="ul-location-check">
+                      <input type="checkbox" class="ul-location-checkbox" data-location="back">
+                      <span class="ul-location-name">Back</span>
+                    </div>
+                    <span class="ul-location-price">+$5.00</span>
+                  </label>
+                  <label class="ul-location-item" data-location="left_sleeve">
+                    <div class="ul-location-check">
+                      <input type="checkbox" class="ul-location-checkbox" data-location="left_sleeve">
+                      <span class="ul-location-name">Left Sleeve</span>
+                    </div>
+                    <span class="ul-location-price">+$3.00</span>
+                  </label>
+                  <label class="ul-location-item" data-location="right_sleeve">
+                    <div class="ul-location-check">
+                      <input type="checkbox" class="ul-location-checkbox" data-location="right_sleeve">
+                      <span class="ul-location-name">Right Sleeve</span>
+                    </div>
+                    <span class="ul-location-price">+$3.00</span>
+                  </label>
+                </div>
+                
+                <!-- Location Settings -->
+                <div class="ul-location-settings visible" id="ul-location-settings">
+                  <div class="ul-location-settings-title">Settings for: <span id="ul-settings-location-name">Front</span></div>
+                  
+                  <div class="ul-slider-group">
+                    <div class="ul-slider-label">
+                      <span>Scale</span>
+                      <span class="ul-slider-value" id="ul-scale-value">100%</span>
+                    </div>
+                    <input type="range" class="ul-slider" id="ul-scale-slider" min="10" max="200" value="100" step="5">
+                  </div>
+                  
+                  <div class="ul-slider-group">
+                    <div class="ul-slider-label">
+                      <span>Position X</span>
+                      <span class="ul-slider-value" id="ul-pos-x-value">0</span>
+                    </div>
+                    <input type="range" class="ul-slider" id="ul-pos-x-slider" min="-100" max="100" value="0" step="1">
+                  </div>
+                  
+                  <div class="ul-slider-group">
+                    <div class="ul-slider-label">
+                      <span>Position Y</span>
+                      <span class="ul-slider-value" id="ul-pos-y-value">0</span>
+                    </div>
+                    <input type="range" class="ul-slider" id="ul-pos-y-slider" min="-100" max="100" value="0" step="1">
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Price Display -->
+              <div class="ul-sidebar-section">
+                <div class="ul-price-box">
+                  <div class="ul-price-row">
+                    <span>Base T-Shirt</span>
+                    <span id="ul-price-base">$19.99</span>
+                  </div>
+                  <div class="ul-price-row" id="ul-price-locations-row" style="display: none;">
+                    <span>Print Locations</span>
+                    <span id="ul-price-locations">+$0.00</span>
+                  </div>
+                  <div class="ul-price-row" id="ul-price-size-row" style="display: none;">
+                    <span>Size Modifier</span>
+                    <span id="ul-price-size">+$0.00</span>
+                  </div>
+                  <div class="ul-price-row total">
+                    <span>Subtotal</span>
+                    <span id="ul-price-total">$19.99</span>
+                  </div>
+                </div>
+              </div>
+              
+            </div>
+          </div>
+        </div>
+        
+        <!-- STEP 3: Details -->
+        <div class="ul-step-panel" id="ul-step-3">
+          <div class="ul-step3-content">
+            
+            <!-- Preview Summary -->
+            <div class="ul-details-preview">
+              <div class="ul-details-preview-thumbs" id="ul-details-thumbs">
+                <div class="ul-details-preview-thumb">🖼️</div>
+              </div>
+              <div class="ul-details-preview-info">
+                <div class="ul-details-preview-title" id="ul-details-title">White T-Shirt, Large</div>
+                <div class="ul-details-preview-meta" id="ul-details-meta">Locations: Front • Subtotal: $19.99</div>
+              </div>
+            </div>
+            
+            <!-- Quantity -->
+            <div class="ul-question-group">
+              <label class="ul-question-label">Quantity <span class="required">*</span></label>
+              <div class="ul-quantity-control">
+                <button type="button" class="ul-quantity-btn" id="ul-qty-minus">−</button>
+                <span class="ul-quantity-value" id="ul-qty-value">1</span>
+                <button type="button" class="ul-quantity-btn" id="ul-qty-plus">+</button>
+              </div>
+            </div>
+            
+            <!-- Extra Questions Container -->
+            <div id="ul-tshirt-extra-questions">
+              <!-- Dynamically populated if merchant has extra questions -->
+            </div>
+            
+            <!-- Special Instructions -->
+            <div class="ul-question-group">
+              <label class="ul-question-label" for="ul-special-instructions">Special Instructions (Optional)</label>
+              <textarea class="ul-question-input ul-question-textarea" id="ul-special-instructions" placeholder="Any special requests for your order..."></textarea>
+            </div>
+            
+          </div>
+        </div>
+        
+        <!-- STEP 4: Review -->
+        <div class="ul-step-panel" id="ul-step-4">
+          <div class="ul-step4-content">
+            
+            <!-- Order Preview Card -->
+            <div class="ul-review-card">
+              <div class="ul-review-header">Order Preview</div>
+              <div class="ul-review-body">
+                
+                <!-- Location Previews -->
+                <div class="ul-review-preview-grid" id="ul-review-preview-grid">
+                  <div class="ul-review-preview-item">
+                    <div class="ul-review-preview-label">Front</div>
+                    <div class="ul-review-preview-box">👕</div>
+                  </div>
+                </div>
+                
+                <!-- Details List -->
+                <ul class="ul-review-list" id="ul-review-list">
+                  <li>
+                    <span class="ul-review-list-label">Color</span>
+                    <span class="ul-review-list-value" id="ul-review-color">White</span>
+                  </li>
+                  <li>
+                    <span class="ul-review-list-label">Size</span>
+                    <span class="ul-review-list-value" id="ul-review-size">Large</span>
+                  </li>
+                  <li>
+                    <span class="ul-review-list-label">Quantity</span>
+                    <span class="ul-review-list-value" id="ul-review-qty">1</span>
+                  </li>
+                  <li>
+                    <span class="ul-review-list-label">Print Locations</span>
+                    <span class="ul-review-list-value" id="ul-review-locations">Front</span>
+                  </li>
+                </ul>
+                
+                <!-- Price Breakdown -->
+                <div class="ul-review-price-breakdown" id="ul-review-price-breakdown">
+                  <div class="ul-review-price-row">
+                    <span>Base T-Shirt</span>
+                    <span id="ul-review-price-base">$19.99</span>
+                  </div>
+                  <div class="ul-review-price-row">
+                    <span>Front Print</span>
+                    <span>$0.00</span>
+                  </div>
+                  <div class="ul-review-price-row total">
+                    <span>TOTAL</span>
+                    <span id="ul-review-total">$19.99</span>
+                  </div>
+                </div>
+                
+              </div>
+            </div>
+            
+            <!-- Confirmation Checkbox -->
+            <div class="ul-confirmation">
+              <label class="ul-confirmation-label">
+                <input type="checkbox" class="ul-confirmation-checkbox" id="ul-confirm-checkbox">
+                <span class="ul-confirmation-text">
+                  I confirm this design is correct and ready for printing. I understand that returns are limited for custom items.
+                </span>
+              </label>
+            </div>
+            
+            <!-- Action Buttons -->
+            <div class="ul-action-buttons">
+              <button type="button" class="ul-action-btn secondary" id="ul-design-another-btn" disabled>
+                🎨 Add to Cart & Design Another
+              </button>
+              <button type="button" class="ul-action-btn primary" id="ul-checkout-btn" disabled>
+                🛒 Add to Cart & Checkout
+              </button>
+            </div>
+            
+          </div>
+        </div>
+        
+      </div>
+    </div>
+    
+    <!-- Footer (Navigation) -->
+    <div class="ul-tshirt-footer">
+      <button type="button" class="ul-nav-btn back hidden" id="ul-nav-back">
+        ← Back
+      </button>
+      <button type="button" class="ul-nav-btn next" id="ul-nav-next" disabled>
+        Next: Design →
+      </button>
+    </div>
+    
   </div>
 </div>
 
-<!-- Three.js from CDN -->
+<!-- Toast Notification -->
+<div class="ul-toast" id="ul-toast"></div>
+
+<!-- Three.js CDN -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.min.js" defer></script>
+
+<!-- OrbitControls CDN (separate module) -->
+<script>
+  // OrbitControls will be loaded dynamically in the JS
+</script>
 
 <!-- T-Shirt Modal Script -->
 <script src="{{ 'tshirt-modal.js' | asset_url }}" defer></script>

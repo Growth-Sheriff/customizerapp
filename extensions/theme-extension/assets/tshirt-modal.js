@@ -1,622 +1,1328 @@
 /**
- * T-Shirt Modal - 3D Preview & Cart Integration
- * ===============================================
- * Provides 3D T-shirt preview with uploaded design
+ * T-Shirt Modal - 4-Step Wizard with 3D Preview
+ * ==============================================
+ * FAZ 2: Complete T-Shirt Designer Modal
  * 
- * Version: 3.0.0
+ * Features:
+ * - Step 1: Upload (inherited or new design)
+ * - Step 2: 3D Preview + Options (color, size, locations)
+ * - Step 3: Extra Questions & Quantity
+ * - Step 4: Review & Actions
+ * 
+ * Version: 4.0.0
+ * Architecture: DTF_TSHIRT_MODAL_ARCHITECTURE.md
  */
 
 (function() {
   'use strict';
 
-  const TShirtModal = {
-    isOpen: false,
-    scene: null,
-    camera: null,
-    renderer: null,
-    tshirt: null,
-    decal: null,
-    animationId: null,
+  // ==========================================================================
+  // STATE MANAGEMENT
+  // ==========================================================================
+  const ULTShirtModal = {
     
-    // Current state
-    uploadData: null,
-    config: null,
-    productId: null,
-    selectedColor: null,
-    selectedSize: null,
-    selectedPosition: 'front',
-    variants: [],
-
-    // DOM elements
-    elements: {},
-
-    // T-shirt color hex map
+    // Modal state
+    isOpen: false,
+    currentStep: 1,
+    
+    // Inherited design from DTF uploader
+    inheritedDesign: {
+      uploadId: null,
+      thumbnailUrl: null,
+      originalUrl: null,
+      name: null,
+      dimensions: { width: 0, height: 0, dpi: 0 }
+    },
+    
+    // Step 1: Upload state
+    step1: {
+      useInheritedDesign: false,
+      newUpload: {
+        status: 'idle', // idle, uploading, complete, error
+        uploadId: null,
+        thumbnailUrl: null,
+        originalUrl: null,
+        name: null,
+        progress: 0
+      }
+    },
+    
+    // Step 2: Design state
+    step2: {
+      tshirtColor: '#FFFFFF',
+      tshirtColorName: 'White',
+      tshirtSize: 'M',
+      locations: {
+        front: { enabled: true, scale: 100, positionX: 0, positionY: 0, price: 0 },
+        back: { enabled: false, scale: 100, positionX: 0, positionY: 0, price: 5 },
+        left_sleeve: { enabled: false, scale: 100, positionX: 0, positionY: 0, price: 3 },
+        right_sleeve: { enabled: false, scale: 100, positionX: 0, positionY: 0, price: 3 }
+      },
+      activeLocation: 'front',
+      basePrice: 19.99,
+      calculatedPrice: 19.99
+    },
+    
+    // Step 3: Details state
+    step3: {
+      quantity: 1,
+      extraAnswers: {},
+      specialInstructions: ''
+    },
+    
+    // Step 4: Review state
+    step4: {
+      confirmationChecked: false
+    },
+    
+    // 3D Scene
+    three: {
+      scene: null,
+      camera: null,
+      renderer: null,
+      controls: null,
+      tshirtMesh: null,
+      decals: {},
+      animationId: null
+    },
+    
+    // Product data
+    product: {
+      id: null,
+      variants: [],
+      colors: [],
+      sizes: []
+    },
+    
+    // Config from merchant
+    config: {
+      tshirtProductHandle: null,
+      extraQuestions: [],
+      sizePricing: { 'XS': 0, 'S': 0, 'M': 0, 'L': 2, 'XL': 2, '2XL': 5, '3XL': 5 }
+    },
+    
+    // DOM elements cache
+    el: {},
+    
+    // Color map
     colorMap: {
-      'white': '#ffffff',
-      'black': '#1a1a1a',
-      'navy': '#1e3a5f',
-      'red': '#dc2626',
-      'blue': '#3b82f6',
-      'green': '#22c55e',
-      'gray': '#6b7280',
-      'grey': '#6b7280',
-      'pink': '#ec4899',
-      'yellow': '#eab308',
-      'orange': '#f97316',
-      'purple': '#a855f7',
-      'brown': '#92400e',
-      'maroon': '#7f1d1d',
-      'olive': '#556b2f',
-      'teal': '#14b8a6',
-      'coral': '#ff7f50',
-      'beige': '#f5f5dc',
-      'cream': '#fffdd0',
-      'burgundy': '#800020',
-      'charcoal': '#36454f',
-      'heather gray': '#9ca3af',
-      'heather grey': '#9ca3af',
-      'light blue': '#93c5fd',
-      'dark green': '#166534',
-      'dark blue': '#1e40af',
-      'royal blue': '#4169e1',
-      'forest green': '#228b22',
-      'sky blue': '#87ceeb',
-      'mint': '#98ff98',
-      'lavender': '#e6e6fa',
-      'natural': '#faebd7',
-      'sand': '#c2b280',
-      'slate': '#708090'
+      'white': '#ffffff', 'black': '#1a1a1a', 'navy': '#1e3a5f',
+      'red': '#dc2626', 'blue': '#3b82f6', 'green': '#22c55e',
+      'gray': '#6b7280', 'grey': '#6b7280', 'pink': '#ec4899',
+      'yellow': '#eab308', 'orange': '#f97316', 'purple': '#a855f7',
+      'brown': '#92400e', 'maroon': '#7f1d1d', 'olive': '#556b2f',
+      'teal': '#14b8a6', 'coral': '#ff7f50', 'beige': '#f5f5dc',
+      'cream': '#fffdd0', 'burgundy': '#800020', 'charcoal': '#36454f',
+      'heather gray': '#9ca3af', 'heather grey': '#9ca3af',
+      'light blue': '#93c5fd', 'dark green': '#166534',
+      'dark blue': '#1e40af', 'royal blue': '#4169e1',
+      'forest green': '#228b22', 'sky blue': '#87ceeb',
+      'mint': '#98ff98', 'lavender': '#e6e6fa', 'natural': '#faebd7', 'sand': '#c2b280'
     },
 
-    /**
-     * Initialize the modal
-     */
+    // ==========================================================================
+    // INITIALIZATION
+    // ==========================================================================
     init() {
-      this.elements = {
-        overlay: document.getElementById('tshirt-modal-overlay'),
-        closeBtn: document.getElementById('tshirt-modal-close'),
-        canvas: document.getElementById('tshirt-3d-canvas'),
-        loading: document.getElementById('tshirt-3d-loading'),
-        colorsContainer: document.getElementById('tshirt-colors'),
-        sizesContainer: document.getElementById('tshirt-sizes'),
-        priceDisplay: document.getElementById('tshirt-price'),
-        priceAddon: document.getElementById('tshirt-price-addon'),
-        addCartBtn: document.getElementById('tshirt-add-cart'),
-        positionBtns: document.querySelectorAll('.tshirt-position-btn')
-      };
-
+      this.cacheElements();
       this.bindEvents();
+      console.log('[ULTShirtModal] Initialized v4.0.0');
     },
 
-    /**
-     * Bind event handlers
-     */
+    cacheElements() {
+      this.el = {
+        overlay: document.getElementById('ul-tshirt-overlay'),
+        closeBtn: document.getElementById('ul-tshirt-close'),
+        toast: document.getElementById('ul-toast'),
+        
+        // Navigation
+        navBack: document.getElementById('ul-nav-back'),
+        navNext: document.getElementById('ul-nav-next'),
+        stepItems: document.querySelectorAll('.ul-step-item'),
+        stepConnectors: document.querySelectorAll('.ul-step-connector'),
+        stepPanels: document.querySelectorAll('.ul-step-panel'),
+        
+        // Step 1
+        inheritedSection: document.getElementById('ul-inherited-section'),
+        inheritedThumb: document.getElementById('ul-inherited-thumb'),
+        inheritedName: document.getElementById('ul-inherited-name'),
+        inheritedMeta: document.getElementById('ul-inherited-meta'),
+        inheritedDesign: document.getElementById('ul-inherited-design'),
+        useInheritedBtn: document.getElementById('ul-use-inherited-btn'),
+        uploadZone: document.getElementById('ul-tshirt-upload-zone'),
+        fileInput: document.getElementById('ul-tshirt-file-input'),
+        uploadProgress: document.getElementById('ul-tshirt-upload-progress'),
+        progressFill: document.getElementById('ul-tshirt-progress-fill'),
+        progressText: document.getElementById('ul-tshirt-progress-text'),
+        newUploadPreview: document.getElementById('ul-new-upload-preview'),
+        newUploadThumb: document.getElementById('ul-new-upload-thumb'),
+        newUploadName: document.getElementById('ul-new-upload-name'),
+        newUploadMeta: document.getElementById('ul-new-upload-meta'),
+        
+        // Step 2
+        canvas: document.getElementById('ul-3d-canvas'),
+        loading3d: document.getElementById('ul-3d-loading'),
+        colorGrid: document.getElementById('ul-color-grid'),
+        sizeSelect: document.getElementById('ul-size-select'),
+        locationList: document.getElementById('ul-location-list'),
+        locationSettings: document.getElementById('ul-location-settings'),
+        settingsLocationName: document.getElementById('ul-settings-location-name'),
+        scaleSlider: document.getElementById('ul-scale-slider'),
+        scaleValue: document.getElementById('ul-scale-value'),
+        posXSlider: document.getElementById('ul-pos-x-slider'),
+        posXValue: document.getElementById('ul-pos-x-value'),
+        posYSlider: document.getElementById('ul-pos-y-slider'),
+        posYValue: document.getElementById('ul-pos-y-value'),
+        quickViewBtns: document.querySelectorAll('.ul-quick-view-btn'),
+        priceBase: document.getElementById('ul-price-base'),
+        priceLocations: document.getElementById('ul-price-locations'),
+        priceLocationsRow: document.getElementById('ul-price-locations-row'),
+        priceSize: document.getElementById('ul-price-size'),
+        priceSizeRow: document.getElementById('ul-price-size-row'),
+        priceTotal: document.getElementById('ul-price-total'),
+        
+        // Step 3
+        detailsTitle: document.getElementById('ul-details-title'),
+        detailsMeta: document.getElementById('ul-details-meta'),
+        detailsThumbs: document.getElementById('ul-details-thumbs'),
+        qtyMinus: document.getElementById('ul-qty-minus'),
+        qtyPlus: document.getElementById('ul-qty-plus'),
+        qtyValue: document.getElementById('ul-qty-value'),
+        extraQuestions: document.getElementById('ul-tshirt-extra-questions'),
+        specialInstructions: document.getElementById('ul-special-instructions'),
+        
+        // Step 4
+        reviewColor: document.getElementById('ul-review-color'),
+        reviewSize: document.getElementById('ul-review-size'),
+        reviewQty: document.getElementById('ul-review-qty'),
+        reviewLocations: document.getElementById('ul-review-locations'),
+        reviewPriceBreakdown: document.getElementById('ul-review-price-breakdown'),
+        reviewPriceBase: document.getElementById('ul-review-price-base'),
+        reviewTotal: document.getElementById('ul-review-total'),
+        reviewPreviewGrid: document.getElementById('ul-review-preview-grid'),
+        confirmCheckbox: document.getElementById('ul-confirm-checkbox'),
+        designAnotherBtn: document.getElementById('ul-design-another-btn'),
+        checkoutBtn: document.getElementById('ul-checkout-btn')
+      };
+    },
+
     bindEvents() {
       // Listen for open event from DTF uploader
-      document.addEventListener('dtf:open-tshirt-modal', (e) => {
-        this.open(e.detail);
-      });
-
-      // Close button
-      this.elements.closeBtn?.addEventListener('click', () => this.close());
-
-      // Click outside to close
-      this.elements.overlay?.addEventListener('click', (e) => {
-        if (e.target === this.elements.overlay) {
-          this.close();
-        }
-      });
-
-      // Escape key to close
-      document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && this.isOpen) {
-          this.close();
-        }
-      });
-
-      // Position toggle
-      this.elements.positionBtns?.forEach(btn => {
-        btn.addEventListener('click', () => {
-          this.setPosition(btn.dataset.position);
-        });
-      });
-
-      // Add to cart
-      this.elements.addCartBtn?.addEventListener('click', () => {
-        this.addToCart();
-      });
-    },
-
-    /**
-     * Open the modal
-     */
-    async open(detail) {
-      const { productId, uploadData, config } = detail;
-
-      this.productId = productId;
-      this.uploadData = uploadData;
-      this.config = config || {};
-
-      // Show modal
-      this.elements.overlay.classList.add('active');
-      this.isOpen = true;
-      document.body.style.overflow = 'hidden';
-
-      // Show loading
-      this.elements.loading.style.display = 'block';
-      this.elements.canvas.style.display = 'none';
-
-      // Load variants from product
-      await this.loadVariants();
-
-      // Render options
-      this.renderColors();
-      this.renderSizes();
-      this.updatePrice();
-
-      // Initialize 3D scene
-      await this.init3D();
-
-      // Hide loading
-      this.elements.loading.style.display = 'none';
-      this.elements.canvas.style.display = 'block';
-    },
-
-    /**
-     * Close the modal
-     */
-    close() {
-      this.elements.overlay.classList.remove('active');
-      this.isOpen = false;
-      document.body.style.overflow = '';
-
-      // Stop animation loop
-      if (this.animationId) {
-        cancelAnimationFrame(this.animationId);
-        this.animationId = null;
-      }
-
-      // Cleanup Three.js
-      if (this.renderer) {
-        this.renderer.dispose();
-        this.renderer = null;
-      }
-      this.scene = null;
-      this.camera = null;
-      this.tshirt = null;
-      this.decal = null;
-    },
-
-    /**
-     * Load product variants
-     */
-    async loadVariants() {
-      // Get variants from the page (assumes Shopify liquid context)
-      const productJson = document.querySelector(`[data-product-json="${this.productId}"]`);
+      document.addEventListener('ul:openTShirtModal', (e) => this.open(e.detail));
       
-      if (productJson) {
-        try {
-          const product = JSON.parse(productJson.textContent);
-          this.variants = product.variants || [];
-        } catch (e) {
-          console.error('[TShirtModal] Failed to parse product JSON:', e);
-        }
-      }
-
-      // Fallback: Try to get from meta tag or global
-      if (this.variants.length === 0 && window.__PRODUCT_VARIANTS__) {
-        this.variants = window.__PRODUCT_VARIANTS__;
-      }
-
-      // Extract unique colors and sizes from config
-      const colorOption = this.config.colorVariantOption || 'Color';
-      const sizeOption = this.config.sizeVariantOption || 'Size';
-
-      this.availableColors = [...new Set(
-        this.variants.map(v => {
-          const opt = v.options?.find(o => o.name === colorOption);
-          return opt?.value || v.option1; // Fallback to option1
-        }).filter(Boolean)
-      )];
-
-      this.availableSizes = [...new Set(
-        this.variants.map(v => {
-          const opt = v.options?.find(o => o.name === sizeOption);
-          return opt?.value || v.option2; // Fallback to option2
-        }).filter(Boolean)
-      )];
-
-      // Set defaults
-      if (this.availableColors.length > 0) {
-        this.selectedColor = this.availableColors[0];
-      }
-      if (this.availableSizes.length > 0) {
-        this.selectedSize = this.availableSizes[0];
-      }
-    },
-
-    /**
-     * Render color swatches
-     */
-    renderColors() {
-      const container = this.elements.colorsContainer;
-      if (!container) return;
-
-      container.innerHTML = '';
-
-      this.availableColors.forEach((color, index) => {
-        const colorLower = color.toLowerCase();
-        const hex = this.colorMap[colorLower] || this.stringToColor(color);
-
-        const swatch = document.createElement('button');
-        swatch.className = 'tshirt-color-swatch' + (index === 0 ? ' active' : '');
-        swatch.style.backgroundColor = hex;
-        swatch.title = color;
-        swatch.type = 'button';
-
-        // Border for light colors
-        if (this.isLightColor(hex)) {
-          swatch.style.border = '1px solid #e5e7eb';
-        }
-
-        swatch.addEventListener('click', () => {
-          container.querySelectorAll('.tshirt-color-swatch').forEach(s => s.classList.remove('active'));
-          swatch.classList.add('active');
-          this.selectedColor = color;
-          this.updateTShirtColor(hex);
-          this.updatePrice();
-        });
-
-        container.appendChild(swatch);
+      // Close
+      this.el.closeBtn?.addEventListener('click', () => this.close());
+      this.el.overlay?.addEventListener('click', (e) => {
+        if (e.target === this.el.overlay) this.close();
       });
-    },
-
-    /**
-     * Render size buttons
-     */
-    renderSizes() {
-      const container = this.elements.sizesContainer;
-      if (!container) return;
-
-      container.innerHTML = '';
-
-      this.availableSizes.forEach((size, index) => {
-        const btn = document.createElement('button');
-        btn.className = 'tshirt-size-btn' + (index === 0 ? ' active' : '');
-        btn.textContent = size;
-        btn.type = 'button';
-
-        btn.addEventListener('click', () => {
-          container.querySelectorAll('.tshirt-size-btn').forEach(s => s.classList.remove('active'));
-          btn.classList.add('active');
-          this.selectedSize = size;
-          this.updatePrice();
-        });
-
-        container.appendChild(btn);
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && this.isOpen) this.close();
       });
-    },
-
-    /**
-     * Update price display
-     */
-    updatePrice() {
-      // Find matching variant
-      const variant = this.variants.find(v => {
-        const hasColor = v.option1 === this.selectedColor || v.option2 === this.selectedColor;
-        const hasSize = v.option1 === this.selectedSize || v.option2 === this.selectedSize;
-        return hasColor && hasSize;
+      
+      // Navigation
+      this.el.navBack?.addEventListener('click', () => this.prevStep());
+      this.el.navNext?.addEventListener('click', () => this.nextStep());
+      
+      // Step 1: Upload
+      this.el.useInheritedBtn?.addEventListener('click', () => this.useInheritedDesign());
+      this.el.uploadZone?.addEventListener('click', () => this.el.fileInput?.click());
+      this.el.uploadZone?.addEventListener('dragover', (e) => this.handleDragOver(e));
+      this.el.uploadZone?.addEventListener('dragleave', () => this.handleDragLeave());
+      this.el.uploadZone?.addEventListener('drop', (e) => this.handleDrop(e));
+      this.el.fileInput?.addEventListener('change', (e) => this.handleFileSelect(e));
+      
+      // Step 2: Options
+      this.el.sizeSelect?.addEventListener('change', (e) => this.setSize(e.target.value));
+      this.el.scaleSlider?.addEventListener('input', (e) => this.setLocationScale(e.target.value));
+      this.el.posXSlider?.addEventListener('input', (e) => this.setLocationPosX(e.target.value));
+      this.el.posYSlider?.addEventListener('input', (e) => this.setLocationPosY(e.target.value));
+      
+      // Quick view buttons
+      this.el.quickViewBtns?.forEach(btn => {
+        btn.addEventListener('click', () => this.setQuickView(btn.dataset.view));
       });
-
-      if (variant) {
-        const price = (variant.price / 100).toFixed(2);
-        this.elements.priceDisplay.textContent = `$${price}`;
-        
-        if (this.config.priceAddon > 0) {
-          this.elements.priceAddon.textContent = `(includes $${this.config.priceAddon.toFixed(2)} customization fee)`;
-        } else {
-          this.elements.priceAddon.textContent = '';
-        }
-
-        this.elements.addCartBtn.disabled = false;
-      } else {
-        this.elements.priceDisplay.textContent = 'Select options';
-        this.elements.addCartBtn.disabled = true;
-      }
-    },
-
-    /**
-     * Initialize Three.js scene
-     */
-    async init3D() {
-      if (typeof THREE === 'undefined') {
-        console.error('[TShirtModal] Three.js not loaded');
-        this.show2DFallback();
-        return;
-      }
-
-      const canvas = this.elements.canvas;
-      const container = canvas.parentElement;
-      const width = container.clientWidth;
-      const height = container.clientHeight;
-
-      // Scene
-      this.scene = new THREE.Scene();
-      this.scene.background = new THREE.Color(0xf0f0f0);
-
-      // Camera
-      this.camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
-      this.camera.position.set(0, 0, 3);
-
-      // Renderer
-      this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-      this.renderer.setSize(width, height);
-      this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-
-      // Lighting
-      const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-      this.scene.add(ambientLight);
-
-      const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-      directionalLight.position.set(5, 5, 5);
-      this.scene.add(directionalLight);
-
-      // Create T-shirt geometry (simple plane for now)
-      // In production, load a proper GLB model
-      await this.createTShirtMesh();
-
-      // Start render loop
-      this.animate();
-
-      // Handle resize
+      
+      // Location checkboxes
+      document.querySelectorAll('.ul-location-checkbox').forEach(cb => {
+        cb.addEventListener('change', () => this.toggleLocation(cb.dataset.location));
+      });
+      
+      // Step 3: Quantity
+      this.el.qtyMinus?.addEventListener('click', () => this.adjustQuantity(-1));
+      this.el.qtyPlus?.addEventListener('click', () => this.adjustQuantity(1));
+      this.el.specialInstructions?.addEventListener('input', (e) => {
+        this.step3.specialInstructions = e.target.value;
+      });
+      
+      // Step 4: Confirmation
+      this.el.confirmCheckbox?.addEventListener('change', (e) => {
+        this.step4.confirmationChecked = e.target.checked;
+        this.updateActionButtons();
+      });
+      this.el.designAnotherBtn?.addEventListener('click', () => this.designAnother());
+      this.el.checkoutBtn?.addEventListener('click', () => this.checkout());
+      
+      // Window resize
       window.addEventListener('resize', () => this.handleResize());
     },
 
-    /**
-     * Create T-shirt mesh
-     */
-    async createTShirtMesh() {
-      // Simple plane geometry (replace with GLB in production)
-      const geometry = new THREE.PlaneGeometry(2, 2.5);
+    // ==========================================================================
+    // MODAL OPEN / CLOSE
+    // ==========================================================================
+    open(detail = {}) {
+      const { uploadData, productId, config } = detail;
       
-      // T-shirt material
-      const material = new THREE.MeshStandardMaterial({
-        color: this.getColorHex(this.selectedColor),
-        side: THREE.DoubleSide
+      console.log('[ULTShirtModal] Opening with:', detail);
+      
+      // Store inherited design if provided
+      if (uploadData) {
+        this.inheritedDesign = {
+          uploadId: uploadData.id || uploadData.uploadId,
+          thumbnailUrl: uploadData.thumbnailUrl || uploadData.url,
+          originalUrl: uploadData.url || uploadData.originalUrl,
+          name: uploadData.name || 'Design',
+          dimensions: uploadData.dimensions || { width: 0, height: 0, dpi: 0 }
+        };
+        this.showInheritedDesign();
+      } else {
+        this.hideInheritedDesign();
+      }
+      
+      // Store config
+      if (config) {
+        Object.assign(this.config, config);
+      }
+      
+      // Store product ID
+      this.product.id = productId;
+      
+      // Reset state
+      this.resetState();
+      
+      // Show modal
+      this.el.overlay?.classList.add('active');
+      this.isOpen = true;
+      document.body.style.overflow = 'hidden';
+      
+      // Go to step 1
+      this.goToStep(1);
+      
+      // Load product variants (for step 2)
+      this.loadProductVariants();
+    },
+
+    close() {
+      this.el.overlay?.classList.remove('active');
+      this.isOpen = false;
+      document.body.style.overflow = '';
+      
+      // Cleanup 3D
+      this.cleanup3D();
+    },
+
+    resetState() {
+      this.currentStep = 1;
+      
+      this.step1 = {
+        useInheritedDesign: false,
+        newUpload: { status: 'idle', uploadId: null, thumbnailUrl: null, originalUrl: null, name: null, progress: 0 }
+      };
+      
+      this.step2 = {
+        tshirtColor: '#FFFFFF',
+        tshirtColorName: 'White',
+        tshirtSize: 'M',
+        locations: {
+          front: { enabled: true, scale: 100, positionX: 0, positionY: 0, price: 0 },
+          back: { enabled: false, scale: 100, positionX: 0, positionY: 0, price: 5 },
+          left_sleeve: { enabled: false, scale: 100, positionX: 0, positionY: 0, price: 3 },
+          right_sleeve: { enabled: false, scale: 100, positionX: 0, positionY: 0, price: 3 }
+        },
+        activeLocation: 'front',
+        basePrice: 19.99,
+        calculatedPrice: 19.99
+      };
+      
+      this.step3 = { quantity: 1, extraAnswers: {}, specialInstructions: '' };
+      this.step4 = { confirmationChecked: false };
+      
+      // Reset UI
+      if (this.el.confirmCheckbox) this.el.confirmCheckbox.checked = false;
+      if (this.el.qtyValue) this.el.qtyValue.textContent = '1';
+      if (this.el.specialInstructions) this.el.specialInstructions.value = '';
+      if (this.el.newUploadPreview) this.el.newUploadPreview.style.display = 'none';
+      
+      this.updateActionButtons();
+    },
+
+    // ==========================================================================
+    // STEP NAVIGATION
+    // ==========================================================================
+    goToStep(step) {
+      this.currentStep = step;
+      
+      // Update step indicators
+      this.el.stepItems?.forEach((item, idx) => {
+        const itemStep = idx + 1;
+        item.classList.remove('active', 'completed');
+        if (itemStep === step) {
+          item.classList.add('active');
+        } else if (itemStep < step) {
+          item.classList.add('completed');
+        }
       });
-
-      this.tshirt = new THREE.Mesh(geometry, material);
-      this.scene.add(this.tshirt);
-
-      // Load and apply decal (uploaded design)
-      if (this.uploadData?.url) {
-        await this.applyDecal(this.uploadData.url);
+      
+      // Update connectors
+      this.el.stepConnectors?.forEach((conn, idx) => {
+        conn.classList.toggle('completed', idx < step - 1);
+      });
+      
+      // Show/hide panels
+      this.el.stepPanels?.forEach((panel, idx) => {
+        panel.classList.toggle('active', idx + 1 === step);
+      });
+      
+      // Update navigation buttons
+      this.updateNavButtons();
+      
+      // Step-specific actions
+      if (step === 2) {
+        this.initStep2();
+      } else if (step === 3) {
+        this.initStep3();
+      } else if (step === 4) {
+        this.initStep4();
       }
     },
 
-    /**
-     * Apply decal (uploaded design) to T-shirt
-     */
-    async applyDecal(imageUrl) {
+    nextStep() {
+      if (this.currentStep < 4 && this.canProceed()) {
+        this.goToStep(this.currentStep + 1);
+      }
+    },
+
+    prevStep() {
+      if (this.currentStep > 1) {
+        this.goToStep(this.currentStep - 1);
+      }
+    },
+
+    canProceed() {
+      switch (this.currentStep) {
+        case 1:
+          return this.step1.useInheritedDesign || this.step1.newUpload.status === 'complete';
+        case 2:
+          return this.getEnabledLocations().length > 0;
+        case 3:
+          return this.step3.quantity > 0;
+        case 4:
+          return this.step4.confirmationChecked;
+        default:
+          return true;
+      }
+    },
+
+    updateNavButtons() {
+      // Back button
+      if (this.el.navBack) {
+        this.el.navBack.classList.toggle('hidden', this.currentStep === 1);
+      }
+      
+      // Next button
+      if (this.el.navNext) {
+        const canProceed = this.canProceed();
+        this.el.navNext.disabled = !canProceed;
+        
+        // Update text
+        const stepLabels = ['Upload', 'Design', 'Details', 'Review'];
+        if (this.currentStep < 4) {
+          this.el.navNext.innerHTML = `Next: ${stepLabels[this.currentStep]} →`;
+          this.el.navNext.style.display = '';
+        } else {
+          this.el.navNext.style.display = 'none';
+        }
+      }
+    },
+
+    // ==========================================================================
+    // STEP 1: UPLOAD
+    // ==========================================================================
+    showInheritedDesign() {
+      if (!this.el.inheritedSection) return;
+      
+      this.el.inheritedSection.style.display = 'block';
+      
+      if (this.el.inheritedThumb) {
+        this.el.inheritedThumb.src = this.inheritedDesign.thumbnailUrl;
+      }
+      if (this.el.inheritedName) {
+        this.el.inheritedName.textContent = this.inheritedDesign.name;
+      }
+      if (this.el.inheritedMeta) {
+        const d = this.inheritedDesign.dimensions;
+        if (d.width && d.height) {
+          this.el.inheritedMeta.textContent = `${d.width} x ${d.height} px • ${d.dpi || 300} DPI`;
+        } else {
+          this.el.inheritedMeta.textContent = 'Ready to use';
+        }
+      }
+    },
+
+    hideInheritedDesign() {
+      if (this.el.inheritedSection) {
+        this.el.inheritedSection.style.display = 'none';
+      }
+    },
+
+    useInheritedDesign() {
+      this.step1.useInheritedDesign = true;
+      
+      // Update UI
+      if (this.el.inheritedDesign) {
+        this.el.inheritedDesign.classList.add('selected');
+      }
+      if (this.el.useInheritedBtn) {
+        this.el.useInheritedBtn.textContent = '✓ Using This Design';
+        this.el.useInheritedBtn.classList.add('selected');
+      }
+      
+      this.updateNavButtons();
+    },
+
+    handleDragOver(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      this.el.uploadZone?.classList.add('dragover');
+    },
+
+    handleDragLeave() {
+      this.el.uploadZone?.classList.remove('dragover');
+    },
+
+    handleDrop(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      this.el.uploadZone?.classList.remove('dragover');
+      
+      const files = e.dataTransfer?.files;
+      if (files?.length > 0) {
+        this.uploadFile(files[0]);
+      }
+    },
+
+    handleFileSelect(e) {
+      const files = e.target?.files;
+      if (files?.length > 0) {
+        this.uploadFile(files[0]);
+      }
+    },
+
+    async uploadFile(file) {
+      // Validate file
+      const allowedTypes = ['image/png', 'image/jpeg', 'image/svg+xml', 'image/webp'];
+      if (!allowedTypes.includes(file.type)) {
+        this.showToast('Please upload a PNG, JPG, SVG, or WEBP file', 'error');
+        return;
+      }
+      
+      if (file.size > 50 * 1024 * 1024) {
+        this.showToast('File size must be less than 50MB', 'error');
+        return;
+      }
+      
+      // Update state
+      this.step1.newUpload.status = 'uploading';
+      this.step1.newUpload.name = file.name;
+      this.step1.useInheritedDesign = false;
+      
+      // Reset inherited selection
+      if (this.el.inheritedDesign) {
+        this.el.inheritedDesign.classList.remove('selected');
+      }
+      if (this.el.useInheritedBtn) {
+        this.el.useInheritedBtn.textContent = '✓ Use This Design';
+        this.el.useInheritedBtn.classList.remove('selected');
+      }
+      
+      // Show progress
+      this.el.uploadZone?.classList.add('uploading');
+      if (this.el.uploadProgress) this.el.uploadProgress.style.display = 'block';
+      this.updateUploadProgress(0);
+      
+      try {
+        // Use the same upload flow as DTF uploader
+        const uploadResult = await this.performUpload(file);
+        
+        // Success
+        this.step1.newUpload = {
+          status: 'complete',
+          uploadId: uploadResult.id,
+          thumbnailUrl: uploadResult.thumbnailUrl || uploadResult.url,
+          originalUrl: uploadResult.url,
+          name: file.name,
+          progress: 100
+        };
+        
+        // Show preview
+        if (this.el.newUploadPreview) {
+          this.el.newUploadPreview.style.display = 'block';
+        }
+        if (this.el.newUploadThumb) {
+          this.el.newUploadThumb.src = this.step1.newUpload.thumbnailUrl;
+        }
+        if (this.el.newUploadName) {
+          this.el.newUploadName.textContent = file.name;
+        }
+        
+        // Hide progress
+        if (this.el.uploadProgress) this.el.uploadProgress.style.display = 'none';
+        this.el.uploadZone?.classList.remove('uploading');
+        
+        this.updateNavButtons();
+        this.showToast('Design uploaded successfully!', 'success');
+        
+      } catch (error) {
+        console.error('[ULTShirtModal] Upload error:', error);
+        this.step1.newUpload.status = 'error';
+        if (this.el.uploadProgress) this.el.uploadProgress.style.display = 'none';
+        this.el.uploadZone?.classList.remove('uploading');
+        this.showToast('Upload failed. Please try again.', 'error');
+      }
+    },
+
+    async performUpload(file) {
+      // Get signed URL
+      const intentRes = await fetch('/apps/upload-lift/api/upload/intent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          filename: file.name,
+          contentType: file.type,
+          size: file.size
+        })
+      });
+      
+      if (!intentRes.ok) throw new Error('Failed to get upload URL');
+      const { uploadUrl, uploadId, publicUrl } = await intentRes.json();
+      
+      // Upload to storage
+      const uploadRes = await fetch(uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type },
+        body: file
+      });
+      
+      if (!uploadRes.ok) throw new Error('Upload failed');
+      
+      // Mark complete
+      await fetch('/apps/upload-lift/api/upload/complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uploadId })
+      });
+      
+      // Create object URL for preview
+      const thumbnailUrl = URL.createObjectURL(file);
+      
+      return {
+        id: uploadId,
+        url: publicUrl,
+        thumbnailUrl
+      };
+    },
+
+    updateUploadProgress(percent) {
+      this.step1.newUpload.progress = percent;
+      if (this.el.progressFill) {
+        this.el.progressFill.style.width = `${percent}%`;
+      }
+      if (this.el.progressText) {
+        this.el.progressText.textContent = percent < 100 ? `Uploading... ${percent}%` : 'Processing...';
+      }
+    },
+
+    // ==========================================================================
+    // STEP 2: DESIGN (3D + OPTIONS)
+    // ==========================================================================
+    initStep2() {
+      // Render color options
+      this.renderColors();
+      
+      // Render size options
+      this.renderSizes();
+      
+      // Update location settings display
+      this.updateLocationSettingsUI();
+      
+      // Calculate price
+      this.calculatePrice();
+      
+      // Initialize 3D
+      this.init3D();
+    },
+
+    async loadProductVariants() {
+      // Try to get variants from window or API
+      // For now, use default colors/sizes
+      this.product.colors = [
+        { name: 'White', hex: '#ffffff' },
+        { name: 'Black', hex: '#1a1a1a' },
+        { name: 'Navy', hex: '#1e3a5f' },
+        { name: 'Red', hex: '#dc2626' },
+        { name: 'Blue', hex: '#3b82f6' },
+        { name: 'Green', hex: '#22c55e' },
+        { name: 'Gray', hex: '#6b7280' },
+        { name: 'Pink', hex: '#ec4899' }
+      ];
+      
+      this.product.sizes = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'];
+    },
+
+    renderColors() {
+      if (!this.el.colorGrid) return;
+      
+      this.el.colorGrid.innerHTML = '';
+      
+      this.product.colors.forEach((color, idx) => {
+        const swatch = document.createElement('button');
+        swatch.type = 'button';
+        swatch.className = 'ul-color-swatch' + (idx === 0 ? ' active' : '');
+        swatch.style.backgroundColor = color.hex;
+        swatch.title = color.name;
+        
+        // Light color detection
+        if (this.isLightColor(color.hex)) {
+          swatch.classList.add('light');
+        }
+        
+        swatch.addEventListener('click', () => this.setColor(color.name, color.hex));
+        this.el.colorGrid.appendChild(swatch);
+      });
+    },
+
+    renderSizes() {
+      if (!this.el.sizeSelect) return;
+      
+      this.el.sizeSelect.innerHTML = '';
+      
+      this.product.sizes.forEach(size => {
+        const option = document.createElement('option');
+        option.value = size;
+        option.textContent = size;
+        if (size === this.step2.tshirtSize) {
+          option.selected = true;
+        }
+        this.el.sizeSelect.appendChild(option);
+      });
+    },
+
+    setColor(name, hex) {
+      this.step2.tshirtColor = hex;
+      this.step2.tshirtColorName = name;
+      
+      // Update UI
+      this.el.colorGrid?.querySelectorAll('.ul-color-swatch').forEach(s => {
+        s.classList.toggle('active', s.title === name);
+      });
+      
+      // Update 3D
+      this.update3DColor(hex);
+    },
+
+    setSize(size) {
+      this.step2.tshirtSize = size;
+      this.calculatePrice();
+    },
+
+    toggleLocation(locationId) {
+      const loc = this.step2.locations[locationId];
+      if (!loc) return;
+      
+      loc.enabled = !loc.enabled;
+      
+      // Update UI
+      const item = document.querySelector(`.ul-location-item[data-location="${locationId}"]`);
+      item?.classList.toggle('selected', loc.enabled);
+      
+      // If enabled, make it active
+      if (loc.enabled) {
+        this.setActiveLocation(locationId);
+      }
+      
+      // Update 3D
+      this.update3DDecal(locationId, loc.enabled);
+      
+      // Recalculate price
+      this.calculatePrice();
+      
+      this.updateNavButtons();
+    },
+
+    setActiveLocation(locationId) {
+      this.step2.activeLocation = locationId;
+      
+      // Update settings UI
+      this.updateLocationSettingsUI();
+      
+      // Move camera to this location
+      this.setQuickView(locationId.replace('_sleeve', '').replace('left', 'left').replace('right', 'right'));
+    },
+
+    updateLocationSettingsUI() {
+      const loc = this.step2.locations[this.step2.activeLocation];
+      if (!loc) return;
+      
+      const nameMap = { front: 'Front', back: 'Back', left_sleeve: 'Left Sleeve', right_sleeve: 'Right Sleeve' };
+      
+      if (this.el.settingsLocationName) {
+        this.el.settingsLocationName.textContent = nameMap[this.step2.activeLocation] || this.step2.activeLocation;
+      }
+      
+      if (this.el.scaleSlider) this.el.scaleSlider.value = loc.scale;
+      if (this.el.scaleValue) this.el.scaleValue.textContent = `${loc.scale}%`;
+      
+      if (this.el.posXSlider) this.el.posXSlider.value = loc.positionX;
+      if (this.el.posXValue) this.el.posXValue.textContent = loc.positionX;
+      
+      if (this.el.posYSlider) this.el.posYSlider.value = loc.positionY;
+      if (this.el.posYValue) this.el.posYValue.textContent = loc.positionY;
+      
+      // Show/hide settings based on location enabled
+      if (this.el.locationSettings) {
+        this.el.locationSettings.classList.toggle('visible', loc.enabled);
+      }
+    },
+
+    setLocationScale(value) {
+      const loc = this.step2.locations[this.step2.activeLocation];
+      if (!loc) return;
+      
+      loc.scale = parseInt(value);
+      if (this.el.scaleValue) this.el.scaleValue.textContent = `${value}%`;
+      
+      this.update3DDecalTransform();
+    },
+
+    setLocationPosX(value) {
+      const loc = this.step2.locations[this.step2.activeLocation];
+      if (!loc) return;
+      
+      loc.positionX = parseInt(value);
+      if (this.el.posXValue) this.el.posXValue.textContent = value;
+      
+      this.update3DDecalTransform();
+    },
+
+    setLocationPosY(value) {
+      const loc = this.step2.locations[this.step2.activeLocation];
+      if (!loc) return;
+      
+      loc.positionY = parseInt(value);
+      if (this.el.posYValue) this.el.posYValue.textContent = value;
+      
+      this.update3DDecalTransform();
+    },
+
+    getEnabledLocations() {
+      return Object.entries(this.step2.locations)
+        .filter(([_, loc]) => loc.enabled)
+        .map(([id, _]) => id);
+    },
+
+    calculatePrice() {
+      let total = this.step2.basePrice;
+      
+      // Add location prices (first location is free)
+      const enabledLocs = this.getEnabledLocations();
+      let locationTotal = 0;
+      enabledLocs.forEach((locId, idx) => {
+        if (idx > 0) { // First is free
+          locationTotal += this.step2.locations[locId].price;
+        }
+      });
+      
+      // Add size modifier
+      const sizeModifier = this.config.sizePricing[this.step2.tshirtSize] || 0;
+      
+      total += locationTotal + sizeModifier;
+      this.step2.calculatedPrice = total;
+      
+      // Update UI
+      if (this.el.priceBase) this.el.priceBase.textContent = `$${this.step2.basePrice.toFixed(2)}`;
+      
+      if (locationTotal > 0) {
+        if (this.el.priceLocationsRow) this.el.priceLocationsRow.style.display = '';
+        if (this.el.priceLocations) this.el.priceLocations.textContent = `+$${locationTotal.toFixed(2)}`;
+      } else {
+        if (this.el.priceLocationsRow) this.el.priceLocationsRow.style.display = 'none';
+      }
+      
+      if (sizeModifier > 0) {
+        if (this.el.priceSizeRow) this.el.priceSizeRow.style.display = '';
+        if (this.el.priceSize) this.el.priceSize.textContent = `+$${sizeModifier.toFixed(2)}`;
+      } else {
+        if (this.el.priceSizeRow) this.el.priceSizeRow.style.display = 'none';
+      }
+      
+      if (this.el.priceTotal) this.el.priceTotal.textContent = `$${total.toFixed(2)}`;
+    },
+
+    setQuickView(view) {
+      // Update button state
+      this.el.quickViewBtns?.forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.view === view);
+      });
+      
+      // Move camera
+      this.moveCamera(view);
+    },
+
+    // ==========================================================================
+    // THREE.JS 3D SCENE
+    // ==========================================================================
+    async init3D() {
+      if (typeof THREE === 'undefined') {
+        console.warn('[ULTShirtModal] Three.js not loaded, showing 2D fallback');
+        this.show2DFallback();
+        return;
+      }
+      
+      const canvas = this.el.canvas;
+      if (!canvas) return;
+      
+      const container = canvas.parentElement;
+      const width = container.clientWidth;
+      const height = container.clientHeight;
+      
+      // Scene
+      this.three.scene = new THREE.Scene();
+      this.three.scene.background = new THREE.Color(0xf0f0f0);
+      
+      // Camera
+      this.three.camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+      this.three.camera.position.set(0, 0, 4);
+      
+      // Renderer
+      this.three.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+      this.three.renderer.setSize(width, height);
+      this.three.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      
+      // Lighting
+      const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+      this.three.scene.add(ambient);
+      
+      const dir1 = new THREE.DirectionalLight(0xffffff, 0.8);
+      dir1.position.set(5, 5, 5);
+      this.three.scene.add(dir1);
+      
+      const dir2 = new THREE.DirectionalLight(0xffffff, 0.3);
+      dir2.position.set(-5, 5, -5);
+      this.three.scene.add(dir2);
+      
+      // Create T-shirt mesh (simplified plane for now)
+      await this.createTShirtMesh();
+      
+      // Apply design
+      await this.applyDesignTexture();
+      
+      // Hide loading
+      if (this.el.loading3d) this.el.loading3d.style.display = 'none';
+      
+      // Start render loop
+      this.animate3D();
+    },
+
+    async createTShirtMesh() {
+      // Simple plane geometry (in production, load a proper GLB model)
+      const geometry = new THREE.PlaneGeometry(2, 2.8);
+      const material = new THREE.MeshStandardMaterial({
+        color: parseInt(this.step2.tshirtColor.replace('#', '0x')),
+        side: THREE.DoubleSide,
+        roughness: 0.8
+      });
+      
+      this.three.tshirtMesh = new THREE.Mesh(geometry, material);
+      this.three.scene.add(this.three.tshirtMesh);
+    },
+
+    async applyDesignTexture() {
+      const designUrl = this.step1.useInheritedDesign 
+        ? this.inheritedDesign.thumbnailUrl 
+        : this.step1.newUpload.thumbnailUrl;
+      
+      if (!designUrl) return;
+      
       return new Promise((resolve) => {
-        const textureLoader = new THREE.TextureLoader();
-        textureLoader.crossOrigin = 'anonymous';
-
-        textureLoader.load(
-          imageUrl,
+        const loader = new THREE.TextureLoader();
+        loader.crossOrigin = 'anonymous';
+        
+        loader.load(
+          designUrl,
           (texture) => {
-            const decalGeometry = new THREE.PlaneGeometry(0.8, 0.8);
-            const decalMaterial = new THREE.MeshBasicMaterial({
+            const decalGeom = new THREE.PlaneGeometry(0.8, 0.8);
+            const decalMat = new THREE.MeshBasicMaterial({
               map: texture,
-              transparent: true
+              transparent: true,
+              side: THREE.DoubleSide
             });
-
-            this.decal = new THREE.Mesh(decalGeometry, decalMaterial);
-            this.decal.position.z = 0.01; // Slightly in front of shirt
             
-            if (this.selectedPosition === 'back') {
-              this.decal.position.z = -0.01;
-              this.decal.rotation.y = Math.PI;
-            }
-
-            this.scene.add(this.decal);
+            const decal = new THREE.Mesh(decalGeom, decalMat);
+            decal.position.z = 0.01;
+            this.three.decals.front = decal;
+            this.three.scene.add(decal);
+            
             resolve();
           },
           undefined,
-          () => {
-            console.error('[TShirtModal] Failed to load design texture');
-            resolve();
-          }
+          () => resolve()
         );
       });
     },
 
-    /**
-     * Update T-shirt color
-     */
-    updateTShirtColor(hex) {
-      if (this.tshirt && this.tshirt.material) {
-        this.tshirt.material.color.set(hex);
+    update3DColor(hex) {
+      if (this.three.tshirtMesh) {
+        this.three.tshirtMesh.material.color.set(hex);
       }
     },
 
-    /**
-     * Set print position (front/back)
-     */
-    setPosition(position) {
-      this.selectedPosition = position;
+    update3DDecal(locationId, enabled) {
+      // Simplified: just show/hide front decal
+      if (this.three.decals.front) {
+        this.three.decals.front.visible = this.step2.locations.front.enabled;
+      }
+    },
 
-      // Update UI
-      this.elements.positionBtns.forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.position === position);
-      });
+    update3DDecalTransform() {
+      const loc = this.step2.locations[this.step2.activeLocation];
+      const decal = this.three.decals[this.step2.activeLocation];
+      
+      if (decal && loc) {
+        const scale = loc.scale / 100;
+        decal.scale.set(scale, scale, 1);
+        decal.position.x = loc.positionX / 100;
+        decal.position.y = loc.positionY / 100;
+      }
+    },
 
-      // Update decal position
-      if (this.decal) {
-        if (position === 'back') {
-          this.decal.position.z = -0.01;
-          this.decal.rotation.y = Math.PI;
-        } else {
-          this.decal.position.z = 0.01;
-          this.decal.rotation.y = 0;
+    moveCamera(view) {
+      if (!this.three.camera) return;
+      
+      const positions = {
+        front: { x: 0, y: 0, z: 4 },
+        back: { x: 0, y: 0, z: -4 },
+        left: { x: -4, y: 0, z: 0 },
+        right: { x: 4, y: 0, z: 0 }
+      };
+      
+      const pos = positions[view] || positions.front;
+      
+      // Animate camera (simplified)
+      this.three.camera.position.set(pos.x, pos.y, pos.z);
+      this.three.camera.lookAt(0, 0, 0);
+    },
+
+    animate3D() {
+      if (!this.isOpen || this.currentStep !== 2) return;
+      
+      this.three.animationId = requestAnimationFrame(() => this.animate3D());
+      
+      // Subtle rotation
+      if (this.three.tshirtMesh) {
+        this.three.tshirtMesh.rotation.y = Math.sin(Date.now() * 0.0008) * 0.15;
+      }
+      
+      // Sync decal rotation
+      Object.values(this.three.decals).forEach(decal => {
+        if (decal && this.three.tshirtMesh) {
+          decal.rotation.y = this.three.tshirtMesh.rotation.y;
         }
-      }
+      });
+      
+      this.three.renderer?.render(this.three.scene, this.three.camera);
+    },
 
-      // Rotate camera to show correct side
-      if (this.camera) {
-        const targetZ = position === 'back' ? -3 : 3;
-        this.camera.position.z = targetZ;
-        this.camera.lookAt(0, 0, 0);
+    show2DFallback() {
+      if (this.el.loading3d) {
+        this.el.loading3d.innerHTML = `
+          <div style="text-align:center;">
+            <img src="${this.step1.useInheritedDesign ? this.inheritedDesign.thumbnailUrl : this.step1.newUpload.thumbnailUrl}" 
+                 style="max-width:80%;max-height:300px;object-fit:contain;" alt="Design preview">
+            <div style="margin-top:16px;color:#6b7280;">3D preview not available</div>
+          </div>
+        `;
       }
     },
 
-    /**
-     * Animation loop
-     */
-    animate() {
-      if (!this.isOpen) return;
-
-      this.animationId = requestAnimationFrame(() => this.animate());
-
-      // Subtle rotation for visual interest
-      if (this.tshirt) {
-        this.tshirt.rotation.y = Math.sin(Date.now() * 0.001) * 0.1;
+    cleanup3D() {
+      if (this.three.animationId) {
+        cancelAnimationFrame(this.three.animationId);
+        this.three.animationId = null;
       }
-      if (this.decal) {
-        this.decal.rotation.y = this.tshirt ? this.tshirt.rotation.y : 0;
+      
+      if (this.three.renderer) {
+        this.three.renderer.dispose();
       }
-
-      this.renderer.render(this.scene, this.camera);
+      
+      this.three = {
+        scene: null,
+        camera: null,
+        renderer: null,
+        controls: null,
+        tshirtMesh: null,
+        decals: {},
+        animationId: null
+      };
     },
 
-    /**
-     * Handle window resize
-     */
     handleResize() {
-      if (!this.renderer || !this.camera || !this.isOpen) return;
-
-      const container = this.elements.canvas.parentElement;
+      if (!this.three.renderer || !this.three.camera || !this.isOpen) return;
+      
+      const container = this.el.canvas?.parentElement;
+      if (!container) return;
+      
       const width = container.clientWidth;
       const height = container.clientHeight;
-
-      this.camera.aspect = width / height;
-      this.camera.updateProjectionMatrix();
-      this.renderer.setSize(width, height);
+      
+      this.three.camera.aspect = width / height;
+      this.three.camera.updateProjectionMatrix();
+      this.three.renderer.setSize(width, height);
     },
 
-    /**
-     * Show 2D fallback if Three.js fails
-     */
-    show2DFallback() {
-      if (!this.uploadData?.url) return;
+    // ==========================================================================
+    // STEP 3: DETAILS
+    // ==========================================================================
+    initStep3() {
+      // Update preview summary
+      const enabledLocs = this.getEnabledLocations();
+      const locNames = enabledLocs.map(id => {
+        const map = { front: 'Front', back: 'Back', left_sleeve: 'Left Sleeve', right_sleeve: 'Right Sleeve' };
+        return map[id] || id;
+      });
+      
+      if (this.el.detailsTitle) {
+        this.el.detailsTitle.textContent = `${this.step2.tshirtColorName} T-Shirt, ${this.step2.tshirtSize}`;
+      }
+      if (this.el.detailsMeta) {
+        this.el.detailsMeta.textContent = `Locations: ${locNames.join(', ')} • Subtotal: $${this.step2.calculatedPrice.toFixed(2)}`;
+      }
+      
+      // Update quantity display
+      if (this.el.qtyValue) {
+        this.el.qtyValue.textContent = this.step3.quantity.toString();
+      }
+    },
 
-      const container = this.elements.canvas.parentElement;
-      container.innerHTML = `
-        <div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#f5f5f5;">
-          <img src="${this.uploadData.url}" style="max-width:80%;max-height:80%;object-fit:contain;" alt="Design preview">
+    adjustQuantity(delta) {
+      const newQty = Math.max(1, this.step3.quantity + delta);
+      this.step3.quantity = newQty;
+      
+      if (this.el.qtyValue) {
+        this.el.qtyValue.textContent = newQty.toString();
+      }
+      
+      if (this.el.qtyMinus) {
+        this.el.qtyMinus.disabled = newQty <= 1;
+      }
+      
+      this.updateNavButtons();
+    },
+
+    // ==========================================================================
+    // STEP 4: REVIEW
+    // ==========================================================================
+    initStep4() {
+      const enabledLocs = this.getEnabledLocations();
+      const locNames = enabledLocs.map(id => {
+        const map = { front: 'Front', back: 'Back', left_sleeve: 'Left Sleeve', right_sleeve: 'Right Sleeve' };
+        return map[id] || id;
+      });
+      
+      // Update review details
+      if (this.el.reviewColor) this.el.reviewColor.textContent = this.step2.tshirtColorName;
+      if (this.el.reviewSize) this.el.reviewSize.textContent = this.step2.tshirtSize;
+      if (this.el.reviewQty) this.el.reviewQty.textContent = this.step3.quantity.toString();
+      if (this.el.reviewLocations) this.el.reviewLocations.textContent = locNames.join(', ');
+      
+      // Update price
+      const total = this.step2.calculatedPrice * this.step3.quantity;
+      if (this.el.reviewPriceBase) {
+        this.el.reviewPriceBase.textContent = `$${this.step2.basePrice.toFixed(2)}`;
+      }
+      if (this.el.reviewTotal) {
+        this.el.reviewTotal.textContent = `$${total.toFixed(2)}`;
+      }
+      
+      // Update price breakdown
+      this.updateReviewPriceBreakdown();
+      
+      this.updateActionButtons();
+    },
+
+    updateReviewPriceBreakdown() {
+      if (!this.el.reviewPriceBreakdown) return;
+      
+      let html = `
+        <div class="ul-review-price-row">
+          <span>Base T-Shirt (${this.step2.tshirtSize})</span>
+          <span>$${this.step2.basePrice.toFixed(2)}</span>
         </div>
       `;
+      
+      const enabledLocs = this.getEnabledLocations();
+      enabledLocs.forEach((locId, idx) => {
+        const loc = this.step2.locations[locId];
+        const map = { front: 'Front', back: 'Back', left_sleeve: 'Left Sleeve', right_sleeve: 'Right Sleeve' };
+        const price = idx === 0 ? 0 : loc.price;
+        html += `
+          <div class="ul-review-price-row">
+            <span>${map[locId]} Print</span>
+            <span>${idx === 0 ? 'Included' : `$${price.toFixed(2)}`}</span>
+          </div>
+        `;
+      });
+      
+      const sizeModifier = this.config.sizePricing[this.step2.tshirtSize] || 0;
+      if (sizeModifier > 0) {
+        html += `
+          <div class="ul-review-price-row">
+            <span>Size ${this.step2.tshirtSize} (+)</span>
+            <span>$${sizeModifier.toFixed(2)}</span>
+          </div>
+        `;
+      }
+      
+      if (this.step3.quantity > 1) {
+        html += `
+          <div class="ul-review-price-row">
+            <span>× ${this.step3.quantity} items</span>
+            <span></span>
+          </div>
+        `;
+      }
+      
+      const total = this.step2.calculatedPrice * this.step3.quantity;
+      html += `
+        <div class="ul-review-price-row total">
+          <span>TOTAL</span>
+          <span>$${total.toFixed(2)}</span>
+        </div>
+      `;
+      
+      this.el.reviewPriceBreakdown.innerHTML = html;
     },
 
-    /**
-     * Add to cart
-     */
-    async addToCart() {
-      // Find matching variant
-      const variant = this.variants.find(v => {
-        const hasColor = v.option1 === this.selectedColor || v.option2 === this.selectedColor;
-        const hasSize = v.option1 === this.selectedSize || v.option2 === this.selectedSize;
-        return hasColor && hasSize;
-      });
-
-      if (!variant) {
-        alert('Please select color and size');
-        return;
+    updateActionButtons() {
+      const enabled = this.step4.confirmationChecked;
+      
+      if (this.el.designAnotherBtn) {
+        this.el.designAnotherBtn.disabled = !enabled;
       }
+      if (this.el.checkoutBtn) {
+        this.el.checkoutBtn.disabled = !enabled;
+      }
+    },
 
-      // Prepare cart data
+    // ==========================================================================
+    // CART ACTIONS
+    // ==========================================================================
+    async addToCart() {
+      // Get design data
+      const designData = this.step1.useInheritedDesign ? this.inheritedDesign : this.step1.newUpload;
+      
+      // Find matching variant (simplified - in production, match by color + size)
+      const variantId = this.product.variants[0]?.id || 'VARIANT_ID';
+      
+      // Prepare line item properties
+      const properties = {
+        '_ul_upload_id': designData.uploadId,
+        '_ul_upload_url': designData.originalUrl || designData.thumbnailUrl,
+        '_ul_upload_name': designData.name,
+        '_ul_tshirt_color': this.step2.tshirtColorName,
+        '_ul_tshirt_size': this.step2.tshirtSize,
+        '_ul_locations': this.getEnabledLocations().join(','),
+        '_ul_is_tshirt': 'true'
+      };
+      
+      // Add location settings
+      this.getEnabledLocations().forEach(locId => {
+        const loc = this.step2.locations[locId];
+        properties[`_ul_${locId}_scale`] = loc.scale.toString();
+        properties[`_ul_${locId}_pos_x`] = loc.positionX.toString();
+        properties[`_ul_${locId}_pos_y`] = loc.positionY.toString();
+      });
+      
+      // Add special instructions
+      if (this.step3.specialInstructions) {
+        properties['_ul_special_instructions'] = this.step3.specialInstructions;
+      }
+      
+      // Add to cart via Shopify AJAX API
       const cartData = {
         items: [{
-          id: variant.id,
-          quantity: 1,
-          properties: {
-            '_upload_id': this.uploadData.id,
-            '_upload_url': this.uploadData.url,
-            '_upload_name': this.uploadData.name,
-            '_tshirt_addon': 'true',
-            '_print_position': this.selectedPosition,
-            '_color': this.selectedColor,
-            '_size': this.selectedSize
-          }
+          id: variantId,
+          quantity: this.step3.quantity,
+          properties
         }]
       };
-
-      this.elements.addCartBtn.disabled = true;
-      this.elements.addCartBtn.textContent = 'Adding...';
-
+      
       try {
         const response = await fetch('/cart/add.js', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(cartData)
         });
-
-        if (!response.ok) throw new Error('Failed to add to cart');
-
-        // Success
-        this.elements.addCartBtn.textContent = 'Added! ✓';
         
-        setTimeout(() => {
-          this.close();
-          // Refresh cart drawer or redirect
-          if (window.Shopify && window.Shopify.theme && window.Shopify.theme.jsCartDrawer) {
-            window.Shopify.theme.jsCartDrawer.open();
-          } else {
-            // Dispatch cart update event
-            document.dispatchEvent(new CustomEvent('cart:updated'));
-          }
-        }, 1000);
-
+        if (!response.ok) throw new Error('Failed to add to cart');
+        
+        // Dispatch cart update event
+        document.dispatchEvent(new CustomEvent('ul:cartUpdated'));
+        document.dispatchEvent(new CustomEvent('cart:updated'));
+        
+        return true;
       } catch (error) {
-        console.error('[TShirtModal] Cart add error:', error);
-        this.elements.addCartBtn.disabled = false;
-        this.elements.addCartBtn.textContent = 'Failed - Try Again';
+        console.error('[ULTShirtModal] Add to cart error:', error);
+        this.showToast('Failed to add to cart. Please try again.', 'error');
+        return false;
       }
     },
 
-    /**
-     * Get color hex from name
-     */
-    getColorHex(colorName) {
-      if (!colorName) return 0xffffff;
-      const lower = colorName.toLowerCase();
-      const hex = this.colorMap[lower];
-      if (hex) return parseInt(hex.replace('#', '0x'), 16);
-      return this.stringToColorInt(colorName);
-    },
-
-    /**
-     * Generate color from string (hash)
-     */
-    stringToColor(str) {
-      let hash = 0;
-      for (let i = 0; i < str.length; i++) {
-        hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    async designAnother() {
+      const success = await this.addToCart();
+      
+      if (success) {
+        this.showToast('✓ Added to cart! Design another item.', 'success');
+        
+        // Reset and go to step 1
+        this.resetState();
+        
+        // Keep inherited design available
+        if (this.inheritedDesign.uploadId) {
+          this.showInheritedDesign();
+        }
+        
+        this.goToStep(1);
       }
-      const color = '#' + ((hash >> 24) & 0xFF).toString(16).padStart(2, '0') +
-                         ((hash >> 16) & 0xFF).toString(16).padStart(2, '0') +
-                         ((hash >> 8) & 0xFF).toString(16).padStart(2, '0');
-      return color;
     },
 
-    stringToColorInt(str) {
-      const hex = this.stringToColor(str);
-      return parseInt(hex.replace('#', '0x'), 16);
+    async checkout() {
+      const success = await this.addToCart();
+      
+      if (success) {
+        this.showToast('✓ Added to cart! Redirecting to checkout...', 'success');
+        
+        // Close modal
+        this.close();
+        
+        // Redirect to checkout
+        setTimeout(() => {
+          window.location.href = '/checkout';
+        }, 1000);
+      }
     },
 
-    /**
-     * Check if color is light
-     */
+    // ==========================================================================
+    // UTILITIES
+    // ==========================================================================
     isLightColor(hex) {
       const color = hex.replace('#', '');
       const r = parseInt(color.substr(0, 2), 16);
@@ -624,17 +1330,34 @@
       const b = parseInt(color.substr(4, 2), 16);
       const brightness = (r * 299 + g * 587 + b * 114) / 1000;
       return brightness > 200;
+    },
+
+    showToast(message, type = 'success') {
+      if (!this.el.toast) return;
+      
+      this.el.toast.textContent = message;
+      this.el.toast.className = 'ul-toast ' + type;
+      
+      // Show
+      setTimeout(() => this.el.toast.classList.add('show'), 10);
+      
+      // Hide after 3s
+      setTimeout(() => {
+        this.el.toast.classList.remove('show');
+      }, 3000);
     }
   };
 
-  // Initialize when DOM ready
+  // ==========================================================================
+  // INITIALIZE
+  // ==========================================================================
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => TShirtModal.init());
+    document.addEventListener('DOMContentLoaded', () => ULTShirtModal.init());
   } else {
-    TShirtModal.init();
+    ULTShirtModal.init();
   }
 
   // Expose globally
-  window.TShirtModal = TShirtModal;
+  window.ULTShirtModal = ULTShirtModal;
 
 })();
