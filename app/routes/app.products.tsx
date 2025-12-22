@@ -1,14 +1,16 @@
 /**
- * Products Page - List all products with Configure links
- * Uses Remix Link for navigation (works with AppBridge)
+ * Products Page - List products with configure links
+ * Uses ResourceList for proper Polaris/React compatibility
  */
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useLoaderData, Link } from "@remix-run/react";
+import { useLoaderData, useNavigate } from "@remix-run/react";
 import {
   Page, Layout, Card, Text, BlockStack, InlineStack,
-  Button, DataTable, Badge, EmptyState, Banner
+  Button, Badge, EmptyState, Banner, ResourceList, ResourceItem,
+  Avatar, Filters
 } from "@shopify/polaris";
+import { useState, useCallback } from "react";
 import { authenticate } from "~/shopify.server";
 import prisma from "~/lib/prisma.server";
 
@@ -29,6 +31,16 @@ const PRODUCTS_QUERY = `
     }
   }
 `;
+
+interface ProductItem {
+  id: string;
+  numericId: string;
+  title: string;
+  status: string;
+  image: string | null;
+  isEnabled: boolean;
+  mode: string | null;
+}
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { session, admin } = await authenticate.admin(request);
@@ -90,7 +102,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
 
   // Merge with configs
-  const products = shopifyProducts.map(product => {
+  const products: ProductItem[] = shopifyProducts.map(product => {
     const config = productConfigs.find(c => c.productId === product.id);
     return {
       ...product,
@@ -105,54 +117,72 @@ export async function loader({ request }: LoaderFunctionArgs) {
   return json({ products, configuredCount, shopPlan: shop.plan });
 }
 
-function ModeBadge({ mode }: { mode: string | null }) {
-  if (!mode) return <Badge>Not configured</Badge>;
-  
-  const badges: Record<string, { tone: "success" | "info" | "warning"; label: string }> = {
-    dtf: { tone: "warning", label: "DTF Transfer" },
-    "3d_designer": { tone: "success", label: "3D Designer" },
-    classic: { tone: "info", label: "Classic" },
+function getModeLabel(mode: string | null): string {
+  if (!mode) return "Not configured";
+  const labels: Record<string, string> = {
+    dtf: "DTF Transfer",
+    "3d_designer": "3D Designer",
+    classic: "Classic",
   };
-  
-  const { tone, label } = badges[mode] || { tone: "info", label: mode };
-  return <Badge tone={tone}>{label}</Badge>;
+  return labels[mode] || mode;
+}
+
+function getModeTone(mode: string | null): "success" | "info" | "warning" | undefined {
+  if (!mode) return undefined;
+  const tones: Record<string, "success" | "info" | "warning"> = {
+    dtf: "warning",
+    "3d_designer": "success",
+    classic: "info",
+  };
+  return tones[mode];
 }
 
 export default function ProductsPage() {
   const { products, configuredCount, shopPlan } = useLoaderData<typeof loader>();
+  const navigate = useNavigate();
+  const [queryValue, setQueryValue] = useState("");
 
-  const rows = products.map(product => [
-    // Product column
-    <InlineStack key={`prod-${product.id}`} gap="300" blockAlign="center">
-      {product.image ? (
-        <img 
-          src={product.image} 
-          alt="" 
-          style={{ width: 40, height: 40, objectFit: "cover", borderRadius: 4 }} 
-        />
-      ) : (
-        <div style={{ width: 40, height: 40, background: "#f4f6f8", borderRadius: 4 }} />
-      )}
-      <Text as="span" variant="bodyMd">{product.title}</Text>
-    </InlineStack>,
-    
-    // Status column
-    product.isEnabled 
-      ? <Badge tone="success">Enabled</Badge> 
-      : <Badge>Disabled</Badge>,
-    
-    // Mode column
-    <ModeBadge key={`mode-${product.id}`} mode={product.mode} />,
-    
-    // Actions column - Remix Link for navigation
-    <Link 
-      key={`link-${product.id}`} 
-      to={`/app/products/${product.numericId}/configure`}
-      style={{ textDecoration: "none" }}
+  const handleQueryChange = useCallback((value: string) => {
+    setQueryValue(value);
+  }, []);
+
+  const handleQueryClear = useCallback(() => {
+    setQueryValue("");
+  }, []);
+
+  // Filter products by search query
+  const filteredProducts = products.filter(product =>
+    product.title.toLowerCase().includes(queryValue.toLowerCase())
+  );
+
+  const handleConfigureClick = useCallback((numericId: string) => {
+    navigate(`/app/products/${numericId}/configure`);
+  }, [navigate]);
+
+  const resourceName = {
+    singular: "product",
+    plural: "products",
+  };
+
+  const filterControl = (
+    <Filters
+      queryValue={queryValue}
+      filters={[]}
+      onQueryChange={handleQueryChange}
+      onQueryClear={handleQueryClear}
+      onClearAll={handleQueryClear}
+      queryPlaceholder="Search products..."
+    />
+  );
+
+  const emptyStateMarkup = (
+    <EmptyState
+      heading="No products found"
+      image="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"
     >
-      <Button size="slim">Configure</Button>
-    </Link>,
-  ]);
+      <p>Add products to your store to configure upload settings.</p>
+    </EmptyState>
+  );
 
   return (
     <Page
@@ -171,30 +201,61 @@ export default function ProductsPage() {
               
               {shopPlan === "free" && (
                 <Banner tone="info">
-                  Free plan active. <Link to="/app/billing">Upgrade</Link> for more features.
+                  Free plan active. Upgrade for more features.
                 </Banner>
               )}
             </BlockStack>
           </Card>
         </Layout.Section>
 
-        {/* Products Table */}
+        {/* Products List */}
         <Layout.Section>
-          <Card>
-            {products.length > 0 ? (
-              <DataTable
-                columnContentTypes={["text", "text", "text", "text"]}
-                headings={["Product", "Status", "Mode", "Actions"]}
-                rows={rows}
-              />
-            ) : (
-              <EmptyState
-                heading="No products found"
-                image="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"
-              >
-                <p>Add products to your store to configure upload settings.</p>
-              </EmptyState>
-            )}
+          <Card padding="0">
+            <ResourceList
+              resourceName={resourceName}
+              items={filteredProducts}
+              filterControl={filterControl}
+              emptyState={emptyStateMarkup}
+              renderItem={(item) => {
+                const { numericId, title, image, isEnabled, mode } = item;
+                const media = (
+                  <Avatar
+                    customer
+                    size="md"
+                    source={image || undefined}
+                    name={title}
+                  />
+                );
+
+                return (
+                  <ResourceItem
+                    id={numericId}
+                    media={media}
+                    accessibilityLabel={`Configure ${title}`}
+                    onClick={() => handleConfigureClick(numericId)}
+                  >
+                    <InlineStack align="space-between" blockAlign="center">
+                      <BlockStack gap="100">
+                        <Text variant="bodyMd" fontWeight="bold" as="span">
+                          {title}
+                        </Text>
+                        <InlineStack gap="200">
+                          {isEnabled ? (
+                            <Badge tone="success">Enabled</Badge>
+                          ) : (
+                            <Badge>Disabled</Badge>
+                          )}
+                          <Badge tone={getModeTone(mode)}>
+                            {getModeLabel(mode)}
+                          </Badge>
+                        </InlineStack>
+                      </BlockStack>
+                      <Button size="slim">Configure</Button>
+                    </InlineStack>
+                  </ResourceItem>
+                );
+              }}
+            />
           </Card>
         </Layout.Section>
       </Layout>
