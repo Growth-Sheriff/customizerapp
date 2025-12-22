@@ -2,13 +2,16 @@
  * DTF Uploader Styles
  * ====================
  * FAZ 1: Core DTF Upload Widget
+ * FAZ 6: Mobile Experience Optimizations
  * 
- * Prepared for:
+ * Features:
  * - FAZ 2: T-Shirt Modal integration
  * - FAZ 3: Confirmation Screen
- * - Mobile responsive
+ * - Mobile responsive (touch-optimized)
+ * - Safe area support (notch devices)
+ * - Reduced motion support
  * 
- * Version: 4.0.0
+ * Version: 4.1.0
  */
 
 :root {
@@ -719,5 +722,186 @@
     left: 16px;
     right: 16px;
     bottom: 16px;
+  }
+}
+
+/* ===== ENHANCED MOBILE (FAZ 6) ===== */
+@media (max-width: 768px) {
+  /* Touch-friendly targets (44px minimum) */
+  .ul-btn,
+  .ul-size-btn,
+  .ul-color-btn,
+  .ul-quantity-btn {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Larger touch areas for quantity controls */
+  .ul-quantity-btn {
+    width: 44px;
+    height: 44px;
+    font-size: 20px;
+  }
+
+  .ul-quantity-input {
+    height: 44px;
+    font-size: 16px; /* Prevents zoom on iOS */
+  }
+
+  /* Color buttons larger for touch */
+  .ul-color-btn {
+    width: 44px;
+    height: 44px;
+  }
+
+  /* Size buttons stacked */
+  .ul-size-grid {
+    gap: 8px;
+  }
+
+  .ul-size-btn {
+    padding: 12px 8px;
+    font-size: 14px;
+  }
+
+  /* Preview image larger on mobile */
+  .ul-file-thumb {
+    width: 80px;
+    height: 80px;
+  }
+
+  /* Action buttons full width */
+  .ul-actions {
+    flex-direction: column;
+  }
+
+  .ul-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Safe area support for bottom elements */
+  .ul-dtf-uploader {
+    padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* ===== SMALL MOBILE ===== */
+@media (max-width: 480px) {
+  .ul-dtf-uploader {
+    padding: 12px;
+    margin: 8px 0;
+  }
+
+  .ul-dropzone {
+    padding: 24px 12px;
+  }
+
+  .ul-dropzone-title {
+    font-size: 16px;
+  }
+
+  .ul-dropzone-subtitle {
+    font-size: 12px;
+  }
+
+  /* Single column for sizes on very small screens */
+  .ul-size-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* Stack file info vertically */
+  .ul-file-info {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .ul-file-name {
+    font-size: 14px;
+  }
+
+  .ul-file-size {
+    font-size: 12px;
+  }
+
+  /* Toast full width with padding */
+  .ul-toast {
+    left: 8px;
+    right: 8px;
+    bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    font-size: 14px;
+    padding: 14px 16px;
+  }
+}
+
+/* ===== TOUCH DEVICE OPTIMIZATIONS ===== */
+@media (pointer: coarse) {
+  /* Remove hover effects for touch */
+  .ul-dropzone:hover {
+    border-color: var(--ul-border);
+    background: var(--ul-bg-secondary);
+  }
+
+  .ul-dropzone.dragging {
+    border-color: var(--ul-primary);
+    background: var(--ul-primary-light);
+  }
+
+  /* Larger hit areas */
+  .ul-file-remove {
+    width: 36px;
+    height: 36px;
+    font-size: 18px;
+  }
+
+  /* Active state feedback */
+  .ul-btn:active,
+  .ul-size-btn:active,
+  .ul-color-btn:active {
+    transform: scale(0.96);
+    opacity: 0.9;
+  }
+}
+
+/* ===== REDUCED MOTION ===== */
+@media (prefers-reduced-motion: reduce) {
+  .ul-dropzone,
+  .ul-btn,
+  .ul-size-btn,
+  .ul-color-btn,
+  .ul-toast,
+  .ul-progress-bar,
+  .ul-file-preview {
+    transition: none;
+  }
+
+  .ul-spinner {
+    animation: none;
+  }
+
+  .ul-toast {
+    animation: none;
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ===== LANDSCAPE MOBILE ===== */
+@media (max-height: 500px) and (orientation: landscape) {
+  .ul-dtf-uploader {
+    padding: 12px 16px;
+  }
+
+  .ul-dropzone {
+    padding: 20px 16px;
+  }
+
+  .ul-dropzone-icon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .ul-size-grid {
+    grid-template-columns: repeat(4, 1fr);
   }
 }

@@ -697,8 +697,141 @@
       // Calculate price
       this.calculatePrice();
       
-      // Initialize 3D
-      this.init3D();
+      // Check for 3D support and initialize
+      if (this.supports3D()) {
+        this.init3D();
+      } else {
+        this.initFallback2D();
+      }
+    },
+    
+    // FAZ 6: 3D Support Detection
+    supports3D() {
+      // Check WebGL2 support
+      const canvas = document.createElement('canvas');
+      const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+      
+      if (!gl) {
+        console.log('[ULTShirtModal] WebGL not supported');
+        return false;
+      }
+      
+      // Check hardware capability
+      const cores = navigator.hardwareConcurrency || 2;
+      if (cores < 4) {
+        console.log('[ULTShirtModal] Low CPU cores:', cores);
+        return false;
+      }
+      
+      // Check mobile performance hint
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      const isLowEndMobile = isMobile && (cores < 6 || navigator.deviceMemory < 4);
+      
+      if (isLowEndMobile) {
+        console.log('[ULTShirtModal] Low-end mobile detected');
+        return false;
+      }
+      
+      return true;
+    },
+    
+    // FAZ 6: 2D Fallback Mode
+    initFallback2D() {
+      console.log('[ULTShirtModal] Initializing 2D fallback mode');
+      
+      // Hide 3D canvas
+      if (this.el.canvas) {
+        this.el.canvas.style.display = 'none';
+      }
+      if (this.el.loading3d) {
+        this.el.loading3d.style.display = 'none';
+      }
+      
+      // Create or show fallback container
+      let fallback = document.getElementById('ul-3d-fallback');
+      if (!fallback) {
+        fallback = this.createFallbackUI();
+      }
+      fallback.classList.add('active');
+      
+      // Update fallback with current design
+      this.updateFallback2D();
+    },
+    
+    createFallbackUI() {
+      const container = document.createElement('div');
+      container.id = 'ul-3d-fallback';
+      container.className = 'ul-3d-fallback';
+      
+      container.innerHTML = `
+        <div class="ul-3d-fallback-notice">
+          <span>📱 2D Preview Mode</span>
+        </div>
+        <div class="ul-fallback-image-container">
+          <svg class="ul-fallback-tshirt" viewBox="0 0 200 240" fill="currentColor">
+            <path d="M100 20 L60 20 L40 60 L20 60 L20 100 L50 100 L50 220 L150 220 L150 100 L180 100 L180 60 L160 60 L140 20 L100 20 Z" 
+                  fill="${this.step2.tshirtColor}" stroke="#ccc" stroke-width="2"/>
+          </svg>
+          <div class="ul-fallback-design-overlay" id="ul-fallback-design"></div>
+        </div>
+        <div class="ul-fallback-view-tabs">
+          <button type="button" class="ul-fallback-view-tab active" data-view="front">Front</button>
+          <button type="button" class="ul-fallback-view-tab" data-view="back">Back</button>
+        </div>
+      `;
+      
+      // Insert into 3D container
+      const step2_3d = document.querySelector('.ul-step2-3d');
+      if (step2_3d) {
+        step2_3d.appendChild(container);
+      }
+      
+      // Bind view tab events
+      container.querySelectorAll('.ul-fallback-view-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+          container.querySelectorAll('.ul-fallback-view-tab').forEach(t => t.classList.remove('active'));
+          tab.classList.add('active');
+          this.step2.activeLocation = tab.dataset.view;
+          this.updateFallback2D();
+        });
+      });
+      
+      return container;
+    },
+    
+    updateFallback2D() {
+      const designEl = document.getElementById('ul-fallback-design');
+      const tshirtSvg = document.querySelector('.ul-fallback-tshirt path');
+      
+      if (!designEl) return;
+      
+      // Update t-shirt color
+      if (tshirtSvg) {
+        tshirtSvg.setAttribute('fill', this.step2.tshirtColor);
+      }
+      
+      // Get current design URL
+      const designUrl = this.step1.useInheritedDesign 
+        ? this.inheritedDesign.thumbnailUrl 
+        : (this.step1.newUpload?.thumbnailUrl || '');
+      
+      if (designUrl) {
+        designEl.style.backgroundImage = `url(${designUrl})`;
+        designEl.style.display = 'block';
+        
+        // Apply scale
+        const loc = this.step2.locations[this.step2.activeLocation];
+        if (loc && loc.enabled) {
+          const scale = (loc.scale || 100) / 100;
+          const x = (loc.positionX || 0) / 2;
+          const y = (loc.positionY || 0) / 2;
+          designEl.style.transform = `translate(calc(-50% + ${x}px), calc(-60% + ${y}px)) scale(${scale})`;
+        } else {
+          designEl.style.display = 'none';
+        }
+      } else {
+        designEl.style.display = 'none';
+      }
     },
 
     async loadProductVariants() {
@@ -775,8 +908,12 @@
         s.classList.toggle('active', s.title === name);
       });
       
-      // Update 3D
-      this.update3DColor(hex);
+      // Update 3D or 2D fallback (FAZ 6)
+      if (this.supports3D()) {
+        this.update3DColor(hex);
+      } else {
+        this.updateFallback2D();
+      }
     },
 
     setSize(size) {
@@ -820,8 +957,12 @@
         this.setActiveLocation(locationId);
       }
       
-      // Update 3D
-      this.update3DDecal(locationId, loc.enabled);
+      // Update 3D or 2D fallback (FAZ 6)
+      if (this.supports3D()) {
+        this.update3DDecal(locationId, loc.enabled);
+      } else {
+        this.updateFallback2D();
+      }
       
       // Recalculate price
       this.calculatePrice();
@@ -876,7 +1017,12 @@
       loc.scale = parseInt(value);
       if (this.el.scaleValue) this.el.scaleValue.textContent = `${value}%`;
       
-      this.update3DDecalTransform();
+      // Update 3D or 2D fallback (FAZ 6)
+      if (this.supports3D()) {
+        this.update3DDecalTransform();
+      } else {
+        this.updateFallback2D();
+      }
     },
 
     setLocationPosX(value) {
@@ -886,7 +1032,12 @@
       loc.positionX = parseInt(value);
       if (this.el.posXValue) this.el.posXValue.textContent = value;
       
-      this.update3DDecalTransform();
+      // Update 3D or 2D fallback (FAZ 6)
+      if (this.supports3D()) {
+        this.update3DDecalTransform();
+      } else {
+        this.updateFallback2D();
+      }
     },
 
     setLocationPosY(value) {
@@ -896,7 +1047,12 @@
       loc.positionY = parseInt(value);
       if (this.el.posYValue) this.el.posYValue.textContent = value;
       
-      this.update3DDecalTransform();
+      // Update 3D or 2D fallback (FAZ 6)
+      if (this.supports3D()) {
+        this.update3DDecalTransform();
+      } else {
+        this.updateFallback2D();
+      }
     },
 
     getEnabledLocations() {

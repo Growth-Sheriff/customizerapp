@@ -2,6 +2,7 @@
  * Confirmation Screen Styles
  * ===========================
  * FAZ 3: Cart Confirmation Overlay
+ * FAZ 6: Mobile Bottom Sheet
  * 
  * Shows after successful cart addition with:
  * - Cart items summary
@@ -9,7 +10,7 @@
  * - Proceed to Checkout button
  * - Continue Shopping button
  * 
- * Version: 1.0.0
+ * Version: 1.1.0
  * Architecture: DTF_TSHIRT_MODAL_ARCHITECTURE.md
  */
 
@@ -333,5 +334,125 @@
 
   .ul-confirm-btn {
     padding: 14px 20px;
+  }
+}
+
+/* =============================================================================
+   FAZ 6: Mobile Bottom Sheet
+   ============================================================================= */
+@media (max-width: 768px) {
+  .ul-confirm-overlay.active {
+    align-items: flex-end;
+    justify-content: stretch;
+  }
+
+  .ul-confirm-modal {
+    width: 100%;
+    max-width: 100%;
+    max-height: 85vh;
+    border-radius: 20px 20px 0 0;
+    animation: ulBottomSheetUp 0.3s ease-out;
+  }
+
+  @keyframes ulBottomSheetUp {
+    from { 
+      transform: translateY(100%);
+      opacity: 0;
+    }
+    to { 
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+
+  /* Drag handle */
+  .ul-confirm-modal::before {
+    content: '';
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 40px;
+    height: 4px;
+    background: #d1d5db;
+    border-radius: 2px;
+    z-index: 1;
+  }
+
+  .ul-confirm-header {
+    padding: 24px 20px 16px;
+  }
+
+  .ul-confirm-icon {
+    width: 48px;
+    height: 48px;
+  }
+
+  .ul-confirm-title {
+    font-size: 20px;
+  }
+
+  .ul-confirm-body {
+    max-height: calc(85vh - 200px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .ul-confirm-footer {
+    padding: 16px 20px;
+    padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+    background: #fff;
+    border-top: 1px solid #e5e7eb;
+  }
+
+  .ul-confirm-actions {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .ul-confirm-btn {
+    width: 100%;
+    padding: 16px 24px;
+    font-size: 16px;
+    min-height: 52px;
+    justify-content: center;
+  }
+
+  .ul-confirm-btn.primary {
+    order: -1; /* Primary button first on mobile */
+  }
+}
+
+/* =============================================================================
+   FAZ 6: Touch Optimization
+   ============================================================================= */
+@media (pointer: coarse) {
+  .ul-confirm-btn {
+    min-height: 48px;
+  }
+
+  .ul-confirm-item {
+    min-height: 60px;
+  }
+}
+
+/* =============================================================================
+   FAZ 6: Safe Area Support
+   ============================================================================= */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  @media (max-width: 768px) {
+    .ul-confirm-footer {
+      padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+    }
+  }
+}
+
+/* =============================================================================
+   FAZ 6: Reduced Motion
+   ============================================================================= */
+@media (prefers-reduced-motion: reduce) {
+  .ul-confirm-overlay,
+  .ul-confirm-modal {
+    animation-duration: 0.01ms !important;
   }
 }
