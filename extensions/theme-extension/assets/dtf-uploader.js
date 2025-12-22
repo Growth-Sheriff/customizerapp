@@ -456,9 +456,15 @@
       });
 
       // T-Shirt button
-      elements.tshirtBtn.addEventListener('click', () => {
-        this.openTShirtModal(productId);
-      });
+      if (elements.tshirtBtn) {
+        console.log('[UL] T-Shirt button found, adding click listener');
+        elements.tshirtBtn.addEventListener('click', () => {
+          console.log('[UL] T-Shirt button clicked!');
+          this.openTShirtModal(productId);
+        });
+      } else {
+        console.warn('[UL] T-Shirt button NOT found in DOM');
+      }
 
       // Add to Cart button
       elements.addCartBtn.addEventListener('click', () => {
@@ -1151,10 +1157,13 @@
      * Open T-Shirt modal (FAZ 2 integration)
      */
     openTShirtModal(productId) {
+      console.log('[UL] openTShirtModal called with productId:', productId);
       const instance = this.instances[productId];
       const { state } = instance;
 
+      console.log('[UL] Upload status:', state.upload.status);
       if (state.upload.status !== 'ready') {
+        console.warn('[UL] Upload not ready, showing error');
         this.showError(productId, 'Please upload your design first.');
         return;
       }

@@ -210,7 +210,10 @@
 
     bindEvents() {
       // Listen for open event from DTF uploader
-      document.addEventListener('ul:openTShirtModal', (e) => this.open(e.detail));
+      document.addEventListener('ul:openTShirtModal', (e) => {
+        console.log('[ULTShirtModal] Received ul:openTShirtModal event:', e.detail);
+        this.open(e.detail);
+      });
       
       // Close
       this.el.closeBtn?.addEventListener('click', () => this.close());
