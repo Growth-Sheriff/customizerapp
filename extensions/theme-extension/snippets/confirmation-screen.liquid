@@ -154,13 +154,15 @@
     },
 
     async show(detail = {}) {
-      // Sync with global state (FAZ 4)
-      if (window.ULState) {
-        window.ULState.set('ui.confirmationOpen', true);
-      }
+      // Prevent re-entry
+      if (this.isOpen) return;
+      this.isOpen = true;
       
-      // Fetch current cart
-      await this.fetchCart();
+      // Fetch current cart (with rate limit protection)
+      if (!this._lastFetch || Date.now() - this._lastFetch > 2000) {
+        await this.fetchCart();
+        this._lastFetch = Date.now();
+      }
       
       // Sync cart data to global state (FAZ 4)
       if (window.ULState && this.cartData) {
@@ -186,11 +188,12 @@
 
       // Show overlay
       this.el.overlay?.classList.add('active');
-      this.isOpen = true;
       document.body.style.overflow = 'hidden';
     },
 
     close() {
+      if (!this.isOpen) return;
+      
       this.el.overlay?.classList.remove('active');
       this.isOpen = false;
       document.body.style.overflow = '';
