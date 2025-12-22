@@ -9,7 +9,7 @@ import { useLoaderData, useActionData, Form, useNavigation, useNavigate } from "
 import {
   Page, Layout, Card, Text, BlockStack, InlineStack,
   TextField, Select, Button, Banner, FormLayout, Divider, Box,
-  Checkbox, Badge, Icon, EmptyState, Modal, ChoiceList
+  Checkbox, Badge, Icon, EmptyState, Modal, ChoiceList, RadioButton
 } from "@shopify/polaris";
 import { DeleteIcon, PlusIcon, AlertCircleIcon, CheckCircleIcon } from "@shopify/polaris-icons";
 import { useState, useCallback } from "react";
@@ -138,11 +138,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       sizeValues: sizeOption?.values || [],
     },
     config: config ? {
+      mode: config.mode || "dtf",
       uploadEnabled: config.uploadEnabled,
       extraQuestions: (config.extraQuestions as ExtraQuestion[]) || [],
       tshirtEnabled: config.tshirtEnabled,
       tshirtConfig: (config.tshirtConfig as TshirtConfig) || null,
     } : {
+      mode: "dtf",
       uploadEnabled: true,
       extraQuestions: [],
       tshirtEnabled: false,
@@ -176,6 +178,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     : `gid://shopify/Product/${productId}`;
 
   if (action === "save") {
+    const mode = formData.get("mode") as string || "dtf";
     const uploadEnabled = formData.get("uploadEnabled") === "true";
     const tshirtEnabled = formData.get("tshirtEnabled") === "true";
     const extraQuestionsJson = formData.get("extraQuestions") as string;
@@ -204,6 +207,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
         },
       },
       update: {
+        mode,
+        enabled: uploadEnabled,
         uploadEnabled,
         extraQuestions: extraQuestions as any,
         tshirtEnabled,
@@ -213,8 +218,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
       create: {
         shopId: shop.id,
         productId: productGid,
-        mode: "dtf",
-        enabled: true,
+        mode,
+        enabled: uploadEnabled,
         uploadEnabled,
         extraQuestions: extraQuestions as any,
         tshirtEnabled,
@@ -236,6 +241,7 @@ export default function ProductConfigurePage() {
   const isLoading = navigation.state === "submitting";
 
   // Form state
+  const [mode, setMode] = useState(config.mode);
   const [uploadEnabled, setUploadEnabled] = useState(config.uploadEnabled);
   const [tshirtEnabled, setTshirtEnabled] = useState(config.tshirtEnabled);
   const [extraQuestions, setExtraQuestions] = useState<ExtraQuestion[]>(config.extraQuestions);
@@ -354,16 +360,43 @@ export default function ProductConfigurePage() {
 
         <Form method="post" id="config-form">
           <input type="hidden" name="_action" value="save" />
+          <input type="hidden" name="mode" value={mode} />
           <input type="hidden" name="uploadEnabled" value={uploadEnabled.toString()} />
           <input type="hidden" name="tshirtEnabled" value={tshirtEnabled.toString()} />
           <input type="hidden" name="extraQuestions" value={JSON.stringify(extraQuestions)} />
           <input type="hidden" name="tshirtConfig" value={JSON.stringify(tshirtConfig)} />
 
-          {/* Upload Settings */}
+          {/* Mode Selection */}
           <Layout.Section>
             <Card>
               <BlockStack gap="400">
-                <Text as="h2" variant="headingMd">📁 Upload Widget</Text>
+                <Text as="h2" variant="headingMd">🎨 Upload Mode</Text>
+                <Text as="p" tone="subdued">
+                  Select the upload mode for this product. Each mode has different features and customer experience.
+                </Text>
+                
+                <BlockStack gap="200">
+                  <RadioButton
+                    label="DTF Transfer"
+                    helpText="Customers upload their design for DTF (Direct to Film) transfer printing. Includes optional T-Shirt add-on."
+                    checked={mode === "dtf"}
+                    id="mode-dtf"
+                    name="mode-radio"
+                    onChange={() => setMode("dtf")}
+                  />
+                  <RadioButton
+                    label="Mode 2 (Coming Soon)"
+                    helpText="Second mode will be available soon."
+                    checked={mode === "mode2"}
+                    id="mode-mode2"
+                    name="mode-radio"
+                    disabled
+                    onChange={() => {}}
+                  />
+                </BlockStack>
+
+                <Divider />
+
                 <Checkbox
                   label="Enable upload widget for this product"
                   helpText="When enabled, customers can upload their designs on the product page"
