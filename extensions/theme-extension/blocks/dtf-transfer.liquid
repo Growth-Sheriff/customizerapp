@@ -20,7 +20,7 @@
   Load Global State Manager (FAZ 4)
   MUST load before other components
 {% endcomment %}
-{{ 'ul-state.js' | asset_url | script_tag }}
+<script src="{{ 'ul-state.js' | asset_url }}" defer></script>
 
 {% comment %}
   Render the DTF Uploader snippet
