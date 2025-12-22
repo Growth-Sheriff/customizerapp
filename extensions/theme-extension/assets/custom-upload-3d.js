@@ -15,7 +15,7 @@
 (function() {
   'use strict';
 
-  // Wait for Three.js to load
+  // Wait for Three.js to load, then setup event handlers
   waitForThreeJS();
 
   // ============================================================
@@ -26,14 +26,26 @@
         typeof THREE.GLTFLoader !== 'undefined' &&
         typeof THREE.OrbitControls !== 'undefined') {
       console.log('[CustomUpload3D] Three.js ready');
-      document.addEventListener('DOMContentLoaded', () => {
-        initPositionItemClicks();
-        initSliders();
-      });
+      
+      // Wait for DOM ready
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', onDOMReady);
+      } else {
+        onDOMReady();
+      }
     } else {
       console.log('[CustomUpload3D] Waiting for Three.js...');
       setTimeout(waitForThreeJS, 100);
     }
+  }
+
+  function onDOMReady() {
+    console.log('[CustomUpload3D] DOM ready, setting up handlers');
+    initPositionItemClicks();
+    initSliders();
+    
+    // Expose global state
+    window.CustomizerState = window.CustomizerState || {};
   }
 
   // ============================================================
@@ -124,18 +136,35 @@
       return;
     }
 
-    const canvas = document.getElementById('cu-3d-canvas');
+    // Try multiple canvas IDs for compatibility
+    let canvas = document.getElementById('cu-3d-canvas');
     if (!canvas) {
-      console.error('[CustomUpload3D] Canvas not found');
+      canvas = document.getElementById('ul-3d-canvas');
+    }
+    
+    if (!canvas) {
+      console.error('[CustomUpload3D] Canvas not found (tried cu-3d-canvas and ul-3d-canvas)');
       return;
+    }
+
+    // Make sure canvas container is visible before getting dimensions
+    const section = canvas.closest('.cu-3d-section, #cu-3d-section, .ul-3d-canvas-wrapper');
+    if (section && section.style.display === 'none') {
+      console.log('[CustomUpload3D] Canvas section is hidden, showing temporarily for init');
     }
 
     console.log('[CustomUpload3D] Initializing...');
 
     // Get model URL from widget data
-    const widget = document.getElementById('custom-upload-widget');
+    const widget = document.getElementById('custom-upload-widget') || 
+                   document.getElementById('upload-lift-3d-designer');
     if (widget && widget.dataset.modelUrl) {
       Config.modelUrl = widget.dataset.modelUrl;
+    }
+    
+    // Get GLB model URL from global variable if set
+    if (window.GLB_MODEL_URL) {
+      Config.modelUrl = window.GLB_MODEL_URL;
     }
 
     // Setup main scene
@@ -171,8 +200,27 @@
     const bgColor = new THREE.Color(0x667eea);
     State.scene.background = bgColor;
 
+    // Get dimensions - use defaults if canvas is hidden
+    let width = canvas.clientWidth || 800;
+    let height = canvas.clientHeight || 500;
+    
+    // If still 0, try parent dimensions
+    if (width === 0 || height === 0) {
+      const parent = canvas.parentElement;
+      if (parent) {
+        width = parent.clientWidth || 800;
+        height = parent.clientHeight || 500;
+      }
+    }
+    
+    // Final fallback
+    if (width === 0) width = 800;
+    if (height === 0) height = 500;
+    
+    console.log('[CustomUpload3D] Canvas dimensions:', width, 'x', height);
+
     // Camera
-    const aspect = canvas.clientWidth / canvas.clientHeight;
+    const aspect = width / height;
     State.camera = new THREE.PerspectiveCamera(Config.cameraFov, aspect, 0.1, 100);
     State.camera.position.set(
       Config.cameraPosition.x,
@@ -186,7 +234,7 @@
       antialias: true,
       alpha: false
     });
-    State.renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+    State.renderer.setSize(width, height);
     State.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     State.renderer.outputEncoding = THREE.sRGBEncoding;
     State.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -328,7 +376,15 @@
   // ============================================================
   function loadModel() {
     const loader = new THREE.GLTFLoader();
-    const loadingEl = document.getElementById('cu-3d-loading');
+    
+    // Try multiple loading element IDs for compatibility
+    let loadingEl = document.getElementById('cu-3d-loading');
+    if (!loadingEl) {
+      loadingEl = document.querySelector('.cu-3d-loading');
+    }
+    if (!loadingEl) {
+      loadingEl = document.querySelector('.ul-3d-loading');
+    }
 
     // Try to load custom model, fallback to default
     const modelUrl = Config.modelUrl || getDefaultModelUrl();
