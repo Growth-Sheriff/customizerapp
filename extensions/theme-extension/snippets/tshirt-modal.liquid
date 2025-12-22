@@ -508,5 +508,15 @@
   });
 </script>
 
+<!-- FAZ 8: Analytics (conditional - may already be loaded by dtf-uploader) -->
+<script>
+  if (typeof ULAnalytics === 'undefined') {
+    const script = document.createElement('script');
+    script.src = '{{ 'ul-analytics.js' | asset_url }}';
+    script.defer = true;
+    document.head.appendChild(script);
+  }
+</script>
+
 <!-- T-Shirt Modal Script -->
 <script src="{{ 'tshirt-modal.js' | asset_url }}" defer></script>

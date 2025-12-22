@@ -415,6 +415,16 @@
           instance.state.form.selectedVariantPrice = parseInt(radio.dataset.priceRaw, 10);
           this.updatePriceDisplay(productId);
           this.validateForm(productId);
+          
+          // FAZ 8: Track size selection
+          if (window.ULAnalytics) {
+            window.ULAnalytics.trackDTFSizeSelected({
+              size: radio.dataset.title,
+              variantId: radio.value,
+              price: instance.state.form.selectedVariantPrice / 100,
+              productId
+            });
+          }
         });
       });
 
@@ -517,6 +527,17 @@
         });
       }
 
+      // FAZ 8: Track upload started
+      if (window.ULAnalytics) {
+        window.ULAnalytics.startTiming('dtf_upload');
+        window.ULAnalytics.trackDTFUploadStarted({
+          fileName: file.name,
+          fileSize: file.size,
+          fileType: file.type,
+          productId
+        });
+      }
+
       // Show progress UI
       elements.dropzone.style.display = 'none';
       elements.progress.classList.add('active');
@@ -585,6 +606,16 @@
         // FAZ 7: Enhanced error handling
         const errorMessage = error.message || 'Upload failed. Please try again.';
         this.showError(productId, errorMessage);
+        
+        // FAZ 8: Track upload failed
+        if (window.ULAnalytics) {
+          window.ULAnalytics.trackDTFUploadFailed({
+            fileName: state.upload.file.name,
+            errorCode: 'UPLOAD_FAILED',
+            errorMessage: errorMessage,
+            productId
+          });
+        }
         
         if (window.ULErrorHandler) {
           // Determine error type
@@ -709,6 +740,21 @@
                 productId,
                 thumbnailUrl: state.upload.result.thumbnailUrl,
                 originalUrl: state.upload.result.originalUrl
+              });
+            }
+
+            // FAZ 8: Track upload completed
+            if (window.ULAnalytics) {
+              const uploadDuration = window.ULAnalytics.endTiming('dtf_upload');
+              window.ULAnalytics.trackDTFUploadCompleted({
+                uploadId,
+                fileName: state.upload.file.name,
+                fileSize: state.upload.file.size,
+                width: state.upload.result.width,
+                height: state.upload.result.height,
+                dpi: state.upload.result.dpi,
+                duration: uploadDuration,
+                productId
               });
             }
 
@@ -976,6 +1022,14 @@
         return;
       }
 
+      // FAZ 8: Track customize clicked
+      if (window.ULAnalytics) {
+        window.ULAnalytics.trackDTFCustomizeClicked({
+          uploadId: state.upload.uploadId,
+          productId
+        });
+      }
+
       // Update global state (FAZ 4)
       if (window.ULState) {
         window.ULState.set('tshirt.useInheritedDesign', true);
@@ -1075,6 +1129,18 @@
 
         // Show toast
         this.showToast('Added to cart!', 'success');
+
+        // FAZ 8: Track add to cart
+        if (window.ULAnalytics) {
+          window.ULAnalytics.trackDTFAddToCart({
+            uploadId: upload.uploadId,
+            variantId: form.selectedVariantId,
+            size: form.selectedVariantTitle,
+            quantity: form.quantity,
+            price: (form.selectedVariantPrice * form.quantity) / 100,
+            productId
+          });
+        }
 
         // Dispatch event for cart update (theme may listen)
         document.dispatchEvent(new CustomEvent('ul:addedToCart', {

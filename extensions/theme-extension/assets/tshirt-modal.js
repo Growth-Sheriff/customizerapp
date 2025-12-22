@@ -319,6 +319,15 @@
         });
       }
       
+      // FAZ 8: Track modal opened
+      if (window.ULAnalytics) {
+        window.ULAnalytics.trackTShirtModalOpened({
+          hasInheritedDesign: !!uploadData,
+          source: 'tshirt-modal',
+          productId
+        });
+      }
+      
       // Show modal
       this.el.overlay?.classList.add('active');
       this.isOpen = true;
@@ -335,6 +344,15 @@
       this.el.overlay?.classList.remove('active');
       this.isOpen = false;
       document.body.style.overflow = '';
+      
+      // FAZ 8: Track modal closed
+      if (window.ULAnalytics) {
+        window.ULAnalytics.trackTShirtModalClosed({
+          stepReached: this.currentStep,
+          completed: this.currentStep === 4 && this.step4.confirmationChecked,
+          productId: this.product.id
+        });
+      }
       
       // Sync with global state (FAZ 4)
       if (window.ULState) {
@@ -389,7 +407,21 @@
     // STEP NAVIGATION
     // ==========================================================================
     goToStep(step) {
+      const previousStep = this.currentStep;
       this.currentStep = step;
+      
+      // FAZ 8: Track step completion when moving forward
+      if (step > previousStep && window.ULAnalytics) {
+        window.ULAnalytics.trackTShirtStepCompleted({
+          step: previousStep,
+          stepName: this.getStepName(previousStep),
+          nextStep: step,
+          timeOnStep: this.stepStartTime ? Date.now() - this.stepStartTime : null
+        });
+      }
+      
+      // Track step start time for duration calculation
+      this.stepStartTime = Date.now();
       
       // Sync with global state (FAZ 4)
       if (window.ULState) {
@@ -956,6 +988,7 @@
     },
 
     setColor(name, hex) {
+      const previousColor = this.step2.tshirtColorName;
       this.step2.tshirtColor = hex;
       this.step2.tshirtColorName = name;
       
@@ -967,6 +1000,15 @@
       // Emit global event (FAZ 4)
       if (window.ULEvents) {
         window.ULEvents.emit('colorChange', { name, hex });
+      }
+      
+      // FAZ 8: Track color change
+      if (window.ULAnalytics && previousColor !== name) {
+        window.ULAnalytics.trackTShirtColorChanged({
+          colorName: name,
+          colorHex: hex,
+          previousColor
+        });
       }
       
       // Update UI
@@ -983,6 +1025,8 @@
     },
 
     setSize(size) {
+      const previousSize = this.step2.tshirtSize;
+      const previousPrice = this.step2.calculatedPrice;
       this.step2.tshirtSize = size;
       
       // Sync with global state (FAZ 4)
@@ -996,6 +1040,15 @@
       }
       
       this.calculatePrice();
+      
+      // FAZ 8: Track size change
+      if (window.ULAnalytics && previousSize !== size) {
+        window.ULAnalytics.trackTShirtSizeChanged({
+          size,
+          previousSize,
+          priceDiff: this.step2.calculatedPrice - previousPrice
+        });
+      }
     },
 
     toggleLocation(locationId) {
@@ -1012,6 +1065,15 @@
       // Emit global event (FAZ 4)
       if (window.ULEvents) {
         window.ULEvents.emit('locationToggle', { locationId, enabled: loc.enabled });
+      }
+      
+      // FAZ 8: Track location toggle
+      if (window.ULAnalytics) {
+        window.ULAnalytics.trackTShirtLocationToggled({
+          location: locationId,
+          enabled: loc.enabled,
+          totalLocations: this.getEnabledLocations().length
+        });
       }
       
       // Update UI
@@ -1614,6 +1676,22 @@
         document.dispatchEvent(new CustomEvent('ul:cartUpdated'));
         document.dispatchEvent(new CustomEvent('cart:updated'));
         
+        // FAZ 8: Track add to cart from T-Shirt modal
+        if (window.ULAnalytics) {
+          const enabledLocations = Object.keys(this.step2.locations).filter(k => this.step2.locations[k].enabled);
+          window.ULAnalytics.trackTShirtAddToCart({
+            color: this.step2.tshirtColorName,
+            colorHex: this.step2.tshirtColor,
+            size: this.step2.tshirtSize,
+            quantity: this.step3.quantity,
+            locations: enabledLocations,
+            locationCount: enabledLocations.length,
+            hasDesign: !!this.inheritedDesign.uploadId,
+            variantId: variantId,
+            price: selectedVariant?.price || null
+          });
+        }
+        
         return true;
       } catch (error) {
         console.error('[ULTShirtModal] Add to cart error:', error);
@@ -1646,6 +1724,15 @@
       if (success) {
         this.showToast('✓ Added to cart! Design another item.', 'success');
         
+        // FAZ 8: Track design another action
+        if (window.ULAnalytics) {
+          window.ULAnalytics.trackTShirtDesignAnother({
+            previousColor: this.step2.tshirtColorName,
+            previousSize: this.step2.tshirtSize,
+            previousLocations: Object.keys(this.step2.locations).filter(k => this.step2.locations[k].enabled)
+          });
+        }
+        
         // Reset and go to step 1
         this.resetState();
         
@@ -1675,6 +1762,21 @@
           });
         }
         
+        // FAZ 8: Track checkout action from T-Shirt modal
+        if (window.ULAnalytics) {
+          const enabledLocations = Object.keys(this.step2.locations).filter(k => this.step2.locations[k].enabled);
+          window.ULAnalytics.trackTShirtCheckout({
+            color: this.step2.tshirtColorName,
+            colorHex: this.step2.tshirtColor,
+            size: this.step2.tshirtSize,
+            quantity: this.step3.quantity,
+            locations: enabledLocations,
+            locationCount: enabledLocations.length,
+            hasDesign: !!this.inheritedDesign.uploadId,
+            currentStep: this.currentStep
+          });
+        }
+        
         // Close modal
         this.close();
         
@@ -1699,6 +1801,18 @@
     // ==========================================================================
     // UTILITIES
     // ==========================================================================
+    
+    // FAZ 8: Get step name for analytics
+    getStepName(step) {
+      const stepNames = {
+        1: 'design',
+        2: 'customize',
+        3: 'quantity',
+        4: 'confirm'
+      };
+      return stepNames[step] || `step_${step}`;
+    },
+    
     isLightColor(hex) {
       const color = hex.replace('#', '');
       const r = parseInt(color.substr(0, 2), 16);
