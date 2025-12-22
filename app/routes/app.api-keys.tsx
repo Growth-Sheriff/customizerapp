@@ -200,16 +200,15 @@ export default function ApiKeysPage() {
   ]);
 
   return (
-    <AppProvider i18n={enTranslations}>
-      <Page
-        title="API Keys"
-        backAction={{ content: "Dashboard", url: "/app" }}
-        primaryAction={
-          canUseApi
-            ? { content: "Create API Key", onAction: () => setCreateModalOpen(true) }
-            : undefined
-        }
-      >
+    <Page
+      title="API Keys"
+      backAction={{ content: "Dashboard", url: "/app" }}
+      primaryAction={
+        canUseApi
+          ? { content: "Create API Key", onAction: () => setCreateModalOpen(true) }
+          : undefined
+      }
+    >
         <Layout>
           {/* New key display */}
           {actionData && "newKey" in actionData && actionData.newKey && (
@@ -378,7 +377,6 @@ export default function ApiKeysPage() {
           </Modal.Section>
         </Modal>
       </Page>
-    </AppProvider>
   );
 }
 

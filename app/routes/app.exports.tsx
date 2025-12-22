@@ -152,14 +152,13 @@ export default function ExportsPage() {
   ]);
 
   return (
-    <AppProvider i18n={enTranslations}>
-      <Page
-        title="Exports"
-        backAction={{ content: "Dashboard", url: "/app" }}
-        secondaryActions={[
-          { content: "Production Queue", url: "/app/queue" },
-        ]}
-      >
+    <Page
+      title="Exports"
+      backAction={{ content: "Dashboard", url: "/app" }}
+      secondaryActions={[
+        { content: "Production Queue", url: "/app/queue" },
+      ]}
+    >
         <Layout>
           {/* Action result banner */}
           {actionData && "success" in actionData && (
@@ -238,7 +237,6 @@ export default function ExportsPage() {
           </Layout.Section>
         </Layout>
       </Page>
-    </AppProvider>
   );
 }
 

@@ -278,14 +278,13 @@ export default function AnalyticsPage() {
   ]);
 
   return (
-    <AppProvider i18n={enTranslations}>
-      <Page
-        title="Analytics"
-        backAction={{ content: "Dashboard", url: "/app" }}
-        secondaryActions={[
-          { content: "Production Queue", url: "/app/queue" },
-        ]}
-      >
+    <Page
+      title="Analytics"
+      backAction={{ content: "Dashboard", url: "/app" }}
+      secondaryActions={[
+        { content: "Production Queue", url: "/app/queue" },
+      ]}
+    >
         <Layout>
           {/* Period Selector */}
           <Layout.Section>
@@ -483,7 +482,6 @@ export default function AnalyticsPage() {
           </Layout.Section>
         </Layout>
       </Page>
-    </AppProvider>
   );
 }
 

@@ -2,25 +2,31 @@ import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json, redirect } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 import {
-  AppProvider, Page, Layout, Card, Text, BlockStack, Banner, Box
+  Page, Layout, Card, Text, BlockStack, Banner, Box
 } from "@shopify/polaris";
-import enTranslations from "@shopify/polaris/locales/en.json";
-import { getShopFromSession } from "~/lib/session.server";
+import { authenticate } from "~/shopify.server";
 import prisma from "~/lib/prisma.server";
 import { getStorageConfig, getDownloadSignedUrl } from "~/lib/storage.server";
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
-  const shopDomain = await getShopFromSession(request);
-  if (!shopDomain) {
-    return redirect("/auth/install");
-  }
+  const { session } = await authenticate.admin(request);
+  const shopDomain = session.shop;
 
-  const shop = await prisma.shop.findUnique({
+  let shop = await prisma.shop.findUnique({
     where: { shopDomain },
   });
 
   if (!shop) {
-    return redirect("/auth/install");
+    shop = await prisma.shop.create({
+      data: {
+        shopDomain,
+        accessToken: session.accessToken || "",
+        plan: "free",
+        billingStatus: "active",
+        storageProvider: "r2",
+        settings: {},
+      },
+    });
   }
 
   const assetSetId = params.id;
@@ -71,11 +77,10 @@ export default function AssetSetPreviewPage() {
   const schema = assetSet.schema as any;
 
   return (
-    <AppProvider i18n={enTranslations}>
-      <Page
-        title={`Preview: ${assetSet.name}`}
-        backAction={{ content: "Asset Sets", url: "/app/asset-sets" }}
-      >
+    <Page
+      title={`Preview: ${assetSet.name}`}
+      backAction={{ content: "Asset Sets", url: "/app/asset-sets" }}
+    >
         <Layout>
           <Layout.Section>
             <Card>
@@ -174,7 +179,6 @@ export default function AssetSetPreviewPage() {
           }}
         />
       </Page>
-    </AppProvider>
   );
 }
 

@@ -114,10 +114,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 export async function action({ request }: ActionFunctionArgs) {
-  const shopDomain = await getShopFromSession(request);
-  if (!shopDomain) {
-    return json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const { session } = await authenticate.admin(request);
+  const shopDomain = session.shop;
 
   const shop = await prisma.shop.findUnique({
     where: { shopDomain },
@@ -334,19 +332,17 @@ export default function AssetSetsPage() {
   // Check for upgrade required
   if ("error" in data && data.error === "upgrade_required") {
     return (
-      <AppProvider i18n={enTranslations}>
-        <Page title="Asset Sets">
-          <Layout>
-            <Layout.Section>
-              <Banner title="Upgrade Required" tone="warning">
-                <p>{data.message}</p>
-                <p>Current plan: <strong>{data.currentPlan}</strong></p>
-                <Button url="/app/billing">Upgrade to Pro</Button>
-              </Banner>
-            </Layout.Section>
-          </Layout>
-        </Page>
-      </AppProvider>
+      <Page title="Asset Sets">
+        <Layout>
+          <Layout.Section>
+            <Banner title="Upgrade Required" tone="warning">
+              <p>{data.message}</p>
+              <p>Current plan: <strong>{data.currentPlan}</strong></p>
+              <Button url="/app/billing">Upgrade to Pro</Button>
+            </Banner>
+          </Layout.Section>
+        </Layout>
+      </Page>
     );
   }
 
@@ -395,12 +391,11 @@ export default function AssetSetsPage() {
   ]);
 
   return (
-    <AppProvider i18n={enTranslations}>
-      <Page
-        title="Asset Sets"
-        backAction={{ content: "Dashboard", url: "/app" }}
-        primaryAction={{ content: "Create Asset Set", onAction: openCreateModal }}
-      >
+    <Page
+      title="Asset Sets"
+      backAction={{ content: "Dashboard", url: "/app" }}
+      primaryAction={{ content: "Create Asset Set", onAction: openCreateModal }}
+    >
         <Layout>
           {/* Action result banner */}
           {actionData && "success" in actionData && (
@@ -581,7 +576,6 @@ export default function AssetSetsPage() {
           </Modal.Section>
         </Modal>
       </Page>
-    </AppProvider>
   );
 }
 
