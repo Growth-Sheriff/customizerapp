@@ -1,0 +1,337 @@
+/**
+ * Confirmation Screen Styles
+ * ===========================
+ * FAZ 3: Cart Confirmation Overlay
+ * 
+ * Shows after successful cart addition with:
+ * - Cart items summary
+ * - Total price
+ * - Proceed to Checkout button
+ * - Continue Shopping button
+ * 
+ * Version: 1.0.0
+ * Architecture: DTF_TSHIRT_MODAL_ARCHITECTURE.md
+ */
+
+/* =============================================================================
+   CSS Variables (inherit from main)
+   ============================================================================= */
+:root {
+  --ul-confirm-z: 10000;
+  --ul-confirm-bg: rgba(0, 0, 0, 0.75);
+}
+
+/* =============================================================================
+   Overlay
+   ============================================================================= */
+.ul-confirm-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: var(--ul-confirm-bg);
+  z-index: var(--ul-confirm-z);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.ul-confirm-overlay.active {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: ulConfirmFadeIn 0.3s ease-out;
+}
+
+@keyframes ulConfirmFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* =============================================================================
+   Modal Container
+   ============================================================================= */
+.ul-confirm-modal {
+  background: #fff;
+  border-radius: 20px;
+  width: 90vw;
+  max-width: 540px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 25px 60px -12px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+  animation: ulConfirmSlideUp 0.35s ease-out;
+}
+
+@keyframes ulConfirmSlideUp {
+  from { 
+    opacity: 0; 
+    transform: translateY(30px) scale(0.95); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translateY(0) scale(1); 
+  }
+}
+
+/* =============================================================================
+   Header
+   ============================================================================= */
+.ul-confirm-header {
+  padding: 24px 24px 20px;
+  text-align: center;
+  border-bottom: 1px solid #e5e7eb;
+  background: linear-gradient(180deg, #f0fdf4 0%, #fff 100%);
+}
+
+.ul-confirm-icon {
+  width: 56px;
+  height: 56px;
+  background: #10b981;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 12px;
+  animation: ulConfirmPop 0.4s ease-out 0.2s both;
+}
+
+@keyframes ulConfirmPop {
+  0% { transform: scale(0); }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
+.ul-confirm-icon svg {
+  width: 28px;
+  height: 28px;
+  color: #fff;
+}
+
+.ul-confirm-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0;
+}
+
+.ul-confirm-subtitle {
+  font-size: 14px;
+  color: #6b7280;
+  margin-top: 4px;
+}
+
+/* =============================================================================
+   Body / Cart Items
+   ============================================================================= */
+.ul-confirm-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+}
+
+.ul-confirm-cart-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ul-confirm-cart-count {
+  background: #6366f1;
+  color: #fff;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+/* Cart Items List */
+.ul-confirm-items {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.ul-confirm-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  transition: transform 0.2s;
+}
+
+.ul-confirm-item:hover {
+  transform: translateX(4px);
+}
+
+.ul-confirm-item-icon {
+  width: 44px;
+  height: 44px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  flex-shrink: 0;
+}
+
+.ul-confirm-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.ul-confirm-item-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ul-confirm-item-meta {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.ul-confirm-item-price {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+  white-space: nowrap;
+}
+
+/* Cart Total */
+.ul-confirm-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 0;
+  border-top: 2px solid #e5e7eb;
+  margin-top: 8px;
+}
+
+.ul-confirm-total-label {
+  font-size: 16px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.ul-confirm-total-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+/* =============================================================================
+   Footer / Actions
+   ============================================================================= */
+.ul-confirm-footer {
+  padding: 20px 24px 24px;
+  border-top: 1px solid #e5e7eb;
+  background: #fafafa;
+}
+
+.ul-confirm-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ul-confirm-btn {
+  width: 100%;
+  padding: 16px 24px;
+  border: none;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transition: all 0.2s;
+}
+
+.ul-confirm-btn.primary {
+  background: #10b981;
+  color: #fff;
+}
+
+.ul-confirm-btn.primary:hover {
+  background: #059669;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.ul-confirm-btn.secondary {
+  background: #fff;
+  color: #374151;
+  border: 1px solid #d1d5db;
+}
+
+.ul-confirm-btn.secondary:hover {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+/* =============================================================================
+   Empty State
+   ============================================================================= */
+.ul-confirm-empty {
+  text-align: center;
+  padding: 32px 16px;
+  color: #6b7280;
+}
+
+.ul-confirm-empty-icon {
+  font-size: 40px;
+  margin-bottom: 12px;
+}
+
+.ul-confirm-empty-text {
+  font-size: 14px;
+}
+
+/* =============================================================================
+   Responsive
+   ============================================================================= */
+@media (max-width: 480px) {
+  .ul-confirm-modal {
+    width: 100%;
+    max-width: 100%;
+    max-height: 100%;
+    border-radius: 0;
+  }
+
+  .ul-confirm-header {
+    padding: 20px;
+  }
+
+  .ul-confirm-body {
+    padding: 16px 20px;
+  }
+
+  .ul-confirm-footer {
+    padding: 16px 20px 20px;
+  }
+
+  .ul-confirm-item {
+    padding: 12px;
+  }
+
+  .ul-confirm-btn {
+    padding: 14px 20px;
+  }
+}

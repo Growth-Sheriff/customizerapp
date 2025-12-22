@@ -1308,15 +1308,17 @@
       const success = await this.addToCart();
       
       if (success) {
-        this.showToast('✓ Added to cart! Redirecting to checkout...', 'success');
+        this.showToast('✓ Added to cart!', 'success');
         
         // Close modal
         this.close();
         
-        // Redirect to checkout
+        // Show confirmation screen (FAZ 3)
         setTimeout(() => {
-          window.location.href = '/checkout';
-        }, 1000);
+          document.dispatchEvent(new CustomEvent('ul:showConfirmation', {
+            detail: { source: 'tshirt-modal' }
+          }));
+        }, 300);
       }
     },
 

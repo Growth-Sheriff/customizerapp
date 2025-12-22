@@ -961,6 +961,13 @@
           bubbles: true
         }));
 
+        // Show confirmation screen (FAZ 3)
+        setTimeout(() => {
+          document.dispatchEvent(new CustomEvent('ul:showConfirmation', {
+            detail: { source: 'dtf-uploader', productId }
+          }));
+        }, 500);
+
         // Reset after 2 seconds
         setTimeout(() => {
           elements.addCartBtn.classList.remove('success');
