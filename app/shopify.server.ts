@@ -4,6 +4,7 @@ import {
   AppDistribution,
   shopifyApp,
   DeliveryMethod,
+  BillingInterval,
 } from "@shopify/shopify-app-remix/server";
 import { RedisSessionStorage } from "@shopify/shopify-app-session-storage-redis";
 import prisma from "~/lib/prisma.server";
@@ -12,6 +13,28 @@ import prisma from "~/lib/prisma.server";
 const redisSessionStorage = new RedisSessionStorage(
   process.env.REDIS_URL || "redis://localhost:6379"
 );
+
+// Billing plans configuration
+const BILLING_PLANS = {
+  STARTER: {
+    amount: 19,
+    currencyCode: "USD",
+    interval: BillingInterval.Every30Days,
+    trialDays: 7,
+  },
+  PRO: {
+    amount: 49,
+    currencyCode: "USD",
+    interval: BillingInterval.Every30Days,
+    trialDays: 7,
+  },
+  ENTERPRISE: {
+    amount: 199,
+    currencyCode: "USD",
+    interval: BillingInterval.Every30Days,
+    trialDays: 14,
+  },
+};
 
 const shopify = shopifyApp({
   apiKey: process.env.SHOPIFY_API_KEY || "",
@@ -29,6 +52,7 @@ const shopify = shopifyApp({
   sessionStorage: redisSessionStorage,
   distribution: AppDistribution.AppStore,
   isEmbeddedApp: true,
+  billing: BILLING_PLANS,
   webhooks: {
     APP_UNINSTALLED: {
       deliveryMethod: DeliveryMethod.Http,
