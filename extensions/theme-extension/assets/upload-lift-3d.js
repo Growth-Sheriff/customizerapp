@@ -670,11 +670,13 @@
     try {
       // Get upload intent
       updateProgress(10);
+      const shopDomain = window.Shopify?.shop || '';
       const intentResponse = await fetch(`${appUrl}/api/upload/intent`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
+          shopDomain,
           productId,
           variantId,
           mode: '3d_designer',
@@ -705,6 +707,7 @@
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
+          shopDomain,
           uploadId: intent.uploadId,
           items: [{
             itemId: intent.itemId,
@@ -753,9 +756,10 @@
   async function pollUploadStatus(uploadId, appUrl) {
     const maxAttempts = 30;
     let attempts = 0;
+    const shopDomain = window.Shopify?.shop || '';
 
     while (attempts < maxAttempts) {
-      const response = await fetch(`${appUrl}/api/upload/status/${uploadId}`, {
+      const response = await fetch(`${appUrl}/api/upload/status/${uploadId}?shopDomain=${encodeURIComponent(shopDomain)}`, {
         credentials: 'include',
       });
 

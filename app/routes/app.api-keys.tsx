@@ -37,7 +37,22 @@ export async function loader({ request }: LoaderFunctionArgs) {
   });
 
   if (!shop) {
-    return redirect("/auth/install");
+    shop = await prisma.shop.create({
+      data: {
+        shopDomain,
+        accessToken: session.accessToken || "",
+        plan: "free",
+        billingStatus: "active",
+        storageProvider: "r2",
+        settings: {},
+      },
+      include: {
+        apiKeys: {
+          where: { status: "active" },
+          orderBy: { createdAt: "desc" },
+        },
+      },
+    });
   }
 
   return json({

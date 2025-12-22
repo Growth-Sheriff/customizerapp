@@ -320,6 +320,7 @@
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
       body: JSON.stringify({
+        shopDomain: window.Shopify?.shop || CONFIG.shopDomain,
         productId: state.productId,
         variantId: state.variantId,
         mode: state.mode,
@@ -357,6 +358,7 @@
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
       body: JSON.stringify({
+        shopDomain: window.Shopify?.shop || CONFIG.shopDomain,
         uploadId: state.uploadId,
         items: [{
           itemId: state.itemId,
@@ -379,9 +381,10 @@
 
   async function pollPreflightStatus() {
     let attempts = 0;
+    const shopDomain = window.Shopify?.shop || CONFIG.shopDomain;
 
     while (attempts < CONFIG.maxPollAttempts) {
-      const response = await fetch(`${CONFIG.apiBase}/api/upload/status/${state.uploadId}`, {
+      const response = await fetch(`${CONFIG.apiBase}/api/upload/status/${state.uploadId}?shopDomain=${encodeURIComponent(shopDomain)}`, {
         credentials: 'include',
       });
 

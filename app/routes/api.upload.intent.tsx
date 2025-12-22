@@ -1,7 +1,6 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { nanoid } from "nanoid";
-import { getShopFromSession, getAccessTokenFromSession } from "~/lib/session.server";
 import { getStorageConfig, getUploadSignedUrl, buildStorageKey } from "~/lib/storage.server";
 import { rateLimitGuard, getIdentifier } from "~/lib/rateLimit.server";
 import { checkUploadAllowed } from "~/lib/billing.server";
@@ -16,11 +15,30 @@ const PLAN_LIMITS = {
 };
 
 // POST /api/upload/intent
-// Request: { productId?, variantId?, mode, contentType, fileName }
+// Request: { shopDomain, productId?, variantId?, mode, contentType, fileName }
 // Response: { uploadId, itemId, uploadUrl, key, expiresIn }
 export async function action({ request }: ActionFunctionArgs) {
   if (request.method !== "POST") {
     return json({ error: "Method not allowed" }, { status: 405 });
+  }
+
+  // Parse request body first to get shopDomain
+  let body: any;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  const { shopDomain, productId, variantId, mode, contentType, fileName, fileSize } = body;
+
+  // Validate required fields
+  if (!shopDomain) {
+    return json({ error: "Missing required field: shopDomain" }, { status: 400 });
+  }
+
+  if (!mode || !contentType || !fileName) {
+    return json({ error: "Missing required fields: mode, contentType, fileName" }, { status: 400 });
   }
 
   // Rate limit check (10/min per customer)
@@ -28,13 +46,6 @@ export async function action({ request }: ActionFunctionArgs) {
   const rateLimitResponse = await rateLimitGuard(identifier, "uploadIntent");
   if (rateLimitResponse) {
     return rateLimitResponse;
-  }
-
-  const shopDomain = await getShopFromSession(request);
-  const accessToken = await getAccessTokenFromSession(request);
-
-  if (!shopDomain || !accessToken) {
-    return json({ error: "Unauthorized" }, { status: 401 });
   }
 
   // Get shop from database
@@ -46,13 +57,6 @@ export async function action({ request }: ActionFunctionArgs) {
     return json({ error: "Shop not found" }, { status: 404 });
   }
 
-  // Parse request body
-  const body = await request.json();
-  const { productId, variantId, mode, contentType, fileName, fileSize } = body;
-
-  if (!mode || !contentType || !fileName) {
-    return json({ error: "Missing required fields: mode, contentType, fileName" }, { status: 400 });
-  }
 
   // Validate mode
   if (!["3d_designer", "classic", "quick"].includes(mode)) {

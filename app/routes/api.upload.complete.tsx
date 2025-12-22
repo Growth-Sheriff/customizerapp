@@ -1,6 +1,5 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { getShopFromSession } from "~/lib/session.server";
 import { triggerUploadReceived } from "~/lib/flow.server";
 import prisma from "~/lib/prisma.server";
 import { Queue } from "bullmq";
@@ -14,15 +13,27 @@ const getRedisConnection = () => {
 };
 
 // POST /api/upload/complete
-// Request: { uploadId, items: [{ itemId, location, transform? }] }
+// Request: { shopDomain, uploadId, items: [{ itemId, location, transform? }] }
 export async function action({ request }: ActionFunctionArgs) {
   if (request.method !== "POST") {
     return json({ error: "Method not allowed" }, { status: 405 });
   }
 
-  const shopDomain = await getShopFromSession(request);
+  let body: any;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  const { shopDomain, uploadId, items } = body;
+
   if (!shopDomain) {
-    return json({ error: "Unauthorized" }, { status: 401 });
+    return json({ error: "Missing required field: shopDomain" }, { status: 400 });
+  }
+
+  if (!uploadId || !items || !Array.isArray(items)) {
+    return json({ error: "Missing required fields: uploadId, items" }, { status: 400 });
   }
 
   const shop = await prisma.shop.findUnique({
@@ -33,12 +44,6 @@ export async function action({ request }: ActionFunctionArgs) {
     return json({ error: "Shop not found" }, { status: 404 });
   }
 
-  const body = await request.json();
-  const { uploadId, items } = body;
-
-  if (!uploadId || !items || !Array.isArray(items)) {
-    return json({ error: "Missing required fields" }, { status: 400 });
-  }
 
   // Verify upload belongs to shop
   const upload = await prisma.upload.findFirst({
@@ -110,11 +115,18 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 }
 
-// GET /api/upload/complete?uploadId=xxx (get upload status)
+// GET /api/upload/complete?uploadId=xxx&shopDomain=xxx (get upload status)
 export async function loader({ request }: LoaderFunctionArgs) {
-  const shopDomain = await getShopFromSession(request);
+  const url = new URL(request.url);
+  const uploadId = url.searchParams.get("uploadId");
+  const shopDomain = url.searchParams.get("shopDomain");
+
   if (!shopDomain) {
-    return json({ error: "Unauthorized" }, { status: 401 });
+    return json({ error: "Missing shopDomain" }, { status: 400 });
+  }
+
+  if (!uploadId) {
+    return json({ error: "Missing uploadId" }, { status: 400 });
   }
 
   const shop = await prisma.shop.findUnique({
@@ -125,12 +137,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
     return json({ error: "Shop not found" }, { status: 404 });
   }
 
-  const url = new URL(request.url);
-  const uploadId = url.searchParams.get("uploadId");
-
-  if (!uploadId) {
-    return json({ error: "Missing uploadId" }, { status: 400 });
-  }
 
   const upload = await prisma.upload.findFirst({
     where: { id: uploadId, shopId: shop.id },

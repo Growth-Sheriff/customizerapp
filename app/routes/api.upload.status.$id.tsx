@@ -1,13 +1,14 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { getShopFromSession } from "~/lib/session.server";
 import prisma from "~/lib/prisma.server";
 
-// GET /api/upload/status/:id
+// GET /api/upload/status/:id?shopDomain=xxx
 export async function loader({ request, params }: LoaderFunctionArgs) {
-  const shopDomain = await getShopFromSession(request);
+  const url = new URL(request.url);
+  const shopDomain = url.searchParams.get("shopDomain");
+
   if (!shopDomain) {
-    return json({ error: "Unauthorized" }, { status: 401 });
+    return json({ error: "Missing shopDomain" }, { status: 400 });
   }
 
   const shop = await prisma.shop.findUnique({
