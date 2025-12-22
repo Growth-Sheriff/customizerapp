@@ -1,16 +1,71 @@
-import type { LoaderFunctionArgs } from "@remix-run/node";
+import { useState } from "react";
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
+import { Form, useActionData, useLoaderData } from "@remix-run/react";
+import {
+  AppProvider as PolarisAppProvider,
+  Button,
+  Card,
+  FormLayout,
+  Page,
+  Text,
+  TextField,
+} from "@shopify/polaris";
+import polarisTranslations from "@shopify/polaris/locales/en.json";
+import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
+
 import { login } from "~/shopify.server";
 
-export async function loader({ request }: LoaderFunctionArgs) {
-  // Delegate to shopify login
-  const url = new URL(request.url);
-  const shop = url.searchParams.get("shop");
-  
-  // If no shop provided, return error
-  if (!shop) {
-    return new Response("Missing shop parameter", { status: 400 });
+export const links = () => [{ rel: "stylesheet", href: polarisStyles }];
+
+export const loader = async ({ request }: LoaderFunctionArgs) => {
+  const errors = loginErrorMessage(await login(request));
+  return { errors, polarisTranslations };
+};
+
+export const action = async ({ request }: ActionFunctionArgs) => {
+  const errors = loginErrorMessage(await login(request));
+  return { errors };
+};
+
+function loginErrorMessage(loginErrors: any) {
+  if (loginErrors?.shop === "MissingShop") {
+    return { shop: "Please enter your shop domain to log in" };
+  } else if (loginErrors?.shop === "InvalidShop") {
+    return { shop: "Please enter a valid shop domain to log in" };
   }
-  
-  // Return the login redirect
-  return login(request);
+  return {};
+}
+
+export default function Auth() {
+  const loaderData = useLoaderData<typeof loader>();
+  const actionData = useActionData<typeof action>();
+  const [shop, setShop] = useState("");
+  const { errors } = actionData || loaderData;
+
+  return (
+    <PolarisAppProvider i18n={loaderData.polarisTranslations}>
+      <Page>
+        <Card>
+          <Form method="post">
+            <FormLayout>
+              <Text variant="headingMd" as="h2">
+                Log in
+              </Text>
+              <TextField
+                type="text"
+                name="shop"
+                label="Shop domain"
+                helpText="example.myshopify.com"
+                value={shop}
+                onChange={setShop}
+                autoComplete="on"
+                error={errors?.shop}
+              />
+              <Button submit>Log in</Button>
+            </FormLayout>
+          </Form>
+        </Card>
+      </Page>
+    </PolarisAppProvider>
+  );
 }
