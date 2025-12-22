@@ -795,17 +795,33 @@
       // Calculate price
       this.calculatePrice();
       
-      // Check for 3D support and initialize
-      if (this.supports3D()) {
+      // Wait for Three.js to load, then initialize 3D
+      this.waitForThreeJS();
+    },
+    
+    // Wait for Three.js to be available
+    waitForThreeJS(attempts = 0) {
+      const maxAttempts = 20; // 2 seconds max wait
+      
+      if (typeof THREE !== 'undefined') {
+        console.log('[ULTShirtModal] Three.js loaded, initializing 3D');
         this.init3D();
-      } else {
-        this.initFallback2D();
+        return;
       }
+      
+      if (attempts >= maxAttempts) {
+        console.warn('[ULTShirtModal] Three.js failed to load, using 2D fallback');
+        this.initFallback2D();
+        return;
+      }
+      
+      // Wait and retry
+      setTimeout(() => this.waitForThreeJS(attempts + 1), 100);
     },
     
     // FAZ 6: 3D Support Detection
     supports3D() {
-      // Check WebGL2 support
+      // Check WebGL support only - be more permissive
       const canvas = document.createElement('canvas');
       const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
       
@@ -814,20 +830,13 @@
         return false;
       }
       
-      // Check hardware capability
-      const cores = navigator.hardwareConcurrency || 2;
-      if (cores < 4) {
-        console.log('[ULTShirtModal] Low CPU cores:', cores);
+      // Check if Three.js is loaded
+      if (typeof THREE === 'undefined') {
+        console.log('[ULTShirtModal] Three.js not yet loaded');
         return false;
       }
       
-      // Check mobile performance hint
-      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-      const isLowEndMobile = isMobile && (cores < 6 || navigator.deviceMemory < 4);
-      
-      if (isLowEndMobile) {
-        console.log('[ULTShirtModal] Low-end mobile detected');
-        return false;
+      return true;
       }
       
       return true;
