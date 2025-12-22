@@ -1,18 +1,16 @@
 import type { LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node";
-import { json, redirect } from "@remix-run/node";
+import { json } from "@remix-run/node";
 import { useLoaderData, useActionData, Form, useNavigation, Link } from "@remix-run/react";
 import {
-  AppProvider, Page, Layout, Card, Text, BlockStack, InlineStack,
+  Page, Layout, Card, Text, BlockStack, InlineStack,
   Button, Banner, DataTable, Badge, Modal, TextField, Select,
   FormLayout, Checkbox, EmptyState
 } from "@shopify/polaris";
-import enTranslations from "@shopify/polaris/locales/en.json";
 import { useState, useCallback } from "react";
-import { getShopFromSession } from "~/lib/session.server";
-import { shopifyGraphQL } from "~/lib/shopify.server";
+import { authenticate } from "~/shopify.server";
 import prisma from "~/lib/prisma.server";
 
-// GraphQL query to fetch products
+// GraphQL query to fetch products - 2025-10 compatible
 const PRODUCTS_QUERY = `
   query getProducts($first: Int!, $after: String) {
     products(first: $first, after: $after) {
@@ -35,17 +33,24 @@ const PRODUCTS_QUERY = `
 `;
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const shopDomain = await getShopFromSession(request);
-  if (!shopDomain) {
-    return redirect("/auth/install");
-  }
+  const { session, admin } = await authenticate.admin(request);
+  const shopDomain = session.shop;
 
-  const shop = await prisma.shop.findUnique({
+  let shop = await prisma.shop.findUnique({
     where: { shopDomain },
   });
 
   if (!shop) {
-    return redirect("/auth/install");
+    shop = await prisma.shop.create({
+      data: {
+        shopDomain,
+        accessToken: session.accessToken || "",
+        plan: "free",
+        billingStatus: "active",
+        storageProvider: "r2",
+        settings: {},
+      },
+    });
   }
 
   // Get product configs from our database
@@ -121,10 +126,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 export async function action({ request }: ActionFunctionArgs) {
-  const shopDomain = await getShopFromSession(request);
-  if (!shopDomain) {
-    return json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const { session } = await authenticate.admin(request);
+  const shopDomain = session.shop;
 
   const shop = await prisma.shop.findUnique({
     where: { shopDomain },

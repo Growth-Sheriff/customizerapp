@@ -1,14 +1,13 @@
 import type { LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node";
-import { json, redirect } from "@remix-run/node";
+import { json } from "@remix-run/node";
 import { useLoaderData, useActionData, Form, useNavigation } from "@remix-run/react";
 import {
-  AppProvider, Page, Layout, Card, Text, BlockStack, InlineStack,
+  Page, Layout, Card, Text, BlockStack, InlineStack,
   Button, Banner, DataTable, Badge, Modal, TextField, Select,
   EmptyState, Box, Checkbox
 } from "@shopify/polaris";
-import enTranslations from "@shopify/polaris/locales/en.json";
 import { useState, useCallback } from "react";
-import { getShopFromSession } from "~/lib/session.server";
+import { authenticate } from "~/shopify.server";
 import prisma from "~/lib/prisma.server";
 import { nanoid } from "nanoid";
 import crypto from "crypto";
@@ -24,12 +23,10 @@ const API_PERMISSIONS = [
 ];
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const shopDomain = await getShopFromSession(request);
-  if (!shopDomain) {
-    return redirect("/auth/install");
-  }
+  const { session } = await authenticate.admin(request);
+  const shopDomain = session.shop;
 
-  const shop = await prisma.shop.findUnique({
+  let shop = await prisma.shop.findUnique({
     where: { shopDomain },
     include: {
       apiKeys: {
@@ -60,10 +57,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 export async function action({ request }: ActionFunctionArgs) {
-  const shopDomain = await getShopFromSession(request);
-  if (!shopDomain) {
-    return json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const { session } = await authenticate.admin(request);
+  const shopDomain = session.shop;
 
   const shop = await prisma.shop.findUnique({
     where: { shopDomain },

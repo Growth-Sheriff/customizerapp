@@ -1,14 +1,13 @@
 import type { LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node";
-import { json, redirect } from "@remix-run/node";
+import { json } from "@remix-run/node";
 import { useLoaderData, useActionData, Form, useNavigation } from "@remix-run/react";
 import {
-  AppProvider, Page, Layout, Card, Text, BlockStack, InlineStack,
+  Page, Layout, Card, Text, BlockStack, InlineStack,
   Button, Banner, DataTable, Badge, Modal, TextField, Select,
   FormLayout, EmptyState, Thumbnail, Box
 } from "@shopify/polaris";
-import enTranslations from "@shopify/polaris/locales/en.json";
 import { useState, useCallback } from "react";
-import { getShopFromSession } from "~/lib/session.server";
+import { authenticate } from "~/shopify.server";
 import prisma from "~/lib/prisma.server";
 import { getStorageConfig, getUploadSignedUrl } from "~/lib/storage.server";
 
@@ -56,17 +55,24 @@ const DEFAULT_CAMERA_PRESETS = [
 ];
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const shopDomain = await getShopFromSession(request);
-  if (!shopDomain) {
-    return redirect("/auth/install");
-  }
+  const { session } = await authenticate.admin(request);
+  const shopDomain = session.shop;
 
-  const shop = await prisma.shop.findUnique({
+  let shop = await prisma.shop.findUnique({
     where: { shopDomain },
   });
 
   if (!shop) {
-    return redirect("/auth/install");
+    shop = await prisma.shop.create({
+      data: {
+        shopDomain,
+        accessToken: session.accessToken || "",
+        plan: "free",
+        billingStatus: "active",
+        storageProvider: "r2",
+        settings: {},
+      },
+    });
   }
 
   // Check plan - 3D Designer requires Pro or Enterprise
