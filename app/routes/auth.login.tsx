@@ -6,16 +6,33 @@ import { login } from "~/shopify.server";
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const shop = url.searchParams.get("shop");
-  const errors = url.searchParams.get("errors");
 
-  // If shop is provided, try to login
+  // If we have shop parameter, start OAuth flow
   if (shop) {
     throw await login(request);
   }
 
+  // Check if this is an embedded request that should not show login
+  const embedded = url.searchParams.get("embedded");
+  const host = url.searchParams.get("host");
+
+  if (embedded === "1" || host) {
+    // For embedded apps, redirect back to main app to trigger proper auth
+    const shopParam = url.searchParams.get("shop");
+    if (shopParam) {
+      return redirect(`/?shop=${shopParam}&embedded=1&host=${host}`);
+    }
+    // If no shop, we can't do anything - show minimal error
+    return json({
+      showForm: false,
+      error: "Missing shop parameter for embedded app",
+    });
+  }
+
+  // Non-embedded access without shop - show install form
   return json({
     showForm: true,
-    errors: errors ? JSON.parse(errors) : null,
+    errors: null,
   });
 }
 
