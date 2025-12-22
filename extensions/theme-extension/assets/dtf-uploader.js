@@ -1,7 +1,8 @@
 /**
- * UL DTF Uploader v4.0.0
+ * UL DTF Uploader v4.1.0
  * ======================
  * FAZ 1: Core DTF Upload Widget
+ * FAZ 4: Global State Integration
  * 
  * Features:
  * - File upload with drag & drop
@@ -10,16 +11,18 @@
  * - Extra questions from merchant config
  * - Add to Cart with line item properties
  * - T-Shirt modal integration (FAZ 2)
+ * - Global state sync (FAZ 4)
  * 
  * State Management Architecture:
  * - Each product has its own isolated state
  * - State changes trigger UI updates
  * - Events dispatched for external integrations
+ * - Syncs with ULState global store (FAZ 4)
  * 
  * Prepared for:
  * - FAZ 2: T-Shirt Modal (event: ul:openTShirtModal)
  * - FAZ 3: Confirmation Screen
- * - FAZ 4: Global State sync
+ * - FAZ 4: Global State sync ✓
  */
 
 (function() {
@@ -480,6 +483,23 @@
       state.upload.progress = 0;
       state.upload.file = { name: file.name, size: file.size, type: file.type };
 
+      // Sync with global state (FAZ 4)
+      if (window.ULState) {
+        window.ULState.set('upload.status', 'uploading');
+        window.ULState.set('upload.fileName', file.name);
+        window.ULState.set('upload.fileSize', file.size);
+        window.ULState.set('upload.mimeType', file.type);
+      }
+
+      // Emit global event (FAZ 4)
+      if (window.ULEvents) {
+        window.ULEvents.emit('uploadStart', { 
+          fileName: file.name, 
+          fileSize: file.size, 
+          productId 
+        });
+      }
+
       // Show progress UI
       elements.dropzone.style.display = 'none';
       elements.progress.classList.add('active');
@@ -623,6 +643,36 @@
             elements.uploadUrlField.value = state.upload.result.originalUrl;
             elements.thumbnailUrlField.value = state.upload.result.thumbnailUrl;
 
+            // Sync with global state (FAZ 4)
+            if (window.ULState) {
+              window.ULState.setUploadComplete({
+                id: uploadId,
+                thumbnailUrl: state.upload.result.thumbnailUrl,
+                url: state.upload.result.originalUrl,
+                name: state.upload.file.name,
+                size: state.upload.file.size,
+                mimeType: state.upload.file.type,
+                dimensions: {
+                  width: state.upload.result.width,
+                  height: state.upload.result.height,
+                  dpi: state.upload.result.dpi
+                }
+              });
+              
+              // Update DTF state
+              window.ULState.set('dtf.productId', productId);
+            }
+
+            // Emit global event (FAZ 4)
+            if (window.ULEvents) {
+              window.ULEvents.emit('uploadComplete', {
+                uploadId,
+                productId,
+                thumbnailUrl: state.upload.result.thumbnailUrl,
+                originalUrl: state.upload.result.originalUrl
+              });
+            }
+
             // Show preview
             this.showPreview(productId);
             elements.progress.classList.remove('active');
@@ -754,6 +804,11 @@
         error: null
       };
 
+      // Sync with global state (FAZ 4)
+      if (window.ULState) {
+        window.ULState.clearUpload();
+      }
+
       // Reset hidden fields
       elements.uploadIdField.value = '';
       elements.uploadUrlField.value = '';
@@ -864,6 +919,17 @@
       if (state.upload.status !== 'ready') {
         this.showError(productId, 'Please upload your design first.');
         return;
+      }
+
+      // Update global state (FAZ 4)
+      if (window.ULState) {
+        window.ULState.set('tshirt.useInheritedDesign', true);
+        window.ULState.openTShirtModal();
+      }
+
+      // Emit global event (FAZ 4)
+      if (window.ULEvents) {
+        window.ULEvents.emit('modalOpen', { source: 'dtf-uploader', productId });
       }
 
       // Dispatch event for tshirt-modal.js (FAZ 2)

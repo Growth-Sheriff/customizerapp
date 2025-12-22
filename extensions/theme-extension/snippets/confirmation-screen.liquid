@@ -2,6 +2,7 @@
   Confirmation Screen Snippet
   ============================
   FAZ 3: Cart Confirmation Overlay
+  FAZ 4: Global State Integration
   
   Usage: {% render 'confirmation-screen' %}
   
@@ -11,10 +12,11 @@
   - Shows cart total
   - Proceed to Checkout button
   - Continue Shopping button
+  - Global state sync (FAZ 4)
   
   Triggered by: ul:showConfirmation event
   
-  Version: 1.0.0
+  Version: 1.1.0
   Architecture: DTF_TSHIRT_MODAL_ARCHITECTURE.md
 {% endcomment %}
 
@@ -91,7 +93,19 @@
     init() {
       this.cacheElements();
       this.bindEvents();
-      console.log('[ULConfirmation] Initialized v1.0.0');
+      
+      // Subscribe to global state changes (FAZ 4)
+      if (window.ULState) {
+        window.ULState.subscribe('ui.confirmationOpen', (isOpen) => {
+          if (isOpen && !this.isOpen) {
+            this.show({});
+          } else if (!isOpen && this.isOpen) {
+            this.close();
+          }
+        });
+      }
+      
+      console.log('[ULConfirmation] Initialized v1.1.0');
     },
 
     cacheElements() {
@@ -140,8 +154,20 @@
     },
 
     async show(detail = {}) {
+      // Sync with global state (FAZ 4)
+      if (window.ULState) {
+        window.ULState.set('ui.confirmationOpen', true);
+      }
+      
       // Fetch current cart
       await this.fetchCart();
+      
+      // Sync cart data to global state (FAZ 4)
+      if (window.ULState && this.cartData) {
+        window.ULState.set('cart.items', this.cartData.items);
+        window.ULState.set('cart.itemCount', this.cartData.item_count);
+        window.ULState.set('cart.totalPrice', this.cartData.total_price);
+      }
 
       // Update UI
       this.render();
@@ -156,6 +182,16 @@
       this.el.overlay?.classList.remove('active');
       this.isOpen = false;
       document.body.style.overflow = '';
+      
+      // Sync with global state (FAZ 4)
+      if (window.ULState) {
+        window.ULState.set('ui.confirmationOpen', false);
+      }
+      
+      // Emit global event (FAZ 4)
+      if (window.ULEvents) {
+        window.ULEvents.emit('hideConfirmation', {});
+      }
     },
 
     async fetchCart() {

@@ -2,14 +2,16 @@
  * T-Shirt Modal - 4-Step Wizard with 3D Preview
  * ==============================================
  * FAZ 2: Complete T-Shirt Designer Modal
+ * FAZ 4: Global State Integration
  * 
  * Features:
  * - Step 1: Upload (inherited or new design)
  * - Step 2: 3D Preview + Options (color, size, locations)
  * - Step 3: Extra Questions & Quantity
  * - Step 4: Review & Actions
+ * - Global state sync (FAZ 4)
  * 
- * Version: 4.0.0
+ * Version: 4.1.0
  * Architecture: DTF_TSHIRT_MODAL_ARCHITECTURE.md
  */
 
@@ -299,6 +301,24 @@
       // Reset state
       this.resetState();
       
+      // Sync with global state (FAZ 4)
+      if (window.ULState) {
+        window.ULState.set('tshirt.isModalOpen', true);
+        window.ULState.set('tshirt.currentStep', 1);
+        if (uploadData) {
+          window.ULState.set('tshirt.useInheritedDesign', true);
+        }
+      }
+      
+      // Emit global event (FAZ 4)
+      if (window.ULEvents) {
+        window.ULEvents.emit('modalOpen', { 
+          source: 'tshirt-modal', 
+          productId,
+          hasInheritedDesign: !!uploadData 
+        });
+      }
+      
       // Show modal
       this.el.overlay?.classList.add('active');
       this.isOpen = true;
@@ -315,6 +335,16 @@
       this.el.overlay?.classList.remove('active');
       this.isOpen = false;
       document.body.style.overflow = '';
+      
+      // Sync with global state (FAZ 4)
+      if (window.ULState) {
+        window.ULState.set('tshirt.isModalOpen', false);
+      }
+      
+      // Emit global event (FAZ 4)
+      if (window.ULEvents) {
+        window.ULEvents.emit('modalClose', { source: 'tshirt-modal' });
+      }
       
       // Cleanup 3D
       this.cleanup3D();
@@ -360,6 +390,16 @@
     // ==========================================================================
     goToStep(step) {
       this.currentStep = step;
+      
+      // Sync with global state (FAZ 4)
+      if (window.ULState) {
+        window.ULState.set('tshirt.currentStep', step);
+      }
+      
+      // Emit global event (FAZ 4)
+      if (window.ULEvents) {
+        window.ULEvents.emit('stepChange', { step, source: 'tshirt-modal' });
+      }
       
       // Update step indicators
       this.el.stepItems?.forEach((item, idx) => {
@@ -720,6 +760,16 @@
       this.step2.tshirtColor = hex;
       this.step2.tshirtColorName = name;
       
+      // Sync with global state (FAZ 4)
+      if (window.ULState) {
+        window.ULState.set('tshirt.color', { name, hex });
+      }
+      
+      // Emit global event (FAZ 4)
+      if (window.ULEvents) {
+        window.ULEvents.emit('colorChange', { name, hex });
+      }
+      
       // Update UI
       this.el.colorGrid?.querySelectorAll('.ul-color-swatch').forEach(s => {
         s.classList.toggle('active', s.title === name);
@@ -731,6 +781,17 @@
 
     setSize(size) {
       this.step2.tshirtSize = size;
+      
+      // Sync with global state (FAZ 4)
+      if (window.ULState) {
+        window.ULState.set('tshirt.size', size);
+      }
+      
+      // Emit global event (FAZ 4)
+      if (window.ULEvents) {
+        window.ULEvents.emit('sizeChange', { size });
+      }
+      
       this.calculatePrice();
     },
 
@@ -739,6 +800,16 @@
       if (!loc) return;
       
       loc.enabled = !loc.enabled;
+      
+      // Sync with global state (FAZ 4)
+      if (window.ULState) {
+        window.ULState.set(`tshirt.locations.${locationId}.enabled`, loc.enabled);
+      }
+      
+      // Emit global event (FAZ 4)
+      if (window.ULEvents) {
+        window.ULEvents.emit('locationToggle', { locationId, enabled: loc.enabled });
+      }
       
       // Update UI
       const item = document.querySelector(`.ul-location-item[data-location="${locationId}"]`);
@@ -760,6 +831,11 @@
 
     setActiveLocation(locationId) {
       this.step2.activeLocation = locationId;
+      
+      // Sync with global state (FAZ 4)
+      if (window.ULState) {
+        window.ULState.set('tshirt.activeLocation', locationId);
+      }
       
       // Update settings UI
       this.updateLocationSettingsUI();
@@ -1310,11 +1386,31 @@
       if (success) {
         this.showToast('✓ Added to cart!', 'success');
         
+        // Emit global event (FAZ 4)
+        if (window.ULEvents) {
+          window.ULEvents.emit('addToCart', { 
+            source: 'tshirt-modal',
+            color: this.step2.tshirtColorName,
+            size: this.step2.tshirtSize,
+            quantity: this.step3.quantity,
+            locations: Object.keys(this.step2.locations).filter(k => this.step2.locations[k].enabled)
+          });
+        }
+        
         // Close modal
         this.close();
         
         // Show confirmation screen (FAZ 3)
         setTimeout(() => {
+          // Emit confirmation event via global state (FAZ 4)
+          if (window.ULState) {
+            window.ULState.openConfirmation();
+          }
+          
+          if (window.ULEvents) {
+            window.ULEvents.emit('showConfirmation', { source: 'tshirt-modal' });
+          }
+          
           document.dispatchEvent(new CustomEvent('ul:showConfirmation', {
             detail: { source: 'tshirt-modal' }
           }));
