@@ -138,8 +138,12 @@ export async function action({ request }: ActionFunctionArgs) {
   const uploadId = nanoid(12);
   const itemId = nanoid(8);
 
-  // Get storage config
-  const storageConfig = getStorageConfig(shop.storageConfig as any);
+  // Get storage config - merge storageProvider with storageConfig
+  const shopStorageConfig = {
+    provider: shop.storageProvider || 'local',
+    ...((shop.storageConfig as Record<string, unknown>) || {}),
+  };
+  const storageConfig = getStorageConfig(shopStorageConfig as any);
 
   // Build storage key
   const key = buildStorageKey(shopDomain, uploadId, itemId, fileName);
