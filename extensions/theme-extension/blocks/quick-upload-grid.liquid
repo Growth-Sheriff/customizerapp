@@ -9,7 +9,7 @@
     Debug mode: Set to true to show block even when not configured
     Change to false in production
   endcomment
-  assign debug_mode = false
+  assign debug_mode = true
 %}
 
 <div id="upload-lift-quick" class="ul-quick-grid" data-app-url="{{ shop.metafields.upload_lift.app_url | default: 'https://customizerapp.dev' }}" data-shop-domain="{{ shop.permanent_domain }}" data-debug="{{ debug_mode }}">
@@ -24,12 +24,10 @@
       {% assign upload_mode = 'classic' %}
     {% endif %}
 
-    {% assign should_show = false %}
-    {% if debug_mode %}
-      {% assign should_show = true %}
-    {% elsif upload_enabled == true and upload_mode == 'quick' %}
-      {% assign should_show = true %}
-    {% endif %}
+    {% comment %}
+      DEBUG: Temporarily show block always for testing
+    {% endcomment %}
+    {% assign should_show = true %}
 
     {% if should_show %}
     <div

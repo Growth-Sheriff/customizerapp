@@ -30,15 +30,24 @@
     Debug mode: Set to true to show block even when not configured
     Change to false in production
   endcomment
-  assign debug_mode = false
+  assign debug_mode = true
 %}
 
-{% assign should_show = false %}
-{% if debug_mode %}
-  {% assign should_show = true %}
-{% elsif upload_enabled == true and upload_mode == 'classic' %}
-  {% assign should_show = true %}
-{% endif %}
+{% comment %}
+  DEBUG: Temporarily show block always for testing
+  Remove this and uncomment the condition below for production
+{% endcomment %}
+{% assign should_show = true %}
+
+{% comment %}
+  Production condition:
+  {% assign should_show = false %}
+  {% if debug_mode %}
+    {% assign should_show = true %}
+  {% elsif upload_enabled == true and upload_mode == 'classic' %}
+    {% assign should_show = true %}
+  {% endif %}
+{% endcomment %}
 
 {% if should_show %}
 <div

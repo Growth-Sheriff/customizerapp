@@ -36,15 +36,13 @@
     Debug mode: Set to true to show block even when not configured
     Change to false in production
   endcomment
-  assign debug_mode = false
+  assign debug_mode = true
 %}
 
-{% assign should_show = false %}
-{% if debug_mode %}
-  {% assign should_show = true %}
-{% elsif upload_enabled == true and upload_mode == '3d_designer' %}
-  {% assign should_show = true %}
-{% endif %}
+{% comment %}
+  DEBUG: Temporarily show block always for testing
+{% endcomment %}
+{% assign should_show = true %}
 
 {% if should_show %}
 <div
