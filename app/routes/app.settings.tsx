@@ -169,6 +169,18 @@ export default function SettingsPage() {
 
   const [provider, setProvider] = useState(storageConfig.provider);
 
+  // Form state for general settings
+  const [shopName, setShopName] = useState(settings.shopName as string);
+  const [notificationEmail, setNotificationEmail] = useState(settings.notificationEmail as string);
+
+  // Form state for storage settings
+  const [bucket, setBucket] = useState(storageConfig.bucket as string);
+  const [accountId, setAccountId] = useState(storageConfig.accountId as string);
+  const [region, setRegion] = useState((storageConfig.region as string) || "us-east-1");
+  const [accessKeyId, setAccessKeyId] = useState(storageConfig.accessKeyId as string);
+  const [secretAccessKey, setSecretAccessKey] = useState(storageConfig.secretAccessKey as string);
+  const [publicUrl, setPublicUrl] = useState(storageConfig.publicUrl as string);
+
   const handleProviderChange = useCallback((value: string) => {
     setProvider(value);
   }, []);
@@ -205,7 +217,8 @@ export default function SettingsPage() {
                     <TextField
                       label="Shop Name"
                       name="shopName"
-                      defaultValue={settings.shopName as string}
+                      value={shopName}
+                      onChange={setShopName}
                       autoComplete="off"
                     />
 
@@ -213,7 +226,8 @@ export default function SettingsPage() {
                       label="Notification Email"
                       name="notificationEmail"
                       type="email"
-                      defaultValue={settings.notificationEmail as string}
+                      value={notificationEmail}
+                      onChange={setNotificationEmail}
                       helpText="Receive notifications about uploads and orders"
                       autoComplete="off"
                     />
@@ -256,7 +270,8 @@ export default function SettingsPage() {
                     <TextField
                       label="Bucket Name"
                       name="bucket"
-                      defaultValue={storageConfig.bucket as string}
+                      value={bucket}
+                      onChange={setBucket}
                       placeholder="upload-lift-files"
                       autoComplete="off"
                     />
@@ -265,7 +280,8 @@ export default function SettingsPage() {
                       <TextField
                         label="Cloudflare Account ID"
                         name="accountId"
-                        defaultValue={storageConfig.accountId as string}
+                        value={accountId}
+                        onChange={setAccountId}
                         helpText="Found in your Cloudflare dashboard"
                         autoComplete="off"
                       />
@@ -282,14 +298,16 @@ export default function SettingsPage() {
                           { label: "EU (Frankfurt)", value: "eu-central-1" },
                           { label: "Asia Pacific (Singapore)", value: "ap-southeast-1" },
                         ]}
-                        value={(storageConfig.region as string) || "us-east-1"}
+                        value={region}
+                        onChange={setRegion}
                       />
                     )}
 
                     <TextField
                       label="Access Key ID"
                       name="accessKeyId"
-                      defaultValue={storageConfig.accessKeyId as string}
+                      value={accessKeyId}
+                      onChange={setAccessKeyId}
                       placeholder="Enter access key"
                       autoComplete="off"
                     />
@@ -298,7 +316,8 @@ export default function SettingsPage() {
                       label="Secret Access Key"
                       name="secretAccessKey"
                       type="password"
-                      defaultValue={storageConfig.secretAccessKey as string}
+                      value={secretAccessKey}
+                      onChange={setSecretAccessKey}
                       placeholder="Enter secret key"
                       autoComplete="off"
                     />
@@ -306,7 +325,8 @@ export default function SettingsPage() {
                     <TextField
                       label="Public URL (Optional)"
                       name="publicUrl"
-                      defaultValue={storageConfig.publicUrl as string}
+                      value={publicUrl}
+                      onChange={setPublicUrl}
                       placeholder="https://cdn.example.com"
                       helpText="Custom domain for public file access"
                       autoComplete="off"

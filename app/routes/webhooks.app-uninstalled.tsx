@@ -1,4 +1,5 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
+import { json } from "@remix-run/node";
 import { authenticate } from "~/shopify.server";
 import prisma from "~/lib/prisma.server";
 

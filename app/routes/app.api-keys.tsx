@@ -217,18 +217,18 @@ export default function ApiKeysPage() {
       >
         <Layout>
           {/* New key display */}
-          {actionData && "newKey" in actionData && (
+          {actionData && "newKey" in actionData && actionData.newKey && (
             <Layout.Section>
               <Banner tone="warning" title="Save Your API Key">
                 <BlockStack gap="200">
-                  <Text as="p">{actionData.warning}</Text>
+                  <Text as="p">Copy this key now. It won&apos;t be shown again!</Text>
                   <Box background="bg-surface-secondary" padding="300" borderRadius="200">
                     <code style={{ fontSize: 14, wordBreak: "break-all" }}>
-                      {actionData.newKey}
+                      {String(actionData.newKey)}
                     </code>
                   </Box>
                   <Button
-                    onClick={() => navigator.clipboard.writeText(actionData.newKey as string)}
+                    onClick={() => navigator.clipboard.writeText(String(actionData.newKey))}
                   >
                     Copy to Clipboard
                   </Button>
@@ -353,7 +353,7 @@ export default function ApiKeysPage() {
                   name="name"
                   helpText="A descriptive name for this API key"
                   autoComplete="off"
-                  required
+                  requiredIndicator
                 />
 
                 <TextField
@@ -362,8 +362,6 @@ export default function ApiKeysPage() {
                   value={rateLimit}
                   onChange={setRateLimit}
                   name="rateLimit"
-                  min={1}
-                  max={1000}
                   autoComplete="off"
                 />
 

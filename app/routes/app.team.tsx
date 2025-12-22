@@ -419,7 +419,7 @@ export default function TeamPage() {
                   onChange={setEmail}
                   name="email"
                   autoComplete="email"
-                  required
+                  requiredIndicator
                 />
 
                 <TextField
