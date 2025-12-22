@@ -22,5 +22,33 @@
     "medium": "Medium",
     "large": "Large",
     "custom": "Custom Size"
+  },
+  "custom_upload": {
+    "upload_design": "Upload Your Design",
+    "drag_drop": "Drag your design here",
+    "or_browse": "or click to browse",
+    "select_size": "Select Size",
+    "include_tshirt": "Include T-Shirt",
+    "select_position": "Select Print Position",
+    "front": "Front",
+    "back": "Back",
+    "left_sleeve": "Left Sleeve",
+    "right_sleeve": "Right Sleeve",
+    "add_location": "Add Another Location",
+    "adjust_position": "Adjust Position",
+    "position_help": "Don't worry! If you can't position perfectly, our team will optimize it for you.",
+    "set_size": "Set Design Size",
+    "tshirt_options": "T-Shirt Options",
+    "add_to_cart": "Add to Cart"
+  },
+  "cart": {
+    "custom_upload": {
+      "tshirt_included": "T-Shirt Included",
+      "size": "Size",
+      "color": "Color",
+      "print_locations": "Print Locations",
+      "dtf_only": "DTF Transfer Sheet",
+      "order_id": "Order ID"
+    }
   }
 }

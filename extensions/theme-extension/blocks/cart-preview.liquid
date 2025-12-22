@@ -1,139 +1,238 @@
 {% comment %}
-  Upload Lift Pro - Cart Preview Block
-  Shows upload previews in cart line items
+  Custom Upload for Products Design - Cart Preview Block
+  Shows upload previews in cart line items with enhanced display
 {% endcomment %}
 
 {% for item in cart.items %}
-  {% assign upload_id = item.properties['_upload_lift_id'] %}
-  {% assign upload_preview = item.properties['_upload_lift_preview'] %}
-  {% assign upload_mode = item.properties['_upload_lift_mode'] %}
+  {% comment %} Check both old and new property keys for compatibility {% endcomment %}
+  {% assign upload_id = item.properties['_custom_upload_id'] | default: item.properties['_upload_lift_id'] %}
+  {% assign upload_preview = item.properties['_custom_upload_preview'] | default: item.properties['_upload_lift_preview'] %}
+  {% assign upload_mode = item.properties['_custom_upload_mode'] | default: item.properties['_upload_lift_mode'] %}
   {% assign design_size = item.properties['Design Size'] %}
   {% assign design_file = item.properties['Design File'] %}
+  {% assign tshirt_included = item.properties['_tshirt_included'] %}
+  {% assign tshirt_size = item.properties['_tshirt_size'] %}
+  {% assign tshirt_color = item.properties['_tshirt_color'] %}
+  {% assign print_locations = item.properties['_print_locations'] %}
 
   {% if upload_id %}
-  <div class="ul-cart-preview" data-line-item-key="{{ item.key }}" data-upload-id="{{ upload_id }}">
-    <div class="ul-cart-preview-image">
+  <div class="cu-cart-preview" data-line-item-key="{{ item.key }}" data-upload-id="{{ upload_id }}">
+    <div class="cu-cart-preview-image">
       {% if upload_preview != blank %}
         <img src="{{ upload_preview }}" alt="Design Preview" width="80" height="80" loading="lazy">
       {% else %}
-        <div class="ul-cart-preview-placeholder">
+        <div class="cu-cart-preview-placeholder">
           <svg viewBox="0 0 24 24" width="32" height="32">
             <path fill="currentColor" d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/>
           </svg>
         </div>
       {% endif %}
+      <span class="cu-cart-badge">Custom</span>
     </div>
 
-    <div class="ul-cart-preview-details">
-      <div class="ul-cart-preview-badge ul-badge-{{ upload_mode }}">
-        {% case upload_mode %}
-          {% when '3d_designer' %}
-            3D Designer
-          {% when 'classic' %}
-            Custom Print
-          {% when 'quick' %}
-            Quick Upload
-          {% else %}
-            Custom Design
-        {% endcase %}
+    <div class="cu-cart-preview-details">
+      <div class="cu-cart-preview-badge cu-badge-{{ upload_mode }}">
+        {% if tshirt_included == 'true' %}
+          <span class="cu-icon">👕</span> T-Shirt Included
+        {% else %}
+          {% case upload_mode %}
+            {% when '3d_designer' or 'tshirt_included' %}
+              <span class="cu-icon">👕</span> 3D Designer
+            {% when 'classic' or 'dtf_only' %}
+              <span class="cu-icon">📄</span> DTF Transfer
+            {% when 'quick' %}
+              <span class="cu-icon">⚡</span> Quick Upload
+            {% else %}
+              <span class="cu-icon">🎨</span> Custom Design
+          {% endcase %}
+        {% endif %}
       </div>
 
-      {% if design_size != blank %}
-        <p class="ul-cart-preview-size">
+      {% if tshirt_size != blank %}
+        <p class="cu-cart-preview-option">
+          <strong>Size:</strong> {{ tshirt_size }}
+        </p>
+      {% elsif design_size != blank %}
+        <p class="cu-cart-preview-option">
           <strong>Size:</strong> {{ design_size }}
         </p>
       {% endif %}
 
-      {% if design_file != blank %}
-        <p class="ul-cart-preview-file">
-          <strong>File:</strong> {{ design_file | truncate: 30 }}
+      {% if tshirt_color != blank %}
+        <p class="cu-cart-preview-option">
+          <strong>Color:</strong>
+          <span class="cu-color-swatch" style="background-color: {{ tshirt_color }};"></span>
         </p>
       {% endif %}
+
+      {% if print_locations != blank %}
+        <p class="cu-cart-preview-option cu-locations">
+          <strong>Print:</strong>
+          {% comment %} Parse JSON locations safely {% endcomment %}
+          <span class="cu-location-tags">
+            {% if print_locations contains 'front' %}<span class="cu-tag">Front</span>{% endif %}
+            {% if print_locations contains 'back' %}<span class="cu-tag">Back</span>{% endif %}
+            {% if print_locations contains 'left_sleeve' %}<span class="cu-tag">L.Sleeve</span>{% endif %}
+            {% if print_locations contains 'right_sleeve' %}<span class="cu-tag">R.Sleeve</span>{% endif %}
+          </span>
+        </p>
+      {% endif %}
+
+      {% if design_file != blank %}
+        <p class="cu-cart-preview-file">
+          <strong>File:</strong> {{ design_file | truncate: 25 }}
+        </p>
+      {% endif %}
+      
+      <p class="cu-cart-preview-id">
+        <small>ID: {{ upload_id | truncate: 10, '...' }}</small>
+      </p>
     </div>
   </div>
   {% endif %}
 {% endfor %}
 
 <style>
-  .ul-cart-preview {
+  .cu-cart-preview {
     display: flex;
     gap: 12px;
     padding: 12px;
-    background: #f9fafb;
+    background: #f9f9fb;
     border-radius: 8px;
     margin-top: 8px;
+    border: 1px solid #e0e0e5;
   }
 
-  .ul-cart-preview-image {
+  .cu-cart-preview-image {
+    position: relative;
     width: 80px;
     height: 80px;
-    border-radius: 4px;
+    border-radius: 6px;
     overflow: hidden;
     background: #fff;
     display: flex;
     align-items: center;
     justify-content: center;
     border: 1px solid #dfe3e8;
+    flex-shrink: 0;
   }
 
-  .ul-cart-preview-image img {
+  .cu-cart-preview-image img {
     width: 100%;
     height: 100%;
     object-fit: contain;
   }
 
-  .ul-cart-preview-placeholder {
+  .cu-cart-preview-placeholder {
     color: #919eab;
   }
 
-  .ul-cart-preview-details {
+  .cu-cart-badge {
+    position: absolute;
+    bottom: -4px;
+    right: -4px;
+    background: linear-gradient(135deg, #7367f0, #9c27b0);
+    color: #fff;
+    font-size: 9px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 4px;
+    text-transform: uppercase;
+  }
+
+  .cu-cart-preview-details {
     flex: 1;
     display: flex;
     flex-direction: column;
     gap: 4px;
+    min-width: 0;
   }
 
-  .ul-cart-preview-badge {
-    display: inline-block;
-    padding: 2px 8px;
+  .cu-cart-preview-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px;
     border-radius: 4px;
     font-size: 11px;
     font-weight: 600;
-    text-transform: uppercase;
     width: fit-content;
-  }
-
-  .ul-badge-3d_designer {
-    background: #5c6ac4;
+    background: linear-gradient(135deg, #7367f0, #9c27b0);
     color: #fff;
   }
 
-  .ul-badge-classic {
-    background: #47c1bf;
+  .cu-icon {
+    font-size: 12px;
+  }
+
+  .cu-badge-3d_designer,
+  .cu-badge-tshirt_included {
+    background: linear-gradient(135deg, #7367f0, #9c27b0);
     color: #fff;
   }
 
-  .ul-badge-quick {
-    background: #9c6ade;
+  .cu-badge-classic,
+  .cu-badge-dtf_only {
+    background: #28c76f;
     color: #fff;
   }
 
-  .ul-cart-preview-size,
-  .ul-cart-preview-file {
+  .cu-badge-quick {
+    background: #ff9f43;
+    color: #fff;
+  }
+
+  .cu-cart-preview-option,
+  .cu-cart-preview-file {
     margin: 0;
-    font-size: 13px;
+    font-size: 12px;
     color: #454f5b;
   }
 
-  .ul-cart-preview-size strong,
-  .ul-cart-preview-file strong {
+  .cu-cart-preview-option strong,
+  .cu-cart-preview-file strong {
     color: #212b36;
+  }
+
+  .cu-color-swatch {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 1px solid #ccc;
+    vertical-align: middle;
+    margin-left: 4px;
+  }
+
+  .cu-location-tags {
+    display: inline-flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    margin-left: 4px;
+  }
+
+  .cu-tag {
+    background: #e9e7fd;
+    color: #7367f0;
+    font-size: 9px;
+    padding: 2px 5px;
+    border-radius: 3px;
+    font-weight: 500;
+  }
+
+  .cu-cart-preview-id {
+    margin: 4px 0 0;
+  }
+
+  .cu-cart-preview-id small {
+    color: #999;
+    font-size: 10px;
   }
 </style>
 
 {% schema %}
 {
-  "name": "UL Cart Preview",
+  "name": "CU Cart Preview",
   "target": "section",
   "settings": []
 }
