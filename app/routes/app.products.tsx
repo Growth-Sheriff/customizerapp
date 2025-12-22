@@ -1,9 +1,9 @@
 import type { LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useLoaderData, useActionData, Link } from "@remix-run/react";
+import { useLoaderData, useActionData } from "@remix-run/react";
 import {
   Page, Layout, Card, Text, BlockStack, InlineStack,
-  Button, Banner, DataTable, Badge, EmptyState
+  Button, Banner, DataTable, Badge, EmptyState, Link
 } from "@shopify/polaris";
 import { authenticate } from "~/shopify.server";
 import prisma from "~/lib/prisma.server";
@@ -141,9 +141,13 @@ export default function ProductsPage() {
     </InlineStack>,
     product.uploadEnabled ? <Badge tone="success">Enabled</Badge> : <Badge>Disabled</Badge>,
     <ModeBadge key={`mode-${product.id}`} mode={product.mode} />,
-    <Link key={`btn-${product.id}`} to={`/app/products/${getNumericId(product.id)}/configure`}>
-      <Button size="slim">Configure</Button>
-    </Link>,
+    <Button 
+      key={`btn-${product.id}`} 
+      size="slim"
+      url={`/app/products/${getNumericId(product.id)}/configure`}
+    >
+      Configure
+    </Button>,
   ]);
 
   return (
@@ -174,7 +178,7 @@ export default function ProductsPage() {
 
               {shopPlan === "free" && (
                 <Banner tone="warning">
-                  Free plan: Limited features. <Link to="/app/billing">Upgrade</Link> for more.
+                  Free plan: Limited features. <Link url="/app/billing">Upgrade</Link> for more.
                 </Banner>
               )}
             </InlineStack>
