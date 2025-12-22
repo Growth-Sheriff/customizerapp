@@ -118,7 +118,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 export async function action({ request }: ActionFunctionArgs) {
-  const { session } = await authenticate.admin(request);
+  const { session, admin } = await authenticate.admin(request);
   const shopDomain = session.shop;
 
   const shop = await prisma.shop.findUnique({
@@ -130,11 +130,12 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   const formData = await request.formData();
-  const action = formData.get("_action");
+  const actionType = formData.get("_action");
 
-  if (action === "save_config") {
+  if (actionType === "save_config") {
     const productId = formData.get("productId") as string;
-    const enabled = formData.get("enabled") === "on";
+    const enabledValue = formData.get("enabled") as string;
+    const enabled = enabledValue === "true" || enabledValue === "on";
     const mode = formData.get("mode") as string;
     const assetSetId = formData.get("assetSetId") as string | null;
 
@@ -150,7 +151,7 @@ export async function action({ request }: ActionFunctionArgs) {
       return json({ error: `Mode "${mode}" is not available in your plan` });
     }
 
-    // Upsert product config
+    // Upsert product config in database
     await prisma.productConfig.upsert({
       where: {
         shopId_productId: {
@@ -172,10 +173,50 @@ export async function action({ request }: ActionFunctionArgs) {
       },
     });
 
+    // Update Shopify Product Metafield so theme blocks can read it
+    try {
+      const metafieldValue = JSON.stringify({
+        enabled,
+        mode,
+        assetSetId: assetSetId || null,
+        maxSizeMB: shop.plan === "free" ? 25 : shop.plan === "starter" ? 50 : 150,
+        updatedAt: new Date().toISOString(),
+      });
+
+      await admin.graphql(`
+        mutation productMetafieldSet($input: ProductInput!) {
+          productUpdate(input: $input) {
+            product {
+              id
+            }
+            userErrors {
+              field
+              message
+            }
+          }
+        }
+      `, {
+        variables: {
+          input: {
+            id: productId,
+            metafields: [{
+              namespace: "upload_lift",
+              key: "config",
+              value: metafieldValue,
+              type: "json",
+            }],
+          },
+        },
+      });
+    } catch (error) {
+      console.error("[Products] Failed to update metafield:", error);
+      // Continue anyway - DB is updated
+    }
+
     return json({ success: true, message: "Product configuration saved" });
   }
 
-  if (action === "disable") {
+  if (actionType === "disable") {
     const productId = formData.get("productId") as string;
 
     await prisma.productConfig.updateMany({
@@ -343,13 +384,13 @@ export default function ProductsPage() {
             <Form method="post" id="config-form">
               <input type="hidden" name="_action" value="save_config" />
               <input type="hidden" name="productId" value={selectedProduct?.id || ""} />
+              <input type="hidden" name="enabled" value={formEnabled ? "true" : "false"} />
 
               <FormLayout>
                 <Checkbox
                   label="Enable upload for this product"
                   checked={formEnabled}
                   onChange={setFormEnabled}
-                  name="enabled"
                 />
 
                 <Select

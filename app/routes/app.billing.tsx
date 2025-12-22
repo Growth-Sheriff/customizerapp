@@ -1,6 +1,6 @@
-import type { LoaderFunctionArgs } from "@remix-run/node";
-import { json } from "@remix-run/node";
-import { useLoaderData } from "@remix-run/react";
+import type { LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node";
+import { json, redirect } from "@remix-run/node";
+import { useLoaderData, Form, useNavigation } from "@remix-run/react";
 import {
   Page, Layout, Card, Text, BlockStack, InlineStack,
   Button, Banner, Badge, Box
@@ -107,8 +107,50 @@ export async function loader({ request }: LoaderFunctionArgs) {
   });
 }
 
+export async function action({ request }: ActionFunctionArgs) {
+  const { session, billing } = await authenticate.admin(request);
+  const shopDomain = session.shop;
+
+  const formData = await request.formData();
+  const planId = formData.get("planId") as string;
+
+  const planDetails = PLANS.find((p) => p.id === planId);
+  if (!planDetails || planDetails.price === 0) {
+    return json({ error: "Invalid plan" }, { status: 400 });
+  }
+
+  // Request billing subscription from Shopify
+  try {
+    await billing.require({
+      plans: [planId.toUpperCase()],
+      isTest: true, // Set to false in production
+      onFailure: async () => {
+        // Redirect to billing confirmation page
+        return billing.request({
+          plan: planId.toUpperCase(),
+          isTest: true, // Set to false in production
+        });
+      },
+    });
+
+    // If we get here, billing is already active
+    // Update shop plan in database
+    await prisma.shop.update({
+      where: { shopDomain },
+      data: { plan: planId, billingStatus: "active" },
+    });
+
+    return json({ success: true, message: `Upgraded to ${planDetails.name}` });
+  } catch (error) {
+    console.error("[Billing] Error:", error);
+    return json({ error: "Billing request failed" }, { status: 500 });
+  }
+}
+
 export default function BillingPage() {
   const { currentPlan, billingStatus, usage, plans } = useLoaderData<typeof loader>();
+  const navigation = useNavigation();
+  const isSubmitting = navigation.state === "submitting";
 
   const currentPlanDetails = plans.find((p) => p.id === currentPlan);
 
@@ -185,13 +227,17 @@ export default function BillingPage() {
                       <Text key={i} as="p" variant="bodySm">✓ {feature}</Text>
                     ))}
                   </BlockStack>
-                  {plan.id !== currentPlan && (
-                    <Button
-                      variant={plan.price > (currentPlanDetails?.price || 0) ? "primary" : undefined}
-                      disabled
-                    >
-                      {plan.price > (currentPlanDetails?.price || 0) ? "Upgrade" : "Downgrade"}
-                    </Button>
+                  {plan.id !== currentPlan && plan.price > 0 && (
+                    <Form method="post">
+                      <input type="hidden" name="planId" value={plan.id} />
+                      <Button
+                        variant={plan.price > (currentPlanDetails?.price || 0) ? "primary" : undefined}
+                        submit
+                        loading={isSubmitting}
+                      >
+                        {plan.price > (currentPlanDetails?.price || 0) ? "Upgrade" : "Downgrade"}
+                      </Button>
+                    </Form>
                   )}
                 </BlockStack>
               </Card>
