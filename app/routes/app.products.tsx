@@ -224,33 +224,25 @@ export default function ProductsPage() {
                 return (
                   <ResourceItem
                     id={numericId}
+                    url={`/app/products/${numericId}/configure`}
                     media={media}
                     accessibilityLabel={`Configure ${title}`}
                   >
-                    <a 
-                      href={`/app/products/${numericId}/configure`}
-                      style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        window.location.href = `/app/products/${numericId}/configure`;
-                      }}
-                    >
-                      <BlockStack gap="100">
-                        <Text variant="bodyMd" fontWeight="bold" as="span">
-                          {title}
-                        </Text>
-                        <InlineStack gap="200">
-                          {isEnabled ? (
-                            <Badge tone="success">Enabled</Badge>
-                          ) : (
-                            <Badge>Disabled</Badge>
-                          )}
-                          <Badge tone={getModeTone(mode)}>
-                            {getModeLabel(mode)}
-                          </Badge>
-                        </InlineStack>
-                      </BlockStack>
-                    </a>
+                    <BlockStack gap="100">
+                      <Text variant="bodyMd" fontWeight="bold" as="span">
+                        {title}
+                      </Text>
+                      <InlineStack gap="200">
+                        {isEnabled ? (
+                          <Badge tone="success">Enabled</Badge>
+                        ) : (
+                          <Badge>Disabled</Badge>
+                        )}
+                        <Badge tone={getModeTone(mode)}>
+                          {getModeLabel(mode)}
+                        </Badge>
+                      </InlineStack>
+                    </BlockStack>
                   </ResourceItem>
                 );
               }}
