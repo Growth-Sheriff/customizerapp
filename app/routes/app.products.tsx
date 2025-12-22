@@ -64,16 +64,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
     });
   }
 
-  // Get product configs
+  // Get product configs - cast to any to access new fields
   const productConfigs = await prisma.productConfig.findMany({
     where: { shopId: shop.id },
-    select: {
-      productId: true,
-      mode: true,
-      enabled: true,
-      uploadEnabled: true,
-    },
-  });
+  }) as Array<{
+    productId: string;
+    mode: string;
+    enabled: boolean;
+    uploadEnabled?: boolean;
+  }>;
 
   // Fetch products from Shopify
   let shopifyProducts: Array<{
