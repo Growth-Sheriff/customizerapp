@@ -4,7 +4,7 @@
  */
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useLoaderData, useNavigate } from "@remix-run/react";
+import { useLoaderData } from "@remix-run/react";
 import {
   Page, Layout, Card, Text, BlockStack, InlineStack,
   Badge, EmptyState, Banner, ResourceList, ResourceItem,
@@ -138,7 +138,6 @@ function getModeTone(mode: string | null): "success" | "info" | "warning" | unde
 
 export default function ProductsPage() {
   const { products, configuredCount, shopPlan } = useLoaderData<typeof loader>();
-  const navigate = useNavigate();
   const [queryValue, setQueryValue] = useState("");
 
   const handleQueryChange = useCallback((value: string) => {
@@ -153,20 +152,6 @@ export default function ProductsPage() {
   const filteredProducts = products.filter(product =>
     product.title.toLowerCase().includes(queryValue.toLowerCase())
   );
-
-  // Navigate using both Remix navigate and App Bridge
-  const handleConfigureClick = useCallback((numericId: string) => {
-    const path = `/app/products/${numericId}/configure`;
-    
-    // Try App Bridge navigation first (for embedded apps)
-    const shopify = (window as any).shopify;
-    if (shopify?.navigate) {
-      shopify.navigate(path);
-    } else {
-      // Fallback to Remix navigate
-      navigate(path);
-    }
-  }, [navigate]);
 
   const resourceName = {
     singular: "product",
@@ -241,13 +226,7 @@ export default function ProductsPage() {
                     id={numericId}
                     media={media}
                     accessibilityLabel={`Configure ${title}`}
-                    onClick={() => handleConfigureClick(numericId)}
-                    shortcutActions={[
-                      {
-                        content: "Configure",
-                        onAction: () => handleConfigureClick(numericId),
-                      },
-                    ]}
+                    url={`/app/products/${numericId}/configure`}
                   >
                     <BlockStack gap="100">
                       <Text variant="bodyMd" fontWeight="bold" as="span">
