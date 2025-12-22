@@ -47,10 +47,30 @@ model ProductConfig {
   id              String   @id @default(cuid())
   shopId          String   @map("shop_id")
   productId       String   @map("product_id") // Shopify product GID
-  mode            String   // 3d_designer, classic, quick
+  
+  // Upload Settings
+  uploadEnabled   Boolean  @default(true) @map("upload_enabled")
+  
+  // Extra Questions (dynamic form fields for customer)
+  // Format: [{ id, type: "text"|"select"|"checkbox", label, options?, required? }]
+  extraQuestions  Json?    @map("extra_questions_json")
+  
+  // T-Shirt Addon Settings
+  tshirtEnabled   Boolean  @default(false) @map("tshirt_enabled")
+  tshirtConfig    Json?    @map("tshirt_config_json")
+  // Format: { 
+  //   colorVariantOption: "Color",  // Shopify option name for color
+  //   sizeVariantOption: "Size",    // Shopify option name for size
+  //   priceAddon: 15.00,            // Extra price for t-shirt
+  //   positions: ["front", "back"]  // Available print positions
+  // }
+  
+  // Legacy fields (keeping for compatibility)
+  mode            String   @default("dtf") // dtf (default), legacy modes: 3d_designer, classic, quick
   enabled         Boolean  @default(true)
   assetSetId      String?  @map("asset_set_id")
   policyOverrides Json?    @map("policy_overrides_json")
+  
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 

@@ -6,10 +6,13 @@ import { existsSync } from "fs";
 
 /**
  * Storage Provider Priority:
- * 1. shopify - Shopify Files API (FREE, RECOMMENDED)
+ * 1. shopify - Shopify Files API (FREE, RECOMMENDED, DEFAULT)
  * 2. local - Server local storage (fallback)
- * 3. r2 - Cloudflare R2 (optional, advanced)
- * 4. s3 - Amazon S3 (optional, advanced)
+ * 3. r2 - Cloudflare R2 (optional, requires valid credentials)
+ * 4. s3 - Amazon S3 (optional, requires valid credentials)
+ * 
+ * IMPORTANT: If R2/S3 is selected but credentials are invalid/missing,
+ * system will automatically fallback to Shopify Files API
  */
 export type StorageProvider = "shopify" | "local" | "r2" | "s3" | "none";
 
@@ -24,22 +27,85 @@ export interface StorageConfig {
   localPath?: string; // Local storage path
 }
 
-// Check if storage is configured
+/**
+ * Validate if storage credentials are complete and valid
+ * Returns true only if all required fields are present
+ */
+export function isStorageCredentialsValid(provider: StorageProvider, config: Partial<StorageConfig>): boolean {
+  // Shopify and local always work
+  if (provider === "shopify" || provider === "none") return true;
+  if (provider === "local") return true;
+  
+  // R2 requires: bucket, accountId, accessKeyId, secretAccessKey
+  if (provider === "r2") {
+    return !!(
+      config.bucket && 
+      config.accountId && 
+      config.accessKeyId && 
+      config.secretAccessKey &&
+      config.bucket.length > 0 &&
+      config.accountId.length > 0 &&
+      config.accessKeyId.length > 0 &&
+      config.secretAccessKey.length > 0
+    );
+  }
+  
+  // S3 requires: bucket, accessKeyId, secretAccessKey
+  if (provider === "s3") {
+    return !!(
+      config.bucket && 
+      config.accessKeyId && 
+      config.secretAccessKey &&
+      config.bucket.length > 0 &&
+      config.accessKeyId.length > 0 &&
+      config.secretAccessKey.length > 0
+    );
+  }
+  
+  return false;
+}
+
+/**
+ * Get effective storage provider with fallback logic
+ * If requested provider has invalid credentials, falls back to shopify
+ */
+export function getEffectiveStorageProvider(
+  requestedProvider: StorageProvider, 
+  config: Partial<StorageConfig>
+): StorageProvider {
+  // If shopify or local requested, use as-is
+  if (requestedProvider === "shopify" || requestedProvider === "none" || requestedProvider === "local") {
+    return requestedProvider === "none" ? "shopify" : requestedProvider;
+  }
+  
+  // For R2/S3, validate credentials
+  if (isStorageCredentialsValid(requestedProvider, config)) {
+    return requestedProvider;
+  }
+  
+  // Fallback to shopify if credentials invalid
+  console.warn(`[Storage] ${requestedProvider} credentials invalid, falling back to Shopify Files`);
+  return "shopify";
+}
+
+// Check if storage is configured (legacy function for compatibility)
 export function isStorageConfigured(config: StorageConfig): boolean {
   if (config.provider === "none") return false;
-  if (config.provider === "shopify") return true; // Always available with Shopify
+  if (config.provider === "shopify") return true;
   if (config.provider === "local") return true;
-  
-  // For R2/S3, check if credentials are set
   return !!(config.accessKeyId && config.secretAccessKey && config.bucket);
 }
 
 // Get storage config from environment or shop settings
+// Now includes automatic fallback for invalid credentials
 export function getStorageConfig(shopConfig?: Partial<StorageConfig>): StorageConfig {
-  const provider = (shopConfig?.provider ?? process.env.STORAGE_PROVIDER ?? "shopify") as StorageProvider;
+  const requestedProvider = (shopConfig?.provider ?? process.env.STORAGE_PROVIDER ?? "shopify") as StorageProvider;
+  
+  // Determine effective provider with fallback
+  const provider = getEffectiveStorageProvider(requestedProvider, shopConfig || {});
 
   // Shopify Files API - recommended default
-  if (provider === "shopify" || provider === "none") {
+  if (provider === "shopify") {
     return {
       provider: "shopify",
       bucket: "",
@@ -83,8 +149,8 @@ export function getStorageConfig(shopConfig?: Partial<StorageConfig>): StorageCo
 
 // Create S3 client (works for both R2 and S3)
 export function createStorageClient(config: StorageConfig): S3Client | null {
-  if (config.provider === "local" || config.provider === "none") {
-    return null; // No S3 client for local storage
+  if (config.provider === "local" || config.provider === "none" || config.provider === "shopify") {
+    return null; // No S3 client for these
   }
 
   if (config.provider === "r2") {

@@ -139,12 +139,17 @@ export async function action({ request }: ActionFunctionArgs) {
   const itemId = nanoid(8);
 
   // Get storage config - merge storageProvider with storageConfig
-  // Priority: shopify (default) > local > r2/s3
+  // FALLBACK LOGIC: If R2/S3 selected but credentials invalid → use Shopify
   const shopStorageConfig = {
     provider: shop.storageProvider || 'shopify',
     ...((shop.storageConfig as Record<string, unknown>) || {}),
   };
+  
+  // getStorageConfig now automatically handles fallback via getEffectiveStorageProvider
   const storageConfig = getStorageConfig(shopStorageConfig as any);
+  
+  // Log effective storage provider for debugging
+  console.log(`[Upload Intent] Shop: ${shopDomain}, Requested: ${shop.storageProvider}, Effective: ${storageConfig.provider}`);
 
   // Build storage key
   const key = buildStorageKey(shopDomain, uploadId, itemId, fileName);

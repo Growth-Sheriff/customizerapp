@@ -1,0 +1,375 @@
+{% comment %}
+  T-Shirt Modal Snippet
+  =====================
+  Usage: {% render 'tshirt-modal' %}
+  
+  This modal provides:
+  - 3D T-Shirt preview with uploaded design
+  - Color & Size variant selection
+  - Front/Back position toggle
+  - Add to cart with line item properties
+  
+  Requires: three.js loaded from CDN
+  
+  Version: 3.0.0
+{% endcomment %}
+
+<style>
+  /* Modal Overlay */
+  .tshirt-modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 9999;
+    backdrop-filter: blur(4px);
+  }
+
+  .tshirt-modal-overlay.active {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.2s ease;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  /* Modal Container */
+  .tshirt-modal {
+    background: #ffffff;
+    border-radius: 16px;
+    width: 95%;
+    max-width: 900px;
+    max-height: 90vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  }
+
+  /* Modal Header */
+  .tshirt-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  .tshirt-modal-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #1f2937;
+  }
+
+  .tshirt-modal-close {
+    background: none;
+    border: none;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #6b7280;
+    transition: background 0.2s;
+  }
+
+  .tshirt-modal-close:hover {
+    background: #f3f4f6;
+    color: #1f2937;
+  }
+
+  /* Modal Body */
+  .tshirt-modal-body {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* 3D Canvas Area */
+  .tshirt-3d-container {
+    flex: 1;
+    min-height: 400px;
+    background: linear-gradient(180deg, #f5f5f5 0%, #e0e0e0 100%);
+    position: relative;
+  }
+
+  .tshirt-3d-canvas {
+    width: 100%;
+    height: 100%;
+  }
+
+  .tshirt-3d-loading {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    color: #6b7280;
+  }
+
+  .tshirt-3d-loading .spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid #e5e7eb;
+    border-top-color: #6366f1;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 12px;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  /* Position Toggle */
+  .tshirt-position-toggle {
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 8px;
+    background: white;
+    padding: 4px;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  }
+
+  .tshirt-position-btn {
+    padding: 8px 16px;
+    background: none;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    cursor: pointer;
+    color: #6b7280;
+    transition: all 0.2s;
+  }
+
+  .tshirt-position-btn.active {
+    background: #6366f1;
+    color: white;
+  }
+
+  /* Sidebar */
+  .tshirt-sidebar {
+    width: 300px;
+    padding: 20px;
+    border-left: 1px solid #e5e7eb;
+    overflow-y: auto;
+    background: #fafafa;
+  }
+
+  .tshirt-section {
+    margin-bottom: 24px;
+  }
+
+  .tshirt-section-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 12px;
+  }
+
+  /* Color Swatches */
+  .tshirt-colors {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .tshirt-color-swatch {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    position: relative;
+    transition: transform 0.2s;
+  }
+
+  .tshirt-color-swatch:hover {
+    transform: scale(1.1);
+  }
+
+  .tshirt-color-swatch.active {
+    border-color: #6366f1;
+  }
+
+  .tshirt-color-swatch.active::after {
+    content: '✓';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    font-size: 14px;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+  }
+
+  /* Size Buttons */
+  .tshirt-sizes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .tshirt-size-btn {
+    min-width: 44px;
+    padding: 8px 12px;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .tshirt-size-btn:hover {
+    border-color: #6366f1;
+  }
+
+  .tshirt-size-btn.active {
+    background: #6366f1;
+    border-color: #6366f1;
+    color: white;
+  }
+
+  .tshirt-size-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* Price Display */
+  .tshirt-price {
+    font-size: 24px;
+    font-weight: 700;
+    color: #1f2937;
+    margin-bottom: 16px;
+  }
+
+  .tshirt-price-addon {
+    font-size: 12px;
+    color: #6b7280;
+    font-weight: 400;
+  }
+
+  /* Add to Cart Button */
+  .tshirt-add-cart {
+    width: 100%;
+    padding: 14px;
+    background: #10b981;
+    border: none;
+    border-radius: 8px;
+    color: white;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .tshirt-add-cart:hover {
+    background: #059669;
+  }
+
+  .tshirt-add-cart:disabled {
+    background: #9ca3af;
+    cursor: not-allowed;
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .tshirt-modal-body {
+      flex-direction: column;
+    }
+
+    .tshirt-sidebar {
+      width: 100%;
+      border-left: none;
+      border-top: 1px solid #e5e7eb;
+      max-height: 280px;
+    }
+
+    .tshirt-3d-container {
+      min-height: 300px;
+    }
+  }
+</style>
+
+<!-- Modal HTML -->
+<div class="tshirt-modal-overlay" id="tshirt-modal-overlay">
+  <div class="tshirt-modal">
+    <div class="tshirt-modal-header">
+      <span class="tshirt-modal-title">👕 Preview on T-Shirt</span>
+      <button type="button" class="tshirt-modal-close" id="tshirt-modal-close">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+        </svg>
+      </button>
+    </div>
+    
+    <div class="tshirt-modal-body">
+      <!-- 3D Preview -->
+      <div class="tshirt-3d-container">
+        <div class="tshirt-3d-loading" id="tshirt-3d-loading">
+          <div class="spinner"></div>
+          <div>Loading 3D Preview...</div>
+        </div>
+        <canvas class="tshirt-3d-canvas" id="tshirt-3d-canvas"></canvas>
+        
+        <!-- Position Toggle -->
+        <div class="tshirt-position-toggle">
+          <button type="button" class="tshirt-position-btn active" data-position="front">Front</button>
+          <button type="button" class="tshirt-position-btn" data-position="back">Back</button>
+        </div>
+      </div>
+
+      <!-- Sidebar -->
+      <div class="tshirt-sidebar">
+        <!-- Colors -->
+        <div class="tshirt-section">
+          <div class="tshirt-section-title">Color</div>
+          <div class="tshirt-colors" id="tshirt-colors">
+            <!-- Dynamically populated -->
+          </div>
+        </div>
+
+        <!-- Sizes -->
+        <div class="tshirt-section">
+          <div class="tshirt-section-title">Size</div>
+          <div class="tshirt-sizes" id="tshirt-sizes">
+            <!-- Dynamically populated -->
+          </div>
+        </div>
+
+        <!-- Price -->
+        <div class="tshirt-section">
+          <div class="tshirt-price" id="tshirt-price">
+            $0.00
+            <span class="tshirt-price-addon" id="tshirt-price-addon"></span>
+          </div>
+        </div>
+
+        <!-- Add to Cart -->
+        <button type="button" class="tshirt-add-cart" id="tshirt-add-cart" disabled>
+          Add T-Shirt to Cart
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Three.js from CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.min.js" defer></script>
+
+<!-- T-Shirt Modal Script -->
+<script src="{{ 'tshirt-modal.js' | asset_url }}" defer></script>
