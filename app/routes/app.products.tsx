@@ -1,10 +1,10 @@
 import type { LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useLoaderData, useActionData, Form, useNavigation, Link } from "@remix-run/react";
+import { useLoaderData, useActionData, Form, useNavigation, Link, useNavigate } from "@remix-run/react";
 import {
   Page, Layout, Card, Text, BlockStack, InlineStack,
   Button, Banner, DataTable, Badge, Modal, TextField, Select,
-  FormLayout, Checkbox, EmptyState
+  FormLayout, Checkbox, EmptyState, Divider
 } from "@shopify/polaris";
 import { useState, useCallback } from "react";
 import { authenticate } from "~/shopify.server";
@@ -141,10 +141,10 @@ export async function action({ request }: ActionFunctionArgs) {
 
     // Validate mode based on plan
     const allowedModes: Record<string, string[]> = {
-      free: ["classic"],
-      starter: ["classic", "quick"],
-      pro: ["classic", "quick", "3d_designer"],
-      enterprise: ["classic", "quick", "3d_designer"],
+      free: ["dtf", "classic"],
+      starter: ["dtf", "classic", "quick"],
+      pro: ["dtf", "classic", "quick", "3d_designer"],
+      enterprise: ["dtf", "classic", "quick", "3d_designer"],
     };
 
     if (!allowedModes[shop.plan]?.includes(mode)) {
@@ -259,10 +259,11 @@ export async function action({ request }: ActionFunctionArgs) {
 function ModeBadge({ mode }: { mode: string | null }) {
   if (!mode) return <Badge>Not configured</Badge>;
 
-  const config: Record<string, { tone: "success" | "info" | "attention"; label: string }> = {
+  const config: Record<string, { tone: "success" | "info" | "attention" | "warning"; label: string }> = {
     "3d_designer": { tone: "success", label: "3D Designer" },
     classic: { tone: "info", label: "Classic" },
     quick: { tone: "attention", label: "Quick" },
+    dtf: { tone: "warning", label: "DTF Transfer" },
   };
 
   const { tone, label } = config[mode] || { tone: "info", label: mode };
@@ -273,6 +274,7 @@ export default function ProductsPage() {
   const { products, assetSets, shopPlan, configuredCount } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
+  const navigate = useNavigate();
   const isSubmitting = navigation.state === "submitting";
 
   const [modalOpen, setModalOpen] = useState(false);
@@ -295,6 +297,7 @@ export default function ProductsPage() {
   }, []);
 
   const modeOptions = [
+    { label: "DTF Transfer", value: "dtf", disabled: false },
     { label: "Classic Upload", value: "classic", disabled: false },
     { label: "Quick Upload", value: "quick", disabled: shopPlan === "free" },
     { label: "3D Designer", value: "3d_designer", disabled: !["pro", "enterprise"].includes(shopPlan) },
@@ -423,11 +426,13 @@ export default function ProductsPage() {
                   onChange={setFormMode}
                   name="mode"
                   helpText={
-                    formMode === "3d_designer"
-                      ? "Interactive 3D preview with multi-location support"
-                      : formMode === "quick"
-                        ? "Streamlined upload for repeat customers"
-                        : "Standard upload with size selection and validation"
+                    formMode === "dtf"
+                      ? "DTF Transfer with optional T-Shirt add-on"
+                      : formMode === "3d_designer"
+                        ? "Interactive 3D preview with multi-location support"
+                        : formMode === "quick"
+                          ? "Streamlined upload for repeat customers"
+                          : "Standard upload with size selection and validation"
                   }
                 />
 
@@ -440,6 +445,27 @@ export default function ProductsPage() {
                     name="assetSetId"
                     helpText="3D model and print locations configuration"
                   />
+                )}
+
+                {formMode === "dtf" && (
+                  <>
+                    <Divider />
+                    <BlockStack gap="200">
+                      <Text as="p" variant="bodySm" tone="subdued">
+                        DTF mode supports extra questions and T-Shirt add-on.
+                      </Text>
+                      <Button
+                        onClick={() => {
+                          closeModal();
+                          // Extract numeric ID from GID
+                          const numericId = selectedProduct?.id?.split('/').pop() || selectedProduct?.id;
+                          navigate(`/app/products/${numericId}/configure`);
+                        }}
+                      >
+                        Advanced Settings →
+                      </Button>
+                    </BlockStack>
+                  </>
                 )}
               </FormLayout>
             </Form>

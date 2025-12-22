@@ -310,7 +310,7 @@
 
       if (variant) {
         const price = (variant.price / 100).toFixed(2);
-        this.elements.priceDisplay.innerHTML = `$${price}`;
+        this.elements.priceDisplay.textContent = `$${price}`;
         
         if (this.config.priceAddon > 0) {
           this.elements.priceAddon.textContent = `(includes $${this.config.priceAddon.toFixed(2)} customization fee)`;

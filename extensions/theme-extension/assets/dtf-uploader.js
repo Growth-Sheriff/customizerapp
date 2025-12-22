@@ -128,7 +128,7 @@
     },
 
     /**
-     * Render extra questions from config
+     * Render extra questions from config (XSS-safe)
      */
     renderExtraQuestions(productId, questions) {
       const instance = this.instances[productId];
@@ -137,67 +137,99 @@
       questionsSection.style.display = 'block';
       sizeStep.textContent = '3'; // Update step number
 
-      let html = '';
-      questions.forEach((q, index) => {
-        const required = q.required ? '<span class="required">*</span>' : '';
-        const requiredAttr = q.required ? 'required' : '';
-        const fieldId = `dtf-q-${productId}-${q.id}`;
+      // Clear container safely
+      questionsContainer.innerHTML = '';
 
+      questions.forEach((q, index) => {
+        const fieldId = `dtf-q-${productId}-${q.id}`;
+        const fieldDiv = document.createElement('div');
+        fieldDiv.className = q.type === 'checkbox' ? 'dtf-field dtf-checkbox-field' : 'dtf-field';
+
+        const label = document.createElement('label');
+        label.setAttribute('for', fieldId);
+        label.textContent = q.label; // Safe - textContent escapes HTML
+        
+        if (q.required) {
+          const reqSpan = document.createElement('span');
+          reqSpan.className = 'required';
+          reqSpan.textContent = ' *';
+          label.appendChild(reqSpan);
+        }
+
+        let input;
         switch (q.type) {
           case 'text':
-            html += `
-              <div class="dtf-field">
-                <label for="${fieldId}">${q.label} ${required}</label>
-                <input type="text" id="${fieldId}" name="properties[${q.label}]" ${requiredAttr}>
-              </div>
-            `;
+            input = document.createElement('input');
+            input.type = 'text';
+            input.id = fieldId;
+            input.name = `properties[${q.label}]`;
+            if (q.required) input.required = true;
+            fieldDiv.appendChild(label);
+            fieldDiv.appendChild(input);
             break;
 
           case 'textarea':
-            html += `
-              <div class="dtf-field">
-                <label for="${fieldId}">${q.label} ${required}</label>
-                <textarea id="${fieldId}" name="properties[${q.label}]" ${requiredAttr}></textarea>
-              </div>
-            `;
+            input = document.createElement('textarea');
+            input.id = fieldId;
+            input.name = `properties[${q.label}]`;
+            if (q.required) input.required = true;
+            fieldDiv.appendChild(label);
+            fieldDiv.appendChild(input);
             break;
 
           case 'select':
-            const options = (q.options || []).map(opt => 
-              `<option value="${opt}">${opt}</option>`
-            ).join('');
-            html += `
-              <div class="dtf-field">
-                <label for="${fieldId}">${q.label} ${required}</label>
-                <select id="${fieldId}" name="properties[${q.label}]" ${requiredAttr}>
-                  <option value="">Select...</option>
-                  ${options}
-                </select>
-              </div>
-            `;
+            input = document.createElement('select');
+            input.id = fieldId;
+            input.name = `properties[${q.label}]`;
+            if (q.required) input.required = true;
+            
+            const defaultOpt = document.createElement('option');
+            defaultOpt.value = '';
+            defaultOpt.textContent = 'Select...';
+            input.appendChild(defaultOpt);
+            
+            (q.options || []).forEach(opt => {
+              const option = document.createElement('option');
+              option.value = opt;
+              option.textContent = opt; // Safe
+              input.appendChild(option);
+            });
+            fieldDiv.appendChild(label);
+            fieldDiv.appendChild(input);
             break;
 
           case 'checkbox':
-            html += `
-              <div class="dtf-field dtf-checkbox-field">
-                <input type="checkbox" id="${fieldId}" name="properties[${q.label}]" value="Yes" ${requiredAttr}>
-                <label for="${fieldId}">${q.label} ${required}</label>
-              </div>
-            `;
+            input = document.createElement('input');
+            input.type = 'checkbox';
+            input.id = fieldId;
+            input.name = `properties[${q.label}]`;
+            input.value = 'Yes';
+            if (q.required) input.required = true;
+            fieldDiv.appendChild(input);
+            fieldDiv.appendChild(label);
             break;
 
           case 'number':
-            html += `
-              <div class="dtf-field">
-                <label for="${fieldId}">${q.label} ${required}</label>
-                <input type="number" id="${fieldId}" name="properties[${q.label}]" ${requiredAttr}>
-              </div>
-            `;
+            input = document.createElement('input');
+            input.type = 'number';
+            input.id = fieldId;
+            input.name = `properties[${q.label}]`;
+            if (q.required) input.required = true;
+            fieldDiv.appendChild(label);
+            fieldDiv.appendChild(input);
             break;
-        }
-      });
 
-      questionsContainer.innerHTML = html;
+          default:
+            input = document.createElement('input');
+            input.type = 'text';
+            input.id = fieldId;
+            input.name = `properties[${q.label}]`;
+            fieldDiv.appendChild(label);
+            fieldDiv.appendChild(input);
+        }
+
+        questionsContainer.appendChild(fieldDiv);
+      });
     },
 
     /**
@@ -290,10 +322,12 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            shop: shopDomain,
-            filename: file.name,
+            shopDomain: shopDomain,
+            productId: productId,
+            mode: 'dtf',
+            fileName: file.name,
             contentType: file.type,
-            size: file.size
+            fileSize: file.size
           })
         });
 

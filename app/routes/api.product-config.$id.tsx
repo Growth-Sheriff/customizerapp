@@ -11,8 +11,27 @@
  */
 
 import type { LoaderFunctionArgs } from "@remix-run/node";
-import { handleCorsOptions, corsJson } from "~/lib/cors.server";
+import { handleCorsOptions, getCorsHeaders } from "~/lib/cors.server";
 import prisma from "~/lib/prisma.server";
+
+// Helper to create cached CORS JSON response
+function cachedCorsJson<T>(data: T, request: Request, options: { status?: number } = {}) {
+  const corsHeaders = getCorsHeaders(request);
+  const headers = new Headers();
+  
+  for (const [key, value] of Object.entries(corsHeaders)) {
+    if (value) headers.set(key, value);
+  }
+  
+  // Cache for 5 minutes
+  headers.set('Cache-Control', 'public, max-age=300, s-maxage=300');
+  headers.set('Content-Type', 'application/json');
+  
+  return new Response(JSON.stringify(data), {
+    status: options.status || 200,
+    headers,
+  });
+}
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   // Handle CORS preflight
@@ -22,7 +41,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const productId = params.id;
   if (!productId) {
-    return corsJson({ error: "Product ID required" }, request, { status: 400 });
+    return cachedCorsJson({ error: "Product ID required" }, request, { status: 400 });
   }
 
   // Get shop from query param
@@ -30,7 +49,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const shopDomain = url.searchParams.get("shop");
 
   if (!shopDomain) {
-    return corsJson({ error: "Shop domain required" }, request, { status: 400 });
+    return cachedCorsJson({ error: "Shop domain required" }, request, { status: 400 });
   }
 
   try {
@@ -40,7 +59,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     });
 
     if (!shop) {
-      return corsJson({ error: "Shop not found" }, request, { status: 404 });
+      return cachedCorsJson({ error: "Shop not found" }, request, { status: 404 });
     }
 
     // Normalize product ID to GID format
@@ -60,7 +79,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
     // If no config exists, return defaults (upload enabled, nothing else)
     if (!config) {
-      return corsJson({
+      return cachedCorsJson({
         productId: productGid,
         uploadEnabled: true,
         extraQuestions: [],
@@ -70,7 +89,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     }
 
     // Return config
-    return corsJson({
+    return cachedCorsJson({
       productId: productGid,
       uploadEnabled: config.uploadEnabled,
       extraQuestions: config.extraQuestions || [],
@@ -80,6 +99,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   } catch (error) {
     console.error("[Product Config API] Error:", error);
-    return corsJson({ error: "Failed to fetch config" }, request, { status: 500 });
+    return cachedCorsJson({ error: "Failed to fetch config" }, request, { status: 500 });
   }
 }
