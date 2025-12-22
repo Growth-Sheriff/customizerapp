@@ -4,13 +4,12 @@
  */
 
 import { useCallback, useState } from "react";
-import { useLocation, useNavigate, Outlet } from "@remix-run/react";
+import { useLocation, Outlet } from "@remix-run/react";
 import {
   Frame,
   Navigation,
   TopBar,
   Text,
-  Icon,
 } from "@shopify/polaris";
 import {
   HomeIcon,
@@ -37,7 +36,6 @@ interface AppFrameProps {
 
 export function AppFrame({ shop, pendingUploads = 0, pendingQueue = 0 }: AppFrameProps) {
   const location = useLocation();
-  const navigate = useNavigate();
   const [mobileNavigationActive, setMobileNavigationActive] = useState(false);
 
   const toggleMobileNavigationActive = useCallback(
@@ -74,14 +72,12 @@ export function AppFrame({ shop, pendingUploads = 0, pendingQueue = 0 }: AppFram
             label: "Dashboard",
             icon: HomeIcon,
             selected: isSelected("/app") && !location.pathname.includes("/app/"),
-            onClick: () => navigate("/app"),
           },
           {
             url: "/app/analytics",
             label: "Reports",
             icon: ChartVerticalFilledIcon,
             selected: isSelected("/app/analytics"),
-            onClick: () => navigate("/app/analytics"),
           },
         ]}
       />
@@ -96,21 +92,18 @@ export function AppFrame({ shop, pendingUploads = 0, pendingQueue = 0 }: AppFram
             icon: OrderIcon,
             selected: isSelected("/app/uploads"),
             badge: pendingUploads > 0 ? String(pendingUploads) : undefined,
-            onClick: () => navigate("/app/uploads"),
           },
           {
             url: "/app/products",
             label: "Products",
             icon: ProductIcon,
             selected: isSelected("/app/products"),
-            onClick: () => navigate("/app/products"),
           },
           {
             url: "/app/asset-sets",
             label: "Asset Sets",
             icon: ImageIcon,
             selected: isSelected("/app/asset-sets"),
-            onClick: () => navigate("/app/asset-sets"),
           },
           {
             url: "/app/queue",
@@ -118,14 +111,12 @@ export function AppFrame({ shop, pendingUploads = 0, pendingQueue = 0 }: AppFram
             icon: ListBulletedIcon,
             selected: isSelected("/app/queue"),
             badge: pendingQueue > 0 ? String(pendingQueue) : undefined,
-            onClick: () => navigate("/app/queue"),
           },
           {
             url: "/app/exports",
             label: "Exports",
             icon: ExportIcon,
             selected: isSelected("/app/exports"),
-            onClick: () => navigate("/app/exports"),
           },
         ]}
       />
@@ -140,35 +131,30 @@ export function AppFrame({ shop, pendingUploads = 0, pendingQueue = 0 }: AppFram
             label: "General",
             icon: SettingsIcon,
             selected: isSelected("/app/settings"),
-            onClick: () => navigate("/app/settings"),
           },
           {
             url: "/app/api-keys",
             label: "API Keys",
             icon: KeyIcon,
             selected: isSelected("/app/api-keys"),
-            onClick: () => navigate("/app/api-keys"),
           },
           {
             url: "/app/team",
             label: "Team",
             icon: PersonIcon,
             selected: isSelected("/app/team"),
-            onClick: () => navigate("/app/team"),
           },
           {
             url: "/app/billing",
             label: "Billing",
             icon: CreditCardIcon,
             selected: isSelected("/app/billing"),
-            onClick: () => navigate("/app/billing"),
           },
           {
             url: "/app/white-label",
             label: "Branding",
             icon: PaintBrushFlatIcon,
             selected: isSelected("/app/white-label"),
-            onClick: () => navigate("/app/white-label"),
           },
         ]}
       />
