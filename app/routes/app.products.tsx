@@ -7,7 +7,7 @@ import { json } from "@remix-run/node";
 import { useLoaderData, useNavigate } from "@remix-run/react";
 import {
   Page, Layout, Card, Text, BlockStack, InlineStack,
-  Button, Badge, EmptyState, Banner, ResourceList, ResourceItem,
+  Badge, EmptyState, Banner, ResourceList, ResourceItem,
   Avatar, Filters
 } from "@shopify/polaris";
 import { useState, useCallback } from "react";
@@ -232,25 +232,28 @@ export default function ProductsPage() {
                     media={media}
                     accessibilityLabel={`Configure ${title}`}
                     onClick={() => handleConfigureClick(numericId)}
+                    shortcutActions={[
+                      {
+                        content: "Configure",
+                        onAction: () => handleConfigureClick(numericId),
+                      },
+                    ]}
                   >
-                    <InlineStack align="space-between" blockAlign="center">
-                      <BlockStack gap="100">
-                        <Text variant="bodyMd" fontWeight="bold" as="span">
-                          {title}
-                        </Text>
-                        <InlineStack gap="200">
-                          {isEnabled ? (
-                            <Badge tone="success">Enabled</Badge>
-                          ) : (
-                            <Badge>Disabled</Badge>
-                          )}
-                          <Badge tone={getModeTone(mode)}>
-                            {getModeLabel(mode)}
-                          </Badge>
-                        </InlineStack>
-                      </BlockStack>
-                      <Button size="slim">Configure</Button>
-                    </InlineStack>
+                    <BlockStack gap="100">
+                      <Text variant="bodyMd" fontWeight="bold" as="span">
+                        {title}
+                      </Text>
+                      <InlineStack gap="200">
+                        {isEnabled ? (
+                          <Badge tone="success">Enabled</Badge>
+                        ) : (
+                          <Badge>Disabled</Badge>
+                        )}
+                        <Badge tone={getModeTone(mode)}>
+                          {getModeLabel(mode)}
+                        </Badge>
+                      </InlineStack>
+                    </BlockStack>
                   </ResourceItem>
                 );
               }}
