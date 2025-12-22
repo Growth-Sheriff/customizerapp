@@ -30,36 +30,64 @@
   async function loadThree() {
     if (threeLoaded) return;
 
+    // Check if Three.js is already loaded globally
+    if (window.THREE && window.THREE.Scene) {
+      threeLoaded = true;
+      return;
+    }
+
     return new Promise((resolve, reject) => {
-      // Load Three.js
+      // Add import map for ES modules
+      const importMap = document.createElement('script');
+      importMap.type = 'importmap';
+      importMap.textContent = JSON.stringify({
+        imports: {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+      });
+      document.head.appendChild(importMap);
+
+      // Load Three.js from UMD bundle (more compatible)
       const threeScript = document.createElement('script');
       threeScript.src = 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js';
       threeScript.onload = () => {
-        // Load GLTFLoader
-        const loaderScript = document.createElement('script');
-        loaderScript.src = 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/loaders/GLTFLoader.js';
-        loaderScript.onload = () => {
-          // Load OrbitControls
-          const controlsScript = document.createElement('script');
-          controlsScript.src = 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/controls/OrbitControls.js';
-          controlsScript.onload = () => {
-            // Load DecalGeometry
-            const decalScript = document.createElement('script');
-            decalScript.src = 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/geometries/DecalGeometry.js';
-            decalScript.onload = () => {
-              threeLoaded = true;
-              resolve();
-            };
-            decalScript.onerror = reject;
-            document.head.appendChild(decalScript);
-          };
-          controlsScript.onerror = reject;
-          document.head.appendChild(controlsScript);
+        // Load addons from jsm directory
+        const addonsScript = document.createElement('script');
+        addonsScript.type = 'module';
+        addonsScript.textContent = `
+          import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
+          import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js';
+          import { DecalGeometry } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/geometries/DecalGeometry.js';
+          
+          // Expose to global scope for our script
+          window.THREE.GLTFLoader = GLTFLoader;
+          window.THREE.OrbitControls = OrbitControls;
+          window.THREE.DecalGeometry = DecalGeometry;
+          
+          // Dispatch event when ready
+          window.dispatchEvent(new CustomEvent('three-addons-ready'));
+        `;
+        document.head.appendChild(addonsScript);
+
+        // Wait for addons to load
+        const onAddonsReady = () => {
+          window.removeEventListener('three-addons-ready', onAddonsReady);
+          threeLoaded = true;
+          console.log('[3D Preview] Three.js loaded successfully');
+          resolve();
         };
-        loaderScript.onerror = reject;
-        document.head.appendChild(loaderScript);
+        window.addEventListener('three-addons-ready', onAddonsReady);
+        
+        // Timeout fallback
+        setTimeout(() => {
+          if (!threeLoaded) {
+            window.removeEventListener('three-addons-ready', onAddonsReady);
+            reject(new Error('Three.js addons load timeout'));
+          }
+        }, 10000);
       };
-      threeScript.onerror = reject;
+      threeScript.onerror = () => reject(new Error('Failed to load Three.js'));
       document.head.appendChild(threeScript);
     });
   }

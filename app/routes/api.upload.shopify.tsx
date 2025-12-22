@@ -11,6 +11,7 @@ import prisma from "~/lib/prisma.server";
 import { nanoid } from "nanoid";
 
 // Shopify Files API - Staged Upload Target
+// Shopify 2025-10 GraphQL API
 const STAGED_UPLOAD_MUTATION = `
   mutation stagedUploadsCreate($input: [StagedUploadInput!]!) {
     stagedUploadsCreate(input: $input) {
@@ -25,12 +26,14 @@ const STAGED_UPLOAD_MUTATION = `
       userErrors {
         field
         message
+        code
       }
     }
   }
 `;
 
 // Create file from staged upload
+// Shopify 2025-10 GraphQL API
 const FILE_CREATE_MUTATION = `
   mutation fileCreate($files: [FileCreateInput!]!) {
     fileCreate(files: $files) {
@@ -38,20 +41,26 @@ const FILE_CREATE_MUTATION = `
         id
         alt
         createdAt
+        fileStatus
         ... on MediaImage {
           image {
             url
             originalSrc
+            width
+            height
           }
+          mimeType
         }
         ... on GenericFile {
           url
           originalFileSize
+          mimeType
         }
       }
       userErrors {
         field
         message
+        code
       }
     }
   }
@@ -110,10 +119,23 @@ export async function action({ request }: ActionFunctionArgs) {
           return corsJson({ error: "Missing fileName, fileSize, or mimeType" }, request, { status: 400 });
         }
 
-        // Determine file type for Shopify
+        // Validate file size (max 20MB for images, 5GB for files)
+        const maxSize = mimeType.startsWith("image/") ? 20 * 1024 * 1024 : 5 * 1024 * 1024 * 1024;
+        if (fileSize > maxSize) {
+          return corsJson({ error: `File too large. Maximum: ${mimeType.startsWith("image/") ? "20MB" : "5GB"}` }, request, { status: 400 });
+        }
+
+        // Determine file type for Shopify - StagedUploadTargetGenerateUploadResource enum
+        // Valid values: IMAGE, FILE, VIDEO, MODEL_3D, BULK_MUTATION_VARIABLES, etc.
         const isImage = mimeType.startsWith("image/");
+        const isVideo = mimeType.startsWith("video/");
+        const is3DModel = mimeType.includes("gltf") || mimeType.includes("glb") || mimeType.includes("usdz");
         const httpMethod = "POST";
-        const fileType = isImage ? "IMAGE" : "FILE";
+        
+        let fileType = "FILE"; // Default for PDF, etc.
+        if (isImage) fileType = "IMAGE";
+        else if (isVideo) fileType = "VIDEO";
+        else if (is3DModel) fileType = "MODEL_3D";
 
         // Call Shopify GraphQL to get staged upload URL
         const response = await fetch(`https://${shopDomain}/admin/api/2025-10/graphql.json`, {
@@ -175,6 +197,17 @@ export async function action({ request }: ActionFunctionArgs) {
           return corsJson({ error: "Missing resourceUrl" }, request, { status: 400 });
         }
 
+        // Determine contentType based on mimeType - FileContentType enum
+        // Valid values: IMAGE, FILE, VIDEO, MODEL_3D, EXTERNAL_VIDEO
+        let contentType = "FILE";
+        if (mimeType?.startsWith("image/")) {
+          contentType = "IMAGE";
+        } else if (mimeType?.startsWith("video/")) {
+          contentType = "VIDEO";
+        } else if (mimeType?.includes("gltf") || mimeType?.includes("glb") || mimeType?.includes("usdz")) {
+          contentType = "MODEL_3D";
+        }
+
         // Create file in Shopify
         const response = await fetch(`https://${shopDomain}/admin/api/2025-10/graphql.json`, {
           method: "POST",
@@ -188,7 +221,7 @@ export async function action({ request }: ActionFunctionArgs) {
               files: [
                 {
                   originalSource: resourceUrl,
-                  contentType: mimeType?.startsWith("image/") ? "IMAGE" : "FILE",
+                  contentType,
                   alt: fileName || "Customer upload",
                 },
               ],
@@ -208,23 +241,49 @@ export async function action({ request }: ActionFunctionArgs) {
 
         if (userErrors?.length > 0) {
           console.error("[Shopify Files] User errors:", userErrors);
-          return corsJson({ error: userErrors[0].message }, request, { status: 400 });
+          const errorCode = userErrors[0].code;
+          const errorMsg = userErrors[0].message;
+          return corsJson({ 
+            error: errorMsg, 
+            code: errorCode,
+            details: userErrors 
+          }, request, { status: 400 });
         }
 
-        // Get the file URL
+        // Check file status - Shopify processes files asynchronously
+        const fileStatus = file?.fileStatus;
+        if (fileStatus === "FAILED") {
+          return corsJson({ error: "File processing failed" }, request, { status: 500 });
+        }
+
+        // Get the file URL based on file type
         let fileUrl = "";
+        let fileType = "unknown";
+        
+        // MediaImage type
         if (file?.image?.url) {
           fileUrl = file.image.url;
+          fileType = "image";
         } else if (file?.image?.originalSrc) {
           fileUrl = file.image.originalSrc;
-        } else if (file?.url) {
+          fileType = "image";
+        } 
+        // GenericFile type (PDF, etc.)
+        else if (file?.url) {
           fileUrl = file.url;
+          fileType = "file";
         }
+
+        // Log success
+        console.log(`[Shopify Files] Created ${fileType}: ${file?.id}, status: ${fileStatus}`);
 
         return corsJson({
           success: true,
           fileId: file?.id,
           fileUrl,
+          fileStatus,
+          fileType,
+          mimeType: file?.mimeType,
         }, request);
       }
 

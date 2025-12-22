@@ -38,7 +38,9 @@ api_version = "2025-10"
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "read_products,write_products,read_orders,write_orders,read_customers"
+# write_files: Required for Shopify Files API (fileCreate, stagedUploadsCreate)
+# read_files: Required to read uploaded files
+scopes = "read_products,write_products,read_orders,write_orders,read_customers,read_files,write_files"
 optional_scopes = []
 use_legacy_install_flow = false
 
