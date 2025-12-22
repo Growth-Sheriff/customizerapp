@@ -851,9 +851,6 @@ console.log('[ULTShirtModal] Script loading...');
       }
       
       return true;
-      }
-      
-      return true;
     },
     
     // FAZ 6: 2D Fallback Mode
