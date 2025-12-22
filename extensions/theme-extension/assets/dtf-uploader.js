@@ -458,22 +458,39 @@
 
     /**
      * Handle file selection
+     * FAZ 7: Enhanced error handling with ULErrorHandler
      */
     async handleFileSelect(productId, file) {
       const instance = this.instances[productId];
       const { elements, apiBase, shopDomain, state } = instance;
 
-      // Validate file type
-      const ext = file.name.split('.').pop().toLowerCase();
-      if (!ALLOWED_EXTENSIONS.includes(ext)) {
-        this.showError(productId, `Invalid file type. Allowed: ${ALLOWED_EXTENSIONS.join(', ').toUpperCase()}`);
-        return;
-      }
+      // FAZ 7: Use ULErrorHandler for file validation
+      if (window.ULErrorHandler) {
+        const validation = window.ULErrorHandler.validateFile(file, {
+          maxSize: MAX_FILE_SIZE,
+          allowedExtensions: ALLOWED_EXTENSIONS
+        });
+        
+        if (!validation.valid) {
+          const err = validation.errors[0];
+          window.ULErrorHandler.show(err.code, err.params, {
+            onRetry: () => elements.fileInput.click()
+          });
+          this.showError(productId, window.ULErrorHandler.getError(err.code).message.replace('{maxSize}', err.params.maxSize || '50MB').replace('{allowedTypes}', err.params.allowedTypes || ALLOWED_EXTENSIONS.join(', ').toUpperCase()));
+          return;
+        }
+      } else {
+        // Fallback validation
+        const ext = file.name.split('.').pop().toLowerCase();
+        if (!ALLOWED_EXTENSIONS.includes(ext)) {
+          this.showError(productId, `Invalid file type. Allowed: ${ALLOWED_EXTENSIONS.join(', ').toUpperCase()}`);
+          return;
+        }
 
-      // Validate file size
-      if (file.size > MAX_FILE_SIZE) {
-        this.showError(productId, 'File too large. Maximum size is 50MB.');
-        return;
+        if (file.size > MAX_FILE_SIZE) {
+          this.showError(productId, 'File too large. Maximum size is 50MB.');
+          return;
+        }
       }
 
       this.hideError(productId);
@@ -564,7 +581,29 @@
         state.upload.error = error.message;
         elements.progress.classList.remove('active');
         elements.dropzone.style.display = 'block';
-        this.showError(productId, error.message || 'Upload failed. Please try again.');
+        
+        // FAZ 7: Enhanced error handling
+        const errorMessage = error.message || 'Upload failed. Please try again.';
+        this.showError(productId, errorMessage);
+        
+        if (window.ULErrorHandler) {
+          // Determine error type
+          let errorCode = 'UPLOAD_FAILED';
+          if (error.message?.includes('network') || error.message?.includes('connection')) {
+            errorCode = 'UPLOAD_NETWORK_ERROR';
+          } else if (error.message?.includes('timeout')) {
+            errorCode = 'UPLOAD_TIMEOUT';
+          } else if (error.message?.includes('process')) {
+            errorCode = 'UPLOAD_PROCESSING_FAILED';
+          }
+          
+          window.ULErrorHandler.show(errorCode, {}, {
+            onRetry: () => {
+              this.hideError(productId);
+              elements.fileInput.click();
+            }
+          });
+        }
       }
     },
 
@@ -707,6 +746,7 @@
 
     /**
      * Show file preview after successful upload
+     * FAZ 7: Enhanced DPI warning with ULErrorHandler
      */
     showPreview(productId) {
       const instance = this.instances[productId];
@@ -727,18 +767,33 @@
       meta.push(this.formatFileSize(file.size));
       elements.filemeta.textContent = meta.join(' • ');
 
-      // Set status
-      const hasWarnings = result.warnings && result.warnings.length > 0;
+      // FAZ 7: Check for low DPI warning
+      const minDpi = state.config.minDPI || 150;
+      const hasLowDpi = result.dpi && result.dpi < minDpi;
+      const hasWarnings = (result.warnings && result.warnings.length > 0) || hasLowDpi;
       const statusEl = elements.filestatus;
+      
+      if (hasLowDpi && window.ULErrorHandler) {
+        // Show DPI warning toast
+        window.ULErrorHandler.show('UPLOAD_LOW_DPI', {
+          actualDpi: result.dpi,
+          minDpi: minDpi
+        });
+      }
       
       if (hasWarnings) {
         elements.preview.classList.add('has-warning');
         statusEl.classList.add('warning');
+        
+        const warningText = hasLowDpi 
+          ? `Low resolution: ${result.dpi} DPI (recommended: ${minDpi}+ DPI)`
+          : result.warnings[0];
+        
         statusEl.innerHTML = `
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
           </svg>
-          <span>${result.warnings[0]}</span>
+          <span>${warningText}</span>
         `;
       } else {
         elements.preview.classList.remove('has-warning');
@@ -1048,7 +1103,25 @@
         console.error('[UL] Add to cart error:', error);
         elements.addCartBtn.classList.remove('loading');
         elements.addCartBtn.disabled = false;
-        this.showError(productId, error.message || 'Failed to add to cart. Please try again.');
+        
+        // FAZ 7: Enhanced cart error handling
+        const errorMsg = error.message || '';
+        
+        if (window.ULErrorHandler) {
+          let errorCode = 'CART_ADD_FAILED';
+          
+          if (errorMsg.includes('stock') || errorMsg.includes('available')) {
+            errorCode = 'CART_VARIANT_OUT_OF_STOCK';
+          } else if (errorMsg.includes('session') || errorMsg.includes('expired')) {
+            errorCode = 'CART_SESSION_EXPIRED';
+          }
+          
+          window.ULErrorHandler.show(errorCode, {}, {
+            onRetry: () => this.addToCart(productId)
+          });
+        }
+        
+        this.showError(productId, errorMsg || 'Failed to add to cart. Please try again.');
       }
     },
 

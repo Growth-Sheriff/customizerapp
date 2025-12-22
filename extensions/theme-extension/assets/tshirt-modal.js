@@ -436,7 +436,8 @@
     },
 
     nextStep() {
-      if (this.currentStep < 4 && this.canProceed()) {
+      // FAZ 7: Validate before proceeding
+      if (this.currentStep < 4 && this.validateStep() && this.canProceed()) {
         this.goToStep(this.currentStep + 1);
       }
     },
@@ -457,6 +458,68 @@
           return this.step3.quantity > 0;
         case 4:
           return this.step4.confirmationChecked;
+        default:
+          return true;
+      }
+    },
+    
+    // FAZ 7: Validation with error display
+    validateStep() {
+      const step = this.currentStep;
+      
+      switch (step) {
+        case 1:
+          if (!this.step1.useInheritedDesign && this.step1.newUpload.status !== 'complete') {
+            if (window.ULErrorHandler) {
+              window.ULErrorHandler.show('VALIDATION_UPLOAD_REQUIRED');
+            } else {
+              this.showToast('Please upload your design first.', 'error');
+            }
+            return false;
+          }
+          return true;
+          
+        case 2:
+          if (this.getEnabledLocations().length === 0) {
+            if (window.ULErrorHandler) {
+              window.ULErrorHandler.show('VALIDATION_LOCATION_REQUIRED');
+            } else {
+              this.showToast('Please select at least one print location.', 'error');
+            }
+            return false;
+          }
+          return true;
+          
+        case 3:
+          if (this.step3.quantity < 1) {
+            if (window.ULErrorHandler) {
+              window.ULErrorHandler.show('VALIDATION_INVALID_INPUT', {
+                fieldName: 'Quantity',
+                hint: 'Please enter at least 1.'
+              });
+            }
+            return false;
+          }
+          return true;
+          
+        case 4:
+          if (!this.step4.confirmationChecked) {
+            if (window.ULErrorHandler) {
+              window.ULErrorHandler.show('VALIDATION_CONFIRMATION_REQUIRED');
+            } else {
+              this.showToast('Please confirm your order before proceeding.', 'error');
+            }
+            // Add shake animation to checkbox
+            if (this.el.confirmCheckbox) {
+              this.el.confirmCheckbox.closest('.ul-confirmation')?.classList.add('ul-error-shake');
+              setTimeout(() => {
+                this.el.confirmCheckbox.closest('.ul-confirmation')?.classList.remove('ul-error-shake');
+              }, 500);
+            }
+            return false;
+          }
+          return true;
+          
         default:
           return true;
       }
@@ -1113,11 +1176,17 @@
     },
 
     // ==========================================================================
-    // THREE.JS 3D SCENE
+    // THREE.JS 3D SCENE - FAZ 7: Enhanced Error Handling
     // ==========================================================================
     async init3D() {
       if (typeof THREE === 'undefined') {
         console.warn('[ULTShirtModal] Three.js not loaded, showing 2D fallback');
+        
+        // FAZ 7: Show info toast about 3D unavailable
+        if (window.ULErrorHandler) {
+          window.ULErrorHandler.show('THREE_WEBGL_NOT_SUPPORTED');
+        }
+        
         this.show2DFallback();
         return;
       }
@@ -1129,42 +1198,54 @@
       const width = container.clientWidth;
       const height = container.clientHeight;
       
-      // Scene
-      this.three.scene = new THREE.Scene();
-      this.three.scene.background = new THREE.Color(0xf0f0f0);
-      
-      // Camera
-      this.three.camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
-      this.three.camera.position.set(0, 0, 4);
-      
-      // Renderer
-      this.three.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-      this.three.renderer.setSize(width, height);
-      this.three.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-      
-      // Lighting
-      const ambient = new THREE.AmbientLight(0xffffff, 0.6);
-      this.three.scene.add(ambient);
-      
-      const dir1 = new THREE.DirectionalLight(0xffffff, 0.8);
-      dir1.position.set(5, 5, 5);
-      this.three.scene.add(dir1);
-      
-      const dir2 = new THREE.DirectionalLight(0xffffff, 0.3);
-      dir2.position.set(-5, 5, -5);
-      this.three.scene.add(dir2);
-      
-      // Create T-shirt mesh (simplified plane for now)
-      await this.createTShirtMesh();
-      
-      // Apply design
-      await this.applyDesignTexture();
-      
-      // Hide loading
-      if (this.el.loading3d) this.el.loading3d.style.display = 'none';
-      
-      // Start render loop
-      this.animate3D();
+      try {
+        // Scene
+        this.three.scene = new THREE.Scene();
+        this.three.scene.background = new THREE.Color(0xf0f0f0);
+        
+        // Camera
+        this.three.camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+        this.three.camera.position.set(0, 0, 4);
+        
+        // Renderer
+        this.three.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+        this.three.renderer.setSize(width, height);
+        this.three.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        
+        // Lighting
+        const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+        this.three.scene.add(ambient);
+        
+        const dir1 = new THREE.DirectionalLight(0xffffff, 0.8);
+        dir1.position.set(5, 5, 5);
+        this.three.scene.add(dir1);
+        
+        const dir2 = new THREE.DirectionalLight(0xffffff, 0.3);
+        dir2.position.set(-5, 5, -5);
+        this.three.scene.add(dir2);
+        
+        // Create T-shirt mesh (simplified plane for now)
+        await this.createTShirtMesh();
+        
+        // Apply design
+        await this.applyDesignTexture();
+        
+        // Hide loading
+        if (this.el.loading3d) this.el.loading3d.style.display = 'none';
+        
+        // Start render loop
+        this.animate3D();
+        
+      } catch (error) {
+        console.error('[ULTShirtModal] 3D init error:', error);
+        
+        // FAZ 7: Show 3D error and fallback
+        if (window.ULErrorHandler) {
+          window.ULErrorHandler.show('THREE_MODEL_LOAD_FAILED');
+        }
+        
+        this.show2DFallback();
+      }
     },
 
     async createTShirtMesh() {
@@ -1209,7 +1290,14 @@
             resolve();
           },
           undefined,
-          () => resolve()
+          (error) => {
+            // FAZ 7: Handle texture load failure
+            console.error('[ULTShirtModal] Texture load error:', error);
+            if (window.ULErrorHandler) {
+              window.ULErrorHandler.show('THREE_TEXTURE_FAILED');
+            }
+            resolve(); // Continue without texture
+          }
         );
       });
     },
@@ -1507,7 +1595,20 @@
           body: JSON.stringify(cartData)
         });
         
-        if (!response.ok) throw new Error('Failed to add to cart');
+        if (!response.ok) {
+          // FAZ 7: Parse error response for better handling
+          const errorData = await response.json().catch(() => ({}));
+          
+          // Check for specific errors
+          if (errorData.description?.includes('not available') || errorData.status === 422) {
+            if (window.ULErrorHandler) {
+              window.ULErrorHandler.show('CART_VARIANT_OUT_OF_STOCK');
+            }
+            throw new Error('This size is currently out of stock.');
+          }
+          
+          throw new Error(errorData.description || 'Failed to add to cart');
+        }
         
         // Dispatch cart update event
         document.dispatchEvent(new CustomEvent('ul:cartUpdated'));
@@ -1516,7 +1617,25 @@
         return true;
       } catch (error) {
         console.error('[ULTShirtModal] Add to cart error:', error);
-        this.showToast('Failed to add to cart. Please try again.', 'error');
+        
+        // FAZ 7: Enhanced cart error handling
+        if (window.ULErrorHandler) {
+          const errorMsg = error.message || '';
+          let errorCode = 'CART_ADD_FAILED';
+          
+          if (errorMsg.includes('stock')) {
+            errorCode = 'CART_VARIANT_OUT_OF_STOCK';
+          } else if (errorMsg.includes('session') || errorMsg.includes('expired')) {
+            errorCode = 'CART_SESSION_EXPIRED';
+          }
+          
+          window.ULErrorHandler.show(errorCode, {}, {
+            onRetry: () => this.addToCart()
+          });
+        } else {
+          this.showToast('Failed to add to cart. Please try again.', 'error');
+        }
+        
         return false;
       }
     },

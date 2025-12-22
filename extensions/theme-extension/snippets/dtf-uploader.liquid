@@ -231,6 +231,8 @@
   <span id="ul-toast-text">Added to cart!</span>
 </div>
 
+<!-- FAZ 7: Error Handler (must load before other scripts) -->
+<script src="{{ 'ul-error-handler.js' | asset_url }}" defer></script>
 <script src="{{ 'dtf-uploader.js' | asset_url }}" defer></script>
 <script>
   document.addEventListener('DOMContentLoaded', function() {
