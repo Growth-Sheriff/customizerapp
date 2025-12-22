@@ -112,7 +112,6 @@
       }
       await loadScriptWithFallback(DECAL_CDNS, () => typeof THREE.DecalGeometry !== 'undefined');
       resolve();
-      document.head.appendChild(script);
     });
   }
 

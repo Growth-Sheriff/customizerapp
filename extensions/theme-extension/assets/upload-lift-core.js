@@ -65,8 +65,13 @@
     if (!container) {
       // Try quick upload
       container = document.getElementById('upload-lift-quick');
-      if (!container) return;
-      initQuickUpload();
+      if (container) {
+        // Set CONFIG from quick upload container
+        CONFIG.apiBase = container.dataset.appUrl || 'https://customizerapp.dev';
+        CONFIG.shopDomain = container.dataset.shopDomain || window.Shopify?.shop || '';
+        console.log('[Upload Lift] Quick Upload initialized', { shopDomain: CONFIG.shopDomain });
+        initQuickUpload();
+      }
       return;
     }
 
@@ -635,23 +640,26 @@
 
     const productId = item.dataset.productId;
     const variantId = item.dataset.variantId;
-    const statusEl = item.querySelector('.ul-quick-status');
+    const progressEl = item.querySelector('.ul-quick-progress');
+    const progressFill = item.querySelector('.ul-quick-progress-fill');
+    const progressText = item.querySelector('.ul-quick-progress-text');
+    const successEl = item.querySelector('.ul-quick-success');
+    const overlayEl = item.querySelector('.ul-quick-overlay');
     const btnEl = item.querySelector('.ul-quick-upload-btn');
 
     // Validate file
     const validation = validateFile(file);
     if (!validation.valid) {
-      if (statusEl) {
-        statusEl.textContent = validation.error;
-        statusEl.className = 'ul-quick-status ul-status-error';
-      }
+      alert(validation.error);
       return;
     }
 
     // Show uploading status
-    if (statusEl) {
-      statusEl.textContent = 'Uploading...';
-      statusEl.className = 'ul-quick-status ul-status-progress';
+    if (overlayEl) overlayEl.style.display = 'none';
+    if (progressEl) {
+      progressEl.style.display = 'block';
+      if (progressFill) progressFill.style.width = '10%';
+      if (progressText) progressText.textContent = 'Uploading...';
     }
     if (btnEl) btnEl.disabled = true;
 
@@ -674,8 +682,12 @@
         }),
       });
 
-      if (!intentRes.ok) throw new Error('Failed to get upload URL');
+      if (!intentRes.ok) {
+        const errData = await intentRes.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to get upload URL');
+      }
       const intent = await intentRes.json();
+      if (progressFill) progressFill.style.width = '30%';
 
       // Step 2: Upload to storage
       await fetch(intent.uploadUrl, {
@@ -683,6 +695,7 @@
         headers: { 'Content-Type': file.type || 'application/octet-stream' },
         body: file,
       });
+      if (progressFill) progressFill.style.width = '60%';
 
       // Step 3: Complete upload
       const completeRes = await fetch(`${CONFIG.apiBase}/api/upload/complete`, {
@@ -700,33 +713,34 @@
         }),
       });
 
-      if (!completeRes.ok) throw new Error('Failed to complete upload');
+      if (!completeRes.ok) {
+        const errData = await completeRes.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to complete upload');
+      }
       const completeData = await completeRes.json();
+      if (progressFill) progressFill.style.width = '80%';
 
       // Step 4: Poll for preflight completion
-      if (statusEl) statusEl.textContent = 'Processing...';
+      if (progressText) progressText.textContent = 'Processing...';
       await pollQuickUploadStatus(intent.uploadId, shopDomain);
+      if (progressFill) progressFill.style.width = '100%';
 
-      // Success - Show add to cart button
-      if (statusEl) {
-        statusEl.textContent = 'Ready!';
-        statusEl.className = 'ul-quick-status ul-status-success';
-      }
+      // Success - Show success state
+      if (progressEl) progressEl.style.display = 'none';
+      if (successEl) successEl.style.display = 'flex';
 
-      // Create Add to Cart button
-      if (btnEl) {
-        btnEl.textContent = 'Add to Cart';
-        btnEl.disabled = false;
-        btnEl.onclick = () => addQuickUploadToCart(intent.uploadId, productId, variantId);
-      }
+      // Auto add to cart after short delay
+      setTimeout(() => {
+        addQuickUploadToCart(intent.uploadId, productId, variantId);
+      }, 500);
 
     } catch (error) {
       console.error('[Upload Lift] Quick upload failed:', error);
-      if (statusEl) {
-        statusEl.textContent = 'Upload failed: ' + (error.message || 'Unknown error');
-        statusEl.className = 'ul-quick-status ul-status-error';
-      }
+      // Hide progress, show overlay again
+      if (progressEl) progressEl.style.display = 'none';
+      if (overlayEl) overlayEl.style.display = 'flex';
       if (btnEl) btnEl.disabled = false;
+      alert('Upload failed: ' + (error.message || 'Unknown error'));
     }
 
     // Reset file input
