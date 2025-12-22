@@ -57,19 +57,19 @@ name = "STARTER"
 amount = 19
 currency_code = "USD"
 interval = "EVERY_30_DAYS"
-trialDays = 7
+trial_days = 7
 
 [[billing.plans]]
 name = "PRO"
 amount = 49
 currency_code = "USD"
 interval = "EVERY_30_DAYS"
-trialDays = 7
+trial_days = 7
 
 [[billing.plans]]
 name = "ENTERPRISE"
 amount = 199
 currency_code = "USD"
 interval = "EVERY_30_DAYS"
-trialDays = 14
+trial_days = 14
 

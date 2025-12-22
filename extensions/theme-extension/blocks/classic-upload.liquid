@@ -7,13 +7,37 @@
 {% liquid
   assign product_id = product.id
   assign variant_id = product.selected_or_first_available_variant.id
-  assign upload_enabled = product.metafields.upload_lift.config.enabled | default: false
-  assign upload_mode = product.metafields.upload_lift.config.mode | default: 'classic'
-  assign max_size_mb = product.metafields.upload_lift.config.maxSizeMB | default: 25
-  assign allowed_formats = product.metafields.upload_lift.config.allowedFormats | default: 'PNG, JPG, PDF'
+
+  comment
+    Get upload config from product metafield
+    The metafield is stored as JSON with enabled, mode, maxSizeMB properties
+  endcomment
+  assign upload_config = product.metafields.upload_lift.config.value
+
+  if upload_config != blank
+    assign upload_enabled = upload_config.enabled | default: false
+    assign upload_mode = upload_config.mode | default: 'classic'
+    assign max_size_mb = upload_config.maxSizeMB | default: 25
+    assign allowed_formats = upload_config.allowedFormats | default: 'PNG, JPG, PDF'
+  else
+    assign upload_enabled = false
+    assign upload_mode = 'classic'
+    assign max_size_mb = 25
+    assign allowed_formats = 'PNG, JPG, PDF'
+  endif
+
+  comment
+    Debug mode: Set to true to show block even when not configured
+    Change to false in production
+  endcomment
+  assign debug_mode = false
+  assign should_show = upload_enabled and upload_mode == 'classic'
+  if debug_mode
+    assign should_show = true
+  endif
 %}
 
-{% if upload_enabled and upload_mode == 'classic' %}
+{% if should_show %}
 <div
   id="upload-lift-classic"
   class="upload-lift-container"
@@ -23,6 +47,7 @@
   data-max-size="{{ max_size_mb }}"
   data-allowed-formats="{{ allowed_formats }}"
   data-app-url="{{ shop.metafields.upload_lift.app_url | default: 'https://customizerapp.dev' }}"
+  data-debug="{{ debug_mode }}"
 >
   <!-- Step 1: Size Selection -->
   <div class="ul-step ul-step-size" data-step="1">

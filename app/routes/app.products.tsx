@@ -183,11 +183,27 @@ export async function action({ request }: ActionFunctionArgs) {
         updatedAt: new Date().toISOString(),
       });
 
-      await admin.graphql(`
+      // Ensure productId is in GID format
+      const productGid = productId.startsWith("gid://")
+        ? productId
+        : `gid://shopify/Product/${productId}`;
+
+      console.log("[Products] Updating metafield for:", productGid, "enabled:", enabled, "mode:", mode);
+
+      const response = await admin.graphql(`
         mutation productMetafieldSet($input: ProductInput!) {
           productUpdate(input: $input) {
             product {
               id
+              metafields(first: 5, namespace: "upload_lift") {
+                edges {
+                  node {
+                    namespace
+                    key
+                    value
+                  }
+                }
+              }
             }
             userErrors {
               field
@@ -198,7 +214,7 @@ export async function action({ request }: ActionFunctionArgs) {
       `, {
         variables: {
           input: {
-            id: productId,
+            id: productGid,
             metafields: [{
               namespace: "upload_lift",
               key: "config",
@@ -208,6 +224,13 @@ export async function action({ request }: ActionFunctionArgs) {
           },
         },
       });
+
+      const result = await response.json();
+      if (result.data?.productUpdate?.userErrors?.length > 0) {
+        console.error("[Products] Metafield userErrors:", result.data.productUpdate.userErrors);
+      } else {
+        console.log("[Products] Metafield updated successfully");
+      }
     } catch (error) {
       console.error("[Products] Failed to update metafield:", error);
       // Continue anyway - DB is updated

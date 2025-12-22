@@ -13,13 +13,37 @@
 {% liquid
   assign product_id = product.id
   assign variant_id = product.selected_or_first_available_variant.id
-  assign upload_enabled = product.metafields.upload_lift.config.enabled | default: false
-  assign upload_mode = product.metafields.upload_lift.config.mode | default: 'classic'
-  assign asset_set_id = product.metafields.upload_lift.config.assetSetId | default: ''
-  assign max_size_mb = product.metafields.upload_lift.config.maxSizeMB | default: 25
+
+  comment
+    Get upload config from product metafield
+    The metafield is stored as JSON with enabled, mode, assetSetId, maxSizeMB properties
+  endcomment
+  assign upload_config = product.metafields.upload_lift.config.value
+
+  if upload_config != blank
+    assign upload_enabled = upload_config.enabled | default: false
+    assign upload_mode = upload_config.mode | default: 'classic'
+    assign asset_set_id = upload_config.assetSetId | default: ''
+    assign max_size_mb = upload_config.maxSizeMB | default: 25
+  else
+    assign upload_enabled = false
+    assign upload_mode = 'classic'
+    assign asset_set_id = ''
+    assign max_size_mb = 25
+  endif
+
+  comment
+    Debug mode: Set to true to show block even when not configured
+    Change to false in production
+  endcomment
+  assign debug_mode = false
+  assign should_show = upload_enabled and upload_mode == '3d_designer'
+  if debug_mode
+    assign should_show = true
+  endif
 %}
 
-{% if upload_enabled and upload_mode == '3d_designer' %}
+{% if should_show %}
 <div
   id="upload-lift-3d-designer"
   class="ul-3d-container"
@@ -29,6 +53,7 @@
   data-asset-set-id="{{ asset_set_id }}"
   data-max-size="{{ max_size_mb }}"
   data-app-url="{{ shop.metafields.upload_lift.app_url | default: 'https://customizerapp.dev' }}"
+  data-debug="{{ debug_mode }}"
 >
   <!-- Header -->
   <div class="ul-3d-header">

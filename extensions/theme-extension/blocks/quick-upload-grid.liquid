@@ -4,12 +4,32 @@
   Location: Collection page / Product grid
 {% endcomment %}
 
-<div id="upload-lift-quick" class="ul-quick-grid" data-app-url="{{ shop.metafields.upload_lift.app_url | default: 'https://customizerapp.dev' }}">
-  {% for product in collection.products %}
-    {% assign upload_enabled = product.metafields.upload_lift.config.enabled | default: false %}
-    {% assign upload_mode = product.metafields.upload_lift.config.mode | default: 'classic' %}
+{% liquid
+  comment
+    Debug mode: Set to true to show block even when not configured
+    Change to false in production
+  endcomment
+  assign debug_mode = false
+%}
 
-    {% if upload_enabled and upload_mode == 'quick' %}
+<div id="upload-lift-quick" class="ul-quick-grid" data-app-url="{{ shop.metafields.upload_lift.app_url | default: 'https://customizerapp.dev' }}" data-debug="{{ debug_mode }}">
+  {% for product in collection.products %}
+    {% assign upload_config = product.metafields.upload_lift.config.value %}
+
+    {% if upload_config != blank %}
+      {% assign upload_enabled = upload_config.enabled | default: false %}
+      {% assign upload_mode = upload_config.mode | default: 'classic' %}
+    {% else %}
+      {% assign upload_enabled = false %}
+      {% assign upload_mode = 'classic' %}
+    {% endif %}
+
+    {% assign should_show = upload_enabled and upload_mode == 'quick' %}
+    {% if debug_mode %}
+      {% assign should_show = true %}
+    {% endif %}
+
+    {% if should_show %}
     <div
       class="ul-quick-item"
       data-product-id="{{ product.id }}"

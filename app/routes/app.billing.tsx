@@ -119,31 +119,39 @@ export async function action({ request }: ActionFunctionArgs) {
     return json({ error: "Invalid plan" }, { status: 400 });
   }
 
+  const planName = planId.toUpperCase();
+
   // Request billing subscription from Shopify
+  // This will redirect to Shopify's billing approval page
   try {
-    await billing.require({
-      plans: [planId.toUpperCase()],
+    // First check if already subscribed to this plan
+    const hasSubscription = await billing.check({
+      plans: [planName],
       isTest: true, // Set to false in production
-      onFailure: async () => {
-        // Redirect to billing confirmation page
-        return billing.request({
-          plan: planId.toUpperCase(),
-          isTest: true, // Set to false in production
-        });
-      },
     });
 
-    // If we get here, billing is already active
-    // Update shop plan in database
-    await prisma.shop.update({
-      where: { shopDomain },
-      data: { plan: planId, billingStatus: "active" },
-    });
+    if (hasSubscription) {
+      // Already subscribed, just update database
+      await prisma.shop.update({
+        where: { shopDomain },
+        data: { plan: planId, billingStatus: "active" },
+      });
+      return json({ success: true, message: `Already on ${planDetails.name} plan` });
+    }
 
-    return json({ success: true, message: `Upgraded to ${planDetails.name}` });
-  } catch (error) {
+    // Request new subscription - this throws a Response redirect
+    return await billing.request({
+      plan: planName,
+      isTest: true, // Set to false in production
+      returnUrl: `https://customizerapp.dev/app?shop=${shopDomain}&billing=success`,
+    });
+  } catch (error: any) {
+    // If it's a redirect response, return it
+    if (error instanceof Response) {
+      return error;
+    }
     console.error("[Billing] Error:", error);
-    return json({ error: "Billing request failed" }, { status: 500 });
+    return json({ error: error?.message || "Billing request failed" }, { status: 500 });
   }
 }
 
