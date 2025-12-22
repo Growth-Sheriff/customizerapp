@@ -45,6 +45,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           originalName: true,
           mimeType: true,
           fileSize: true,
+          storageKey: true,
           preflightStatus: true,
           preflightResult: true,
           thumbnailKey: true,
@@ -71,15 +72,28 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     overallPreflight = "warning";
   }
 
+  // Map status for widget compatibility
+  // Widget expects 'ready' or 'completed', but we store 'uploaded'
+  let clientStatus = upload.status;
+  if (upload.status === 'uploaded') {
+    clientStatus = 'ready';
+  }
+
+  // Build download URL for local storage
+  const host = process.env.HOST || "https://customizerapp.dev";
+  const firstItem = upload.items[0];
+  const downloadUrl = firstItem?.storageKey ? `${host}/api/files/${encodeURIComponent(firstItem.storageKey)}` : null;
+
   return corsJson({
     uploadId: upload.id,
-    status: upload.status,
+    status: clientStatus,
     mode: upload.mode,
     productId: upload.productId,
     variantId: upload.variantId,
     overallPreflight,
     preflightSummary: upload.preflightSummary,
     items: upload.items,
+    downloadUrl,
     createdAt: upload.createdAt,
     updatedAt: upload.updatedAt,
   }, request);

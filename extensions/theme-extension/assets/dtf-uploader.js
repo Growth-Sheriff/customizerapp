@@ -822,7 +822,7 @@
       const poll = async () => {
         try {
           const response = await fetch(
-            `${apiBase}/api/upload/status/${uploadId}?shop=${encodeURIComponent(shopDomain)}`
+            `${apiBase}/api/upload/status/${uploadId}?shopDomain=${encodeURIComponent(shopDomain)}`
           );
           
           if (!response.ok) {
