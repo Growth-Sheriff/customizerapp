@@ -1,6 +1,6 @@
 import type { LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useLoaderData, useActionData, useNavigate, Link } from "@remix-run/react";
+import { useLoaderData, useActionData, Link } from "@remix-run/react";
 import {
   Page, Layout, Card, Text, BlockStack, InlineStack,
   Button, Banner, DataTable, Badge, EmptyState
@@ -126,7 +126,6 @@ function ModeBadge({ mode }: { mode: string | null }) {
 export default function ProductsPage() {
   const { products, shopPlan, configuredCount } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
-  const navigate = useNavigate();
 
   // Extract numeric ID from GID for navigation
   const getNumericId = (gid: string) => gid.split("/").pop() || gid;
@@ -142,13 +141,9 @@ export default function ProductsPage() {
     </InlineStack>,
     product.uploadEnabled ? <Badge tone="success">Enabled</Badge> : <Badge>Disabled</Badge>,
     <ModeBadge key={`mode-${product.id}`} mode={product.mode} />,
-    <Button 
-      key={`btn-${product.id}`} 
-      size="slim" 
-      onClick={() => navigate(`/app/products/${getNumericId(product.id)}/configure`)}
-    >
-      Configure
-    </Button>,
+    <Link key={`btn-${product.id}`} to={`/app/products/${getNumericId(product.id)}/configure`}>
+      <Button size="slim">Configure</Button>
+    </Link>,
   ]);
 
   return (

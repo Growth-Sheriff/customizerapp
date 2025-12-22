@@ -26,7 +26,18 @@ function createPrismaClient() {
     if (tenantScopedModels.includes(params.model ?? "")) {
       // For read operations, ensure shop_id is in where clause
       if (["findMany", "findFirst", "findUnique", "count", "aggregate"].includes(params.action)) {
-        if (!params.args?.where?.shopId && !params.args?.where?.shop_id) {
+        const where = params.args?.where;
+        // Check for shopId in different locations:
+        // - Direct: where.shopId
+        // - Composite key: where.shopId_productId.shopId (ProductConfig)
+        // - Composite key: where.shopId_fileKey.shopId (Upload)
+        const hasShopScope = 
+          where?.shopId || 
+          where?.shop_id || 
+          where?.shopId_productId?.shopId ||
+          where?.shopId_fileKey?.shopId;
+        
+        if (!hasShopScope) {
           console.warn(`[TENANT GUARD] Query to ${params.model} without shopId scope!`);
           // In production, you might want to throw an error here
           // throw new Error(`Tenant scope required for ${params.model}`);
