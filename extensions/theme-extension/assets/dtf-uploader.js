@@ -582,13 +582,18 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            shopDomain: shopDomain,
             uploadId: intentData.uploadId,
-            shop: shopDomain
+            items: [{
+              itemId: intentData.itemId,
+              location: 'front'
+            }]
           })
         });
 
         if (!completeResponse.ok) {
-          throw new Error('Failed to finalize upload');
+          const errData = await completeResponse.json().catch(() => ({}));
+          throw new Error(errData.error || 'Failed to finalize upload');
         }
 
         // Step 4: Poll for processing status
