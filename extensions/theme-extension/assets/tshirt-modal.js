@@ -2188,15 +2188,35 @@ console.log('[ULTShirtModal] Script loading...');
         // Capture snapshot
         const dataUrl = this.three.renderer.domElement.toDataURL('image/png');
         
-        // Create preview item
+        // Store snapshot for order note
+        this.step4.locationSnapshots = this.step4.locationSnapshots || {};
+        this.step4.locationSnapshots[locId] = dataUrl;
+        
+        // Create preview item with click handler
         const item = document.createElement('div');
         item.className = 'ul-review-preview-item';
-        item.innerHTML = `
-          <div class="ul-review-preview-label">${locNames[locId]}</div>
-          <div class="ul-review-preview-box">
-            <img src="${dataUrl}" alt="${locNames[locId]} preview" style="width: 100%; height: 100%; object-fit: contain; border-radius: 8px;">
-          </div>
-        `;
+        
+        const label = document.createElement('div');
+        label.className = 'ul-review-preview-label';
+        label.textContent = locNames[locId];
+        
+        const box = document.createElement('div');
+        box.className = 'ul-review-preview-box';
+        box.title = 'Click to enlarge';
+        
+        const img = document.createElement('img');
+        img.src = dataUrl;
+        img.alt = `${locNames[locId]} preview`;
+        img.style.cssText = 'width: 100%; height: 100%; object-fit: contain; border-radius: 8px;';
+        
+        // Add click-to-zoom handler
+        box.addEventListener('click', () => {
+          this.showLightbox(dataUrl, locNames[locId]);
+        });
+        
+        box.appendChild(img);
+        item.appendChild(label);
+        item.appendChild(box);
         grid.appendChild(item);
         
         // Small delay between snapshots
@@ -2208,6 +2228,80 @@ console.log('[ULTShirtModal] Script loading...');
         this.three.tshirtModel.rotation.y = 0;
       } else if (this.three.tshirtMesh) {
         this.three.tshirtMesh.rotation.y = 0;
+      }
+    },
+    
+    // Show lightbox with zoomed image
+    showLightbox(imageUrl, label) {
+      // Remove existing lightbox if any
+      this.closeLightbox();
+      
+      // Create lightbox overlay
+      const overlay = document.createElement('div');
+      overlay.className = 'ul-lightbox-overlay';
+      overlay.id = 'ul-lightbox-overlay';
+      
+      const content = document.createElement('div');
+      content.className = 'ul-lightbox-content';
+      
+      const closeBtn = document.createElement('button');
+      closeBtn.className = 'ul-lightbox-close';
+      closeBtn.innerHTML = '×';
+      closeBtn.title = 'Close (ESC)';
+      closeBtn.onclick = () => this.closeLightbox();
+      
+      const img = document.createElement('img');
+      img.className = 'ul-lightbox-image';
+      img.src = imageUrl;
+      img.alt = label;
+      
+      const labelEl = document.createElement('div');
+      labelEl.className = 'ul-lightbox-label';
+      labelEl.textContent = label;
+      
+      const hint = document.createElement('div');
+      hint.className = 'ul-lightbox-hint';
+      hint.textContent = 'Press ESC or click outside to close';
+      
+      content.appendChild(closeBtn);
+      content.appendChild(img);
+      content.appendChild(labelEl);
+      content.appendChild(hint);
+      overlay.appendChild(content);
+      
+      // Close on overlay click (not content)
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+          this.closeLightbox();
+        }
+      });
+      
+      // Close on ESC key
+      this._lightboxKeyHandler = (e) => {
+        if (e.key === 'Escape') {
+          this.closeLightbox();
+        }
+      };
+      document.addEventListener('keydown', this._lightboxKeyHandler);
+      
+      document.body.appendChild(overlay);
+      
+      // Trigger animation
+      requestAnimationFrame(() => {
+        overlay.classList.add('active');
+      });
+    },
+    
+    // Close lightbox
+    closeLightbox() {
+      const overlay = document.getElementById('ul-lightbox-overlay');
+      if (overlay) {
+        overlay.classList.remove('active');
+        setTimeout(() => overlay.remove(), 300);
+      }
+      if (this._lightboxKeyHandler) {
+        document.removeEventListener('keydown', this._lightboxKeyHandler);
+        this._lightboxKeyHandler = null;
       }
     },
 
@@ -2256,6 +2350,9 @@ console.log('[ULTShirtModal] Script loading...');
         properties['_ul_special_instructions'] = this.step3.specialInstructions;
       }
       
+      // Generate detailed order note for production
+      const orderNote = this.generateOrderNote();
+      
       // Add to cart via Shopify AJAX API
       const cartData = {
         items: [{
@@ -2266,6 +2363,7 @@ console.log('[ULTShirtModal] Script loading...');
       };
       
       try {
+        // First add item to cart
         const response = await fetch('/cart/add.js', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -2286,6 +2384,9 @@ console.log('[ULTShirtModal] Script loading...');
           
           throw new Error(errorData.description || 'Failed to add to cart');
         }
+        
+        // Update cart note with order details
+        await this.updateCartNote(orderNote);
         
         // Dispatch cart update event
         document.dispatchEvent(new CustomEvent('ul:cartUpdated'));
@@ -2330,6 +2431,110 @@ console.log('[ULTShirtModal] Script loading...');
         }
         
         return false;
+      }
+    },
+    
+    // Generate detailed order note for production team
+    generateOrderNote() {
+      const designData = this.step1.useInheritedDesign ? this.inheritedDesign : this.step1.newUpload;
+      const enabledLocs = this.getEnabledLocations();
+      const now = new Date().toISOString();
+      
+      let note = `═══════════════════════════════════════\n`;
+      note += `🎨 T-SHIRT CUSTOMIZER ORDER\n`;
+      note += `═══════════════════════════════════════\n\n`;
+      
+      // Basic Info
+      note += `📋 ORDER DETAILS:\n`;
+      note += `─────────────────────────────────────\n`;
+      note += `• Size: ${this.step2.tshirtSize}\n`;
+      note += `• Color: ${this.step2.tshirtColorName} (${this.step2.tshirtColor})\n`;
+      note += `• Quantity: ${this.step3.quantity}\n`;
+      note += `• Timestamp: ${now}\n\n`;
+      
+      // Design Info
+      note += `🖼️ DESIGN FILE:\n`;
+      note += `─────────────────────────────────────\n`;
+      note += `• Name: ${designData.name || 'Custom Design'}\n`;
+      note += `• Upload ID: ${designData.uploadId || 'N/A'}\n`;
+      if (designData.originalUrl) {
+        note += `• File URL: ${designData.originalUrl}\n`;
+      }
+      note += `\n`;
+      
+      // Print Locations
+      note += `📍 PRINT LOCATIONS (${enabledLocs.length}):\n`;
+      note += `─────────────────────────────────────\n`;
+      
+      const locNames = {
+        front: 'FRONT',
+        back: 'BACK',
+        left_sleeve: 'LEFT SLEEVE',
+        right_sleeve: 'RIGHT SLEEVE'
+      };
+      
+      const cameraRotations = {
+        front: '0°',
+        back: '180°',
+        left_sleeve: '-90°',
+        right_sleeve: '+90°'
+      };
+      
+      enabledLocs.forEach((locId, index) => {
+        const loc = this.step2.locations[locId];
+        note += `\n  [${index + 1}] ${locNames[locId]}\n`;
+        note += `      • Scale: ${(loc.scale * 100).toFixed(0)}%\n`;
+        note += `      • Position X: ${loc.positionX.toFixed(3)}\n`;
+        note += `      • Position Y: ${loc.positionY.toFixed(3)}\n`;
+        note += `      • UV Center: u=${this.UV_REGIONS[locId].center.u}, v=${this.UV_REGIONS[locId].center.v}\n`;
+        note += `      • Camera Rotation: ${cameraRotations[locId]}\n`;
+      });
+      
+      note += `\n`;
+      
+      // Special Instructions
+      if (this.step3.specialInstructions) {
+        note += `📝 SPECIAL INSTRUCTIONS:\n`;
+        note += `─────────────────────────────────────\n`;
+        note += `${this.step3.specialInstructions}\n\n`;
+      }
+      
+      // Technical Info
+      note += `⚙️ TECHNICAL INFO:\n`;
+      note += `─────────────────────────────────────\n`;
+      note += `• Canvas Size: 2048x2048px\n`;
+      note += `• Default Scale: ${this.UV_REGIONS.front.defaultSize || 0.55}\n`;
+      note += `• Texture Strategy: Baked UV Mapping\n`;
+      note += `═══════════════════════════════════════\n`;
+      
+      return note;
+    },
+    
+    // Update cart note with order details
+    async updateCartNote(note) {
+      try {
+        // First get existing cart to preserve any existing notes
+        const cartResponse = await fetch('/cart.js');
+        const cart = await cartResponse.json();
+        
+        // Append to existing note if any
+        let fullNote = cart.note || '';
+        if (fullNote) {
+          fullNote += '\n\n';
+        }
+        fullNote += note;
+        
+        // Update cart note
+        await fetch('/cart/update.js', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ note: fullNote })
+        });
+        
+        console.log('[ULTShirtModal] Order note added to cart');
+      } catch (error) {
+        console.warn('[ULTShirtModal] Failed to update cart note:', error);
+        // Non-blocking - continue even if note update fails
       }
     },
 
