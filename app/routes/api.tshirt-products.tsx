@@ -30,7 +30,71 @@ export async function loader({ request }: LoaderFunctionArgs) {
   try {
     const { admin } = await authenticate.admin(request);
     
-    // Query products tagged with "custom-upload-tshirt" or in specific collection
+    const url = new URL(request.url);
+    const handle = url.searchParams.get("handle");
+    
+    // If handle provided, validate specific product
+    if (handle) {
+      const response = await admin.graphql(`
+        query GetProductByHandle($handle: String!) {
+          productByHandle(handle: $handle) {
+            id
+            title
+            handle
+            status
+            options {
+              name
+              values
+            }
+            variants(first: 100) {
+              edges {
+                node {
+                  id
+                  title
+                  price
+                  availableForSale
+                }
+              }
+            }
+          }
+        }
+      `, { variables: { handle } });
+      
+      const data = await response.json();
+      const product = data.data?.productByHandle;
+      
+      if (!product) {
+        return json({ error: "Product not found" }, { status: 404 });
+      }
+      
+      // Find color and size options
+      const colorOption = product.options?.find((o: any) => 
+        o.name.toLowerCase().includes("color") || 
+        o.name.toLowerCase().includes("renk") ||
+        o.name.toLowerCase().includes("colour")
+      );
+      
+      const sizeOption = product.options?.find((o: any) => 
+        o.name.toLowerCase().includes("size") || 
+        o.name.toLowerCase().includes("beden")
+      );
+
+      return json({
+        id: product.id,
+        title: product.title,
+        handle: product.handle,
+        status: product.status,
+        hasColorVariant: !!colorOption,
+        hasSizeVariant: !!sizeOption,
+        colorOptionName: colorOption?.name || null,
+        sizeOptionName: sizeOption?.name || null,
+        colorValues: colorOption?.values || [],
+        sizeValues: sizeOption?.values || [],
+        variantCount: product.variants?.edges?.length || 0,
+      });
+    }
+    
+    // Original logic: Query products tagged with "custom-upload-tshirt"
     const response = await admin.graphql(`
       query GetTshirtProducts {
         products(first: 20, query: "tag:custom-upload-tshirt OR product_type:T-Shirt") {
