@@ -1199,9 +1199,9 @@ console.log('[ULTShirtModal] Script loading...');
       loc.scale = parseInt(value);
       if (this.el.scaleValue) this.el.scaleValue.textContent = `${value}%`;
       
-      // Update 3D or 2D fallback (FAZ 6)
+      // Update 3D or 2D fallback (FAZ 6) - debounced for performance
       if (this.supports3D()) {
-        this.update3DDecalTransform();
+        this.debouncedUpdateDecal();
       } else {
         this.updateFallback2D();
       }
@@ -1214,9 +1214,9 @@ console.log('[ULTShirtModal] Script loading...');
       loc.positionX = parseInt(value);
       if (this.el.posXValue) this.el.posXValue.textContent = value;
       
-      // Update 3D or 2D fallback (FAZ 6)
+      // Update 3D or 2D fallback (FAZ 6) - debounced for performance
       if (this.supports3D()) {
-        this.update3DDecalTransform();
+        this.debouncedUpdateDecal();
       } else {
         this.updateFallback2D();
       }
@@ -1229,12 +1229,25 @@ console.log('[ULTShirtModal] Script loading...');
       loc.positionY = parseInt(value);
       if (this.el.posYValue) this.el.posYValue.textContent = value;
       
-      // Update 3D or 2D fallback (FAZ 6)
+      // Update 3D or 2D fallback (FAZ 6) - debounced for performance
       if (this.supports3D()) {
-        this.update3DDecalTransform();
+        this.debouncedUpdateDecal();
       } else {
         this.updateFallback2D();
       }
+    },
+    
+    // Debounced decal update to prevent excessive recreations during slider drag
+    debouncedUpdateDecal() {
+      // Clear previous timeout
+      if (this._decalUpdateTimeout) {
+        clearTimeout(this._decalUpdateTimeout);
+      }
+      
+      // Set new timeout - wait 150ms after last input
+      this._decalUpdateTimeout = setTimeout(() => {
+        this.update3DDecalTransform();
+      }, 150);
     },
 
     getEnabledLocations() {
