@@ -1285,7 +1285,7 @@ console.log('[ULTShirtModal] Script loading...');
     // ==========================================================================
     
     // DEBUG MODE - Set to true to see UV grid overlay
-    DEBUG_UV_GRID: false, // DISABLED - UV coordinates now calibrated
+    DEBUG_UV_GRID: true, // RE-ENABLED for accurate calibration
     
     // Draw debug grid to visualize UV mapping
     drawDebugGrid() {
