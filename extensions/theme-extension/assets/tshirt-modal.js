@@ -148,10 +148,10 @@ console.log('[ULTShirtModal] Script loading...');
         defaultSize: 0.70
       },
       right_sleeve: {
-        // Middle area of UV (sleeve)
-        bounds: { uMin: 0.45, uMax: 0.65, vMin: 0.15, vMax: 0.40 },
-        center: { u: 0.55, v: 0.28 },
-        defaultSize: 0.35
+        // Right sleeve area of UV
+        bounds: { uMin: 0.45, uMax: 0.75, vMin: 0.70, vMax: 1.0 },
+        center: { u: 0.60, v: 0.85 },
+        defaultSize: 0.70
       }
     },
 
