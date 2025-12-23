@@ -1294,6 +1294,29 @@ console.log('[ULTShirtModal] Script loading...');
     // ==========================================================================
     // THREE.JS 3D SCENE - FAZ 7: Enhanced Error Handling
     // ==========================================================================
+    
+    // Load DecalGeometry from CDN if not already loaded
+    async loadDecalGeometry() {
+      if (typeof THREE !== 'undefined' && typeof THREE.DecalGeometry !== 'undefined') {
+        return true; // Already loaded
+      }
+      
+      return new Promise((resolve) => {
+        // Try to load from jsDelivr CDN
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/geometries/DecalGeometry.js';
+        script.onload = () => {
+          console.log('[ULTShirtModal] DecalGeometry loaded from CDN');
+          resolve(true);
+        };
+        script.onerror = () => {
+          console.warn('[ULTShirtModal] Failed to load DecalGeometry from CDN');
+          resolve(false);
+        };
+        document.head.appendChild(script);
+      });
+    },
+    
     async init3D() {
       if (typeof THREE === 'undefined') {
         console.warn('[ULTShirtModal] Three.js not loaded, showing 2D fallback');
@@ -1306,6 +1329,9 @@ console.log('[ULTShirtModal] Script loading...');
         this.show2DFallback();
         return;
       }
+      
+      // Try to load DecalGeometry
+      await this.loadDecalGeometry();
       
       const canvas = this.el.canvas;
       if (!canvas) return;
@@ -1576,12 +1602,23 @@ console.log('[ULTShirtModal] Script loading...');
       console.log('[ULTShirtModal] Created decals for locations:', enabledLocations.join(', '));
     },
     
-    // Create decal for a specific location
+    // Create decal for a specific location using DecalGeometry
     createDecalForLocation(texture, locationId, targetMesh) {
       const config = this.DECAL_LOCATIONS[locationId];
       if (!config) {
         console.warn('[ULTShirtModal] Unknown location:', locationId);
         return;
+      }
+      
+      // Remove old decal for this location first
+      if (this.three.decals[locationId]) {
+        const oldDecal = this.three.decals[locationId];
+        if (oldDecal.parent) {
+          oldDecal.parent.remove(oldDecal);
+        }
+        oldDecal.geometry?.dispose();
+        oldDecal.material?.map?.dispose();
+        oldDecal.material?.dispose();
       }
       
       // Calculate aspect ratio for proper scaling
@@ -1620,22 +1657,17 @@ console.log('[ULTShirtModal] Script loading...');
         }
       }
       
-      // Create position and orientation vectors
-      const position = new THREE.Vector3(posX, posY, posZ);
-      const orientation = new THREE.Euler(config.rotation.x, config.rotation.y, config.rotation.z);
-      const size = new THREE.Vector3(sizeX, sizeY, 0.1); // Z is depth of projection
-      
-      let decal;
-      let geometry;
-      
-      // Try to use DecalGeometry if available (ES Module loaded)
+      // Check if DecalGeometry is available
       if (typeof THREE.DecalGeometry !== 'undefined') {
-        console.log('[ULTShirtModal] Using DecalGeometry for', locationId);
+        // Use DecalGeometry for realistic projection onto mesh surface
+        const position = new THREE.Vector3(posX, posY, posZ);
+        const orientation = new THREE.Euler(config.rotation.x, config.rotation.y, config.rotation.z);
+        const size = new THREE.Vector3(sizeX, sizeY, 0.1); // Z depth for projection
         
         try {
-          geometry = new THREE.DecalGeometry(targetMesh, position, orientation, size);
+          const decalGeometry = new THREE.DecalGeometry(targetMesh, position, orientation, size);
           
-          const material = new THREE.MeshBasicMaterial({
+          const decalMaterial = new THREE.MeshBasicMaterial({
             map: texture,
             transparent: true,
             depthTest: true,
@@ -1645,71 +1677,48 @@ console.log('[ULTShirtModal] Script loading...');
             polygonOffsetUnits: -4
           });
           
-          decal = new THREE.Mesh(geometry, material);
+          const decal = new THREE.Mesh(decalGeometry, decalMaterial);
           decal.renderOrder = 999;
           
+          // Add to tshirtModel so it rotates with the shirt
+          const model = this.three.tshirtModel || this.three.scene;
+          model.add(decal);
+          this.three.decals[locationId] = decal;
+          
+          console.log(`[ULTShirtModal] DecalGeometry created for ${locationId}`, { position: position.toArray(), size: size.toArray() });
+          return;
         } catch (err) {
-          console.warn('[ULTShirtModal] DecalGeometry failed, falling back to plane:', err);
-          decal = null;
+          console.warn('[ULTShirtModal] DecalGeometry failed, falling back to plane:', err.message);
         }
       }
       
-      // Fallback to plane geometry if DecalGeometry not available or failed
-      if (!decal) {
-        console.log('[ULTShirtModal] Using PlaneGeometry fallback for', locationId);
-        
-        geometry = new THREE.PlaneGeometry(1, 1);
-        
-        const material = new THREE.MeshBasicMaterial({
-          map: texture,
-          transparent: true,
-          depthTest: true,
-          depthWrite: false,
-          side: THREE.FrontSide,
-          polygonOffset: true,
-          polygonOffsetFactor: -10,
-          polygonOffsetUnits: -10
-        });
-        
-        decal = new THREE.Mesh(geometry, material);
-        decal.renderOrder = 999;
-        
-        // Apply position
-        decal.position.set(posX, posY, posZ);
-        
-        // Apply rotation
-        decal.rotation.set(config.rotation.x, config.rotation.y, config.rotation.z);
-        
-        // Apply scale
-        decal.scale.set(sizeX, sizeY, 1);
-      }
+      // Fallback: Use PlaneGeometry if DecalGeometry not available
+      console.log('[ULTShirtModal] Using PlaneGeometry fallback for', locationId);
       
-      // Remove old decal for this location
-      if (this.three.decals[locationId]) {
-        const oldDecal = this.three.decals[locationId];
-        if (oldDecal.parent) {
-          oldDecal.parent.remove(oldDecal);
-        }
-        oldDecal.geometry?.dispose();
-        oldDecal.material?.map?.dispose();
-        oldDecal.material?.dispose();
-      }
+      const geometry = new THREE.PlaneGeometry(1, 1);
+      const material = new THREE.MeshBasicMaterial({
+        map: texture,
+        transparent: true,
+        depthTest: true,
+        depthWrite: false,
+        side: THREE.FrontSide,
+        polygonOffset: true,
+        polygonOffsetFactor: -10,
+        polygonOffsetUnits: -10
+      });
       
-      // Add decal to scene
-      // DecalGeometry: add to scene directly (already in world coords)
-      // Plane fallback: add as child of tshirtMesh (rotates with it)
-      if (typeof THREE.DecalGeometry !== 'undefined' && geometry instanceof THREE.DecalGeometry) {
-        this.three.scene.add(decal);
-        decal._isDecalGeometry = true;
-      } else {
-        // Plane: add as child of T-shirt mesh (rotates together)
-        this.three.tshirtMesh.add(decal);
-        decal._isDecalGeometry = false;
-      }
+      const decal = new THREE.Mesh(geometry, material);
+      decal.renderOrder = 999;
       
+      decal.position.set(posX, posY, posZ);
+      decal.rotation.set(config.rotation.x, config.rotation.y, config.rotation.z);
+      decal.scale.set(sizeX, sizeY, 1);
+      
+      // Add as child of T-shirt mesh (rotates together)
+      this.three.tshirtMesh.add(decal);
       this.three.decals[locationId] = decal;
       
-      console.log(`[ULTShirtModal] Decal created for ${locationId} using ${decal._isDecalGeometry ? 'DecalGeometry' : 'PlaneGeometry'}`);
+      console.log(`[ULTShirtModal] Plane decal created for ${locationId} at`, { x: posX, y: posY, z: posZ });
     },
 
     update3DColor(hex) {
@@ -1881,7 +1890,7 @@ console.log('[ULTShirtModal] Script loading...');
         // Lerp current rotation towards target
         this.three.currentRotationY += (this.three.targetRotationY - this.three.currentRotationY) * 0.1;
         
-        // Apply rotation to MODEL (decals rotate with it as children)
+        // Apply rotation to MODEL (decals are children, so they rotate too)
         target.rotation.y = this.three.currentRotationY;
       }
       
