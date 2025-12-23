@@ -1765,6 +1765,23 @@ console.log('[ULTShirtModal] Script loading...');
       
       if (!decal || !locSettings || !config) return;
       
+      // DecalGeometry cannot be scaled after creation - must recreate
+      if (decal._isDecalGeometry) {
+        console.log('[ULTShirtModal] Recreating DecalGeometry for scale/position change');
+        
+        // Find target mesh
+        let targetMesh = null;
+        this.three.tshirtMesh?.traverse((child) => {
+          if (child.isMesh && !targetMesh) targetMesh = child;
+        });
+        
+        if (targetMesh && this.currentTexture) {
+          this.createDecalForLocation(this.currentTexture, locationId, targetMesh);
+        }
+        return;
+      }
+      
+      // PlaneGeometry can be transformed directly
       // Get texture aspect ratio
       const texture = decal.material?.map;
       const aspectRatio = texture?.image ? texture.image.width / texture.image.height : 1;
