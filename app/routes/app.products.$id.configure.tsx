@@ -74,6 +74,25 @@ const PRODUCT_QUERY = `
   }
 `;
 
+// Fetch all products for T-Shirt dropdown
+const ALL_PRODUCTS_QUERY = `
+  query getAllProducts {
+    products(first: 100, sortKey: TITLE) {
+      edges {
+        node {
+          id
+          title
+          handle
+          options {
+            name
+            values
+          }
+        }
+      }
+    }
+  }
+`;
+
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const { session, admin } = await authenticate.admin(request);
   const shopDomain = session.shop;
@@ -107,6 +126,29 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   if (!product) {
     throw new Response("Product not found", { status: 404 });
   }
+
+  // Fetch all products for T-Shirt dropdown
+  const allProductsResponse = await admin.graphql(ALL_PRODUCTS_QUERY);
+  const allProductsData = await allProductsResponse.json();
+  
+  const allProducts = allProductsData.data?.products?.edges?.map((edge: any) => {
+    const p = edge.node;
+    const colorOpt = p.options?.find((o: any) => 
+      o.name.toLowerCase().includes("color") || o.name.toLowerCase().includes("renk")
+    );
+    const sizeOpt = p.options?.find((o: any) => 
+      o.name.toLowerCase().includes("size") || o.name.toLowerCase().includes("beden")
+    );
+    return {
+      id: p.id,
+      title: p.title,
+      handle: p.handle,
+      hasColorVariant: !!colorOpt,
+      hasSizeVariant: !!sizeOpt,
+      colorValues: colorOpt?.values || [],
+      sizeValues: sizeOpt?.values || [],
+    };
+  }) || [];
 
   // Get existing config - using raw query to access all fields
   const config = await prisma.productConfig.findUnique({
@@ -142,6 +184,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       colorValues: colorOption?.values || [],
       sizeValues: sizeOption?.values || [],
     },
+    allProducts,
     config: config ? {
       mode: config.mode || "dtf",
       uploadEnabled: config.uploadEnabled ?? true,
@@ -243,7 +286,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 }
 
 export default function ProductConfigurePage() {
-  const { shop, product, config } = useLoaderData<typeof loader>();
+  const { shop, product, allProducts, config } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>() as { success?: boolean; message?: string; error?: string } | null;
   const navigation = useNavigation();
   const navigate = useNavigate();
@@ -267,9 +310,6 @@ export default function ProductConfigurePage() {
       positions: ["front", "back"],
     }
   );
-  
-  // Product picker state
-  const [showProductPicker, setShowProductPicker] = useState(false);
 
   // Question modal state
   const [showQuestionModal, setShowQuestionModal] = useState(false);
@@ -504,70 +544,47 @@ export default function ProductConfigurePage() {
                     <BlockStack gap="300">
                       <Text as="h3" variant="headingSm">🎯 Select T-Shirt Product</Text>
                       <Text as="p" tone="subdued">
-                        Enter the product handle of the T-Shirt that will be added to cart. 
-                        Find it in Shopify Admin → Products → Edit Product → URL (the part after /products/).
+                        Choose the T-Shirt product that will be added to cart when customer clicks "I want this on a T-Shirt too!"
                       </Text>
                       
-                      <InlineStack gap="300" align="end">
-                        <Box minWidth="300px">
-                          <TextField
-                            label="T-Shirt Product Handle"
-                            value={tshirtConfig.tshirtProductHandle || ''}
-                            onChange={(val) => setTshirtConfig(prev => ({ 
-                              ...prev, 
-                              tshirtProductHandle: val,
+                      <Select
+                        label="T-Shirt Product"
+                        options={[
+                          { label: '-- Select a product --', value: '' },
+                          ...allProducts.map((p: any) => ({
+                            label: `${p.title} ${!p.hasColorVariant || !p.hasSizeVariant ? '⚠️' : '✅'}`,
+                            value: p.id,
+                          }))
+                        ]}
+                        value={tshirtConfig.tshirtProductId || ''}
+                        onChange={(selectedId) => {
+                          const selectedProduct = allProducts.find((p: any) => p.id === selectedId);
+                          if (selectedProduct) {
+                            setTshirtConfig(prev => ({
+                              ...prev,
+                              tshirtProductId: selectedProduct.id,
+                              tshirtProductHandle: selectedProduct.handle,
+                              tshirtProductTitle: selectedProduct.title,
+                              colorValues: selectedProduct.colorValues || [],
+                              sizeValues: selectedProduct.sizeValues || [],
+                            }));
+                          } else {
+                            setTshirtConfig(prev => ({
+                              ...prev,
                               tshirtProductId: null,
+                              tshirtProductHandle: null,
                               tshirtProductTitle: null,
                               colorValues: [],
                               sizeValues: [],
-                            }))}
-                            placeholder="e.g. basic-tshirt, custom-tee"
-                            helpText="The product handle from your Shopify store"
-                            autoComplete="off"
-                          />
-                        </Box>
-                        <Button 
-                          onClick={async () => {
-                            if (!tshirtConfig.tshirtProductHandle) return;
-                            setShowProductPicker(true); // Use as loading state
-                            try {
-                              // Validate by fetching product via API
-                              const res = await fetch(`/api/tshirt-products?handle=${encodeURIComponent(tshirtConfig.tshirtProductHandle)}`);
-                              if (res.ok) {
-                                const data = await res.json();
-                                setTshirtConfig(prev => ({
-                                  ...prev,
-                                  tshirtProductId: data.id,
-                                  tshirtProductTitle: data.title,
-                                  colorValues: data.colorValues || [],
-                                  sizeValues: data.sizeValues || [],
-                                  colorVariantOption: data.colorOptionName || prev.colorVariantOption,
-                                  sizeVariantOption: data.sizeOptionName || prev.sizeVariantOption,
-                                }));
-                              } else {
-                                alert('Product not found. Please check the handle.');
-                              }
-                            } catch (e) {
-                              alert('Error validating product');
-                            }
-                            setShowProductPicker(false);
-                          }}
-                          loading={showProductPicker}
-                          disabled={!tshirtConfig.tshirtProductHandle}
-                        >
-                          Validate Product
-                        </Button>
-                      </InlineStack>
+                            }));
+                          }
+                        }}
+                        helpText="Products with ✅ have Color and Size variants. Products with ⚠️ are missing variants."
+                      />
                       
                       {tshirtConfig.tshirtProductId && (
                         <Banner tone="success">
-                          <p>✅ Product validated: <strong>{tshirtConfig.tshirtProductTitle}</strong></p>
-                        </Banner>
-                      )}
-                      
-                      {!tshirtConfig.tshirtProductId && tshirtConfig.tshirtProductHandle && (
-                        <Banner tone="info">
-                          <p>Click "Validate Product" to check if this product exists and has correct variants.</p>
+                          <p>✅ Selected: <strong>{tshirtConfig.tshirtProductTitle}</strong></p>
                         </Banner>
                       )}
                     </BlockStack>
