@@ -89,7 +89,12 @@ console.log('[ULTShirtModal] Script loading...');
       controls: null,
       tshirtMesh: null,
       decals: {},
-      animationId: null
+      animationId: null,
+      // Mouse drag rotation state
+      isDragging: false,
+      previousMouseX: 0,
+      targetRotationY: 0,
+      currentRotationY: 0
     },
     
     // Current loaded texture for decals
@@ -116,24 +121,24 @@ console.log('[ULTShirtModal] Script loading...');
     // Decal location presets for shirt_baked.glb
     DECAL_LOCATIONS: {
       front: {
-        position: { x: -0.001, y: 0.028, z: 0.149 },
+        position: { x: 0, y: 0.04, z: 0.135 },
         rotation: { x: 0, y: 0, z: 0 },
         baseScale: 0.15
       },
       back: {
-        position: { x: -0.001, y: 0.028, z: -0.130 },
+        position: { x: 0, y: 0.04, z: -0.125 },
         rotation: { x: 0, y: Math.PI, z: 0 },
         baseScale: 0.15
       },
       left_sleeve: {
-        position: { x: -0.18, y: 0.12, z: 0.02 },
+        position: { x: -0.16, y: 0.14, z: 0 },
         rotation: { x: 0, y: Math.PI / 2, z: 0 },
-        baseScale: 0.08
+        baseScale: 0.06
       },
       right_sleeve: {
-        position: { x: 0.18, y: 0.12, z: 0.02 },
+        position: { x: 0.16, y: 0.14, z: 0 },
         rotation: { x: 0, y: -Math.PI / 2, z: 0 },
-        baseScale: 0.08
+        baseScale: 0.06
       }
     },
 
@@ -1312,9 +1317,9 @@ console.log('[ULTShirtModal] Script loading...');
         this.three.scene = new THREE.Scene();
         this.three.scene.background = new THREE.Color(0xf0f0f0);
         
-        // Camera - closer view since model is at original scale
+        // Camera - adjusted for 2x model scale
         this.three.camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
-        this.three.camera.position.set(0, 0, 2);
+        this.three.camera.position.set(0, 0, 3);
         
         // Renderer
         this.three.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -1341,6 +1346,9 @@ console.log('[ULTShirtModal] Script loading...');
         
         // Hide loading
         if (this.el.loading3d) this.el.loading3d.style.display = 'none';
+        
+        // Setup mouse drag rotation
+        this.setupMouseDragRotation(canvas);
         
         // Start render loop
         this.animate3D();
@@ -1406,9 +1414,10 @@ console.log('[ULTShirtModal] Script loading...');
                 }
               });
               
-              // Keep original scale - camera distance handles size
+              // Scale 2x for better visibility
+              this.three.tshirtMesh.scale.set(2, 2, 2);
               // Model center is at approximately (0, -0.045, 0.01)
-              this.three.tshirtMesh.position.set(0, 0.05, 0); // Slight Y offset to center in view
+              this.three.tshirtMesh.position.set(0, 0.1, 0); // Slight Y offset to center in view
               
               this.three.scene.add(this.three.tshirtMesh);
               resolve();
@@ -1573,15 +1582,16 @@ console.log('[ULTShirtModal] Script loading...');
       // Create plane geometry (1x1, will be scaled)
       const geometry = new THREE.PlaneGeometry(1, 1);
       
-      // Material with JSM-style settings
+      // Material with improved depth settings
       const material = new THREE.MeshBasicMaterial({
         map: texture,
         transparent: true,
-        depthTest: false,       // Always visible (like JSM)
-        depthWrite: true,
-        side: THREE.DoubleSide,
+        depthTest: true,        // Enable depth test for proper occlusion
+        depthWrite: false,      // Don't write to depth buffer
+        side: THREE.FrontSide,  // Only front face visible
         polygonOffset: true,
-        polygonOffsetFactor: -4
+        polygonOffsetFactor: -4,
+        polygonOffsetUnits: -4
       });
       
       const decal = new THREE.Mesh(geometry, material);
@@ -1705,12 +1715,12 @@ console.log('[ULTShirtModal] Script loading...');
     moveCamera(view) {
       if (!this.three.camera) return;
       
-      // Camera positions adjusted for z=2 base distance
+      // Camera positions adjusted for 2x model scale
       const positions = {
-        front: { x: 0, y: 0, z: 2 },
-        back: { x: 0, y: 0, z: -2 },
-        left: { x: -2, y: 0, z: 0 },
-        right: { x: 2, y: 0, z: 0 }
+        front: { x: 0, y: 0, z: 3 },
+        back: { x: 0, y: 0, z: -3 },
+        left: { x: -3, y: 0, z: 0 },
+        right: { x: 3, y: 0, z: 0 }
       };
       
       const pos = positions[view] || positions.front;
@@ -1718,6 +1728,75 @@ console.log('[ULTShirtModal] Script loading...');
       // Animate camera (simplified)
       this.three.camera.position.set(pos.x, pos.y, pos.z);
       this.three.camera.lookAt(0, 0, 0);
+      
+      // Reset rotation when changing view
+      this.three.targetRotationY = 0;
+      this.three.currentRotationY = 0;
+      if (this.three.tshirtMesh) {
+        this.three.tshirtMesh.rotation.y = 0;
+      }
+    },
+    
+    // Setup mouse drag rotation for T-shirt
+    setupMouseDragRotation(canvas) {
+      const self = this;
+      
+      // Mouse down - start dragging
+      canvas.addEventListener('mousedown', (e) => {
+        self.three.isDragging = true;
+        self.three.previousMouseX = e.clientX;
+        canvas.style.cursor = 'grabbing';
+      });
+      
+      // Mouse move - rotate if dragging
+      canvas.addEventListener('mousemove', (e) => {
+        if (!self.three.isDragging) return;
+        
+        const deltaX = e.clientX - self.three.previousMouseX;
+        self.three.previousMouseX = e.clientX;
+        
+        // Adjust rotation speed
+        self.three.targetRotationY += deltaX * 0.01;
+      });
+      
+      // Mouse up - stop dragging
+      canvas.addEventListener('mouseup', () => {
+        self.three.isDragging = false;
+        canvas.style.cursor = 'grab';
+      });
+      
+      // Mouse leave - stop dragging
+      canvas.addEventListener('mouseleave', () => {
+        self.three.isDragging = false;
+        canvas.style.cursor = 'grab';
+      });
+      
+      // Touch support for mobile
+      canvas.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 1) {
+          self.three.isDragging = true;
+          self.three.previousMouseX = e.touches[0].clientX;
+        }
+      });
+      
+      canvas.addEventListener('touchmove', (e) => {
+        if (!self.three.isDragging || e.touches.length !== 1) return;
+        
+        const deltaX = e.touches[0].clientX - self.three.previousMouseX;
+        self.three.previousMouseX = e.touches[0].clientX;
+        
+        self.three.targetRotationY += deltaX * 0.01;
+        e.preventDefault(); // Prevent scrolling
+      }, { passive: false });
+      
+      canvas.addEventListener('touchend', () => {
+        self.three.isDragging = false;
+      });
+      
+      // Set initial cursor
+      canvas.style.cursor = 'grab';
+      
+      console.log('[ULTShirtModal] Mouse drag rotation enabled');
     },
 
     animate3D() {
@@ -1725,9 +1804,13 @@ console.log('[ULTShirtModal] Script loading...');
       
       this.three.animationId = requestAnimationFrame(() => this.animate3D());
       
-      // Subtle rotation - decals rotate with T-shirt since they're children
+      // Smooth rotation interpolation
       if (this.three.tshirtMesh) {
-        this.three.tshirtMesh.rotation.y = Math.sin(Date.now() * 0.0008) * 0.15;
+        // Lerp current rotation towards target
+        this.three.currentRotationY += (this.three.targetRotationY - this.three.currentRotationY) * 0.1;
+        
+        // Apply rotation
+        this.three.tshirtMesh.rotation.y = this.three.currentRotationY;
       }
       
       this.three.renderer?.render(this.three.scene, this.three.camera);
@@ -1773,7 +1856,11 @@ console.log('[ULTShirtModal] Script loading...');
         controls: null,
         tshirtMesh: null,
         decals: {},
-        animationId: null
+        animationId: null,
+        isDragging: false,
+        previousMouseX: 0,
+        targetRotationY: 0,
+        currentRotationY: 0
       };
     },
 
