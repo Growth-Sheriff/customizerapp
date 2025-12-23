@@ -6,12 +6,8 @@ handle = "product-3d-customizer"
 application_url = "https://customizerapp.dev"
 embedded = true
 
-# App Store required URLs
-privacy_policy_url = "https://customizerapp.dev/legal/privacy"
-terms_of_service_url = "https://customizerapp.dev/legal/terms"
-
-[app_home]
-url = "https://customizerapp.dev/app"
+# Note: privacy_policy_url and terms_of_service_url are set in Partner Dashboard
+# URLs: https://customizerapp.dev/legal/privacy, https://customizerapp.dev/legal/terms
 
 [webhooks]
 api_version = "2025-10"
@@ -44,17 +40,8 @@ api_version = "2025-10"
   topics = [ "products/update" ]
   uri = "/webhooks/products-update"
 
-  [[webhooks.subscriptions]]
-  topics = [ "customers/data_request" ]
-  uri = "/api/gdpr/customers/data_request"
-
-  [[webhooks.subscriptions]]
-  topics = [ "customers/redact" ]
-  uri = "/api/gdpr/customers/redact"
-
-  [[webhooks.subscriptions]]
-  topics = [ "shop/redact" ]
-  uri = "/api/gdpr/shop/redact"
+# Note: GDPR webhooks (customers/data_request, customers/redact, shop/redact)
+# are configured in Partner Dashboard under App Setup > Compliance webhooks
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
