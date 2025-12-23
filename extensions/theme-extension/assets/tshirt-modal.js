@@ -1432,78 +1432,58 @@ console.log('[ULTShirtModal] Script loading...');
       }
       
       return new Promise((resolve) => {
-        const loader = new THREE.TextureLoader();
-        loader.setCrossOrigin('anonymous');
+        console.log('[ULTShirtModal] Loading texture via Image API:', designUrl);
         
-        // Log for debugging
-        console.log('[ULTShirtModal] TextureLoader created, loading:', designUrl);
+        // Use Image API directly - more reliable for cross-origin
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
         
-        loader.load(
-          designUrl,
-          (texture) => {
-            console.log('[ULTShirtModal] Texture loaded successfully');
-            
-            // Create decal plane - sized relative to T-shirt
-            const decalGeom = new THREE.PlaneGeometry(1.2, 1.2);
-            const decalMat = new THREE.MeshBasicMaterial({
-              map: texture,
-              transparent: true,
-              side: THREE.DoubleSide,
-              depthWrite: false
+        img.onload = () => {
+          console.log('[ULTShirtModal] Image loaded:', img.width, 'x', img.height);
+          
+          // Create texture from image
+          const texture = new THREE.Texture(img);
+          texture.needsUpdate = true;
+          
+          this.createDecalFromTexture(texture);
+          console.log('[ULTShirtModal] Decal created successfully');
+          resolve();
+        };
+        
+        img.onerror = (error) => {
+          console.error('[ULTShirtModal] Image load error:', error?.type, error?.message);
+          
+          // Fallback: try fetch + createImageBitmap
+          console.log('[ULTShirtModal] Trying fetch fallback...');
+          fetch(designUrl, { mode: 'cors', credentials: 'omit' })
+            .then(res => {
+              console.log('[ULTShirtModal] Fetch status:', res.status);
+              if (!res.ok) throw new Error('Fetch failed: ' + res.status);
+              return res.blob();
+            })
+            .then(blob => {
+              console.log('[ULTShirtModal] Blob created, size:', blob.size);
+              return createImageBitmap(blob);
+            })
+            .then(bitmap => {
+              console.log('[ULTShirtModal] ImageBitmap created');
+              const texture = new THREE.CanvasTexture(bitmap);
+              this.createDecalFromTexture(texture);
+              resolve();
+            })
+            .catch(fetchErr => {
+              console.error('[ULTShirtModal] Fetch fallback failed:', fetchErr.message);
+              if (window.ULErrorHandler) {
+                window.ULErrorHandler.show('THREE_TEXTURE_FAILED');
+              }
+              resolve();
             });
-            
-            const decal = new THREE.Mesh(decalGeom, decalMat);
-            
-            // Position decal on front of T-shirt
-            // Adjust these values based on your GLB model
-            decal.position.set(0, 0.3, 0.55); // x, y (height), z (forward)
-            decal.renderOrder = 1; // Render on top
-            
-            // Remove old decal if exists
-            if (this.three.decals.front) {
-              this.three.scene.remove(this.three.decals.front);
-            }
-            
-            this.three.decals.front = decal;
-            this.three.scene.add(decal);
-            
-            console.log('[ULTShirtModal] Decal added to scene');
-            resolve();
-          },
-          (progress) => {
-            console.log('[ULTShirtModal] Texture loading progress:', progress.loaded, '/', progress.total);
-          },
-          (error) => {
-            // Log more details about the error
-            console.error('[ULTShirtModal] Texture load error type:', error?.type);
-            console.error('[ULTShirtModal] Texture load error message:', error?.message);
-            console.error('[ULTShirtModal] Texture load error target src:', error?.target?.src);
-            console.error('[ULTShirtModal] Full error:', JSON.stringify(error, Object.getOwnPropertyNames(error || {})));
-            
-            // Fallback: try loading via fetch + createImageBitmap
-            console.log('[ULTShirtModal] Trying fallback fetch method...');
-            fetch(designUrl, { mode: 'cors' })
-              .then(res => {
-                console.log('[ULTShirtModal] Fetch response:', res.status, res.headers.get('content-type'));
-                if (!res.ok) throw new Error('Fetch failed: ' + res.status);
-                return res.blob();
-              })
-              .then(blob => createImageBitmap(blob))
-              .then(bitmap => {
-                console.log('[ULTShirtModal] Fallback: ImageBitmap created');
-                const texture = new THREE.CanvasTexture(bitmap);
-                this.createDecalFromTexture(texture);
-                resolve();
-              })
-              .catch(fetchErr => {
-                console.error('[ULTShirtModal] Fallback also failed:', fetchErr.message);
-                if (window.ULErrorHandler) {
-                  window.ULErrorHandler.show('THREE_TEXTURE_FAILED');
-                }
-                resolve();
-              });
-          }
-        );
+        };
+        
+        // Start loading
+        img.src = designUrl;
+      });
+    },
       });
     },
 
