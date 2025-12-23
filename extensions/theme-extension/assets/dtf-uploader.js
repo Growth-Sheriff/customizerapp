@@ -205,6 +205,7 @@
         Object.assign(state.config, {
           uploadEnabled: config.uploadEnabled !== false,
           tshirtEnabled: config.tshirtEnabled === true,
+          tshirtConfig: config.tshirtConfig || null,
           extraQuestions: config.extraQuestions || []
         });
 

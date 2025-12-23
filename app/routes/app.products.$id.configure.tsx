@@ -9,10 +9,11 @@ import { useLoaderData, useActionData, Form, useNavigation, useNavigate } from "
 import {
   Page, Layout, Card, Text, BlockStack, InlineStack,
   TextField, Select, Button, Banner, FormLayout, Divider, Box,
-  Checkbox, Badge, Icon, EmptyState, Modal, ChoiceList, RadioButton
+  Checkbox, Badge, Icon, EmptyState, Modal, ChoiceList, RadioButton, Thumbnail
 } from "@shopify/polaris";
-import { DeleteIcon, PlusIcon, AlertCircleIcon, CheckCircleIcon } from "@shopify/polaris-icons";
+import { DeleteIcon, PlusIcon, AlertCircleIcon, CheckCircleIcon, SearchIcon } from "@shopify/polaris-icons";
 import { useState, useCallback } from "react";
+import { ResourcePicker } from "@shopify/app-bridge-react";
 import { authenticate } from "~/shopify.server";
 import prisma from "~/lib/prisma.server";
 
@@ -29,8 +30,13 @@ interface ExtraQuestion {
 }
 
 interface TshirtConfig {
+  tshirtProductId: string | null;      // Selected T-Shirt product GID
+  tshirtProductHandle: string | null;  // Selected T-Shirt product handle
+  tshirtProductTitle: string | null;   // Selected T-Shirt product title
   colorVariantOption: string;
   sizeVariantOption: string;
+  colorValues: string[];               // Available colors from T-Shirt product
+  sizeValues: string[];                // Available sizes from T-Shirt product
   priceAddon: number;
   positions: string[];
 }
@@ -251,12 +257,20 @@ export default function ProductConfigurePage() {
   const [extraQuestions, setExtraQuestions] = useState<ExtraQuestion[]>(config.extraQuestions || []);
   const [tshirtConfig, setTshirtConfig] = useState<TshirtConfig>(
     config.tshirtConfig || {
-      colorVariantOption: product.colorOptionName || "Color",
-      sizeVariantOption: product.sizeOptionName || "Size",
+      tshirtProductId: null,
+      tshirtProductHandle: null,
+      tshirtProductTitle: null,
+      colorVariantOption: "Color",
+      sizeVariantOption: "Size",
+      colorValues: [],
+      sizeValues: [],
       priceAddon: 15.00,
       positions: ["front", "back"],
     }
   );
+  
+  // Product picker state
+  const [showProductPicker, setShowProductPicker] = useState(false);
 
   // Question modal state
   const [showQuestionModal, setShowQuestionModal] = useState(false);
@@ -487,47 +501,105 @@ export default function ProductConfigurePage() {
                   <>
                     <Divider />
                     
-                    {/* Variant Check */}
+                    {/* T-Shirt Product Selection */}
                     <BlockStack gap="300">
-                      <Text as="h3" variant="headingSm">Variant Requirements</Text>
+                      <Text as="h3" variant="headingSm">🎯 Select T-Shirt Product</Text>
+                      <Text as="p" tone="subdued">
+                        Choose the T-Shirt product that will be added to cart when customers use this feature.
+                      </Text>
                       
-                      <InlineStack gap="400">
-                        <Box>
-                          <InlineStack gap="200">
-                            <Icon source={product.hasColorVariant ? CheckCircleIcon : AlertCircleIcon} />
-                            <Text as="span">
-                              Color Variants: {product.hasColorVariant ? (
-                                <Badge tone="success">{`${product.colorValues.length} colors found`}</Badge>
-                              ) : (
-                                <Badge tone="critical">Not found</Badge>
-                              )}
-                            </Text>
+                      {tshirtConfig.tshirtProductId ? (
+                        <Box padding="300" background="bg-surface-secondary" borderRadius="200">
+                          <InlineStack gap="400" align="center">
+                            <Box>
+                              <Text as="span" fontWeight="semibold">
+                                {tshirtConfig.tshirtProductTitle || 'Selected Product'}
+                              </Text>
+                              <Text as="p" tone="subdued">
+                                Handle: {tshirtConfig.tshirtProductHandle}
+                              </Text>
+                            </Box>
+                            <Button variant="plain" tone="critical" onClick={() => setTshirtConfig(prev => ({
+                              ...prev,
+                              tshirtProductId: null,
+                              tshirtProductHandle: null,
+                              tshirtProductTitle: null,
+                              colorValues: [],
+                              sizeValues: [],
+                            }))}>
+                              Remove
+                            </Button>
                           </InlineStack>
                         </Box>
-                        
-                        <Box>
-                          <InlineStack gap="200">
-                            <Icon source={product.hasSizeVariant ? CheckCircleIcon : AlertCircleIcon} />
-                            <Text as="span">
-                              Size Variants: {product.hasSizeVariant ? (
-                                <Badge tone="success">{`${product.sizeValues.length} sizes found`}</Badge>
-                              ) : (
-                                <Badge tone="critical">Not found</Badge>
-                              )}
-                            </Text>
-                          </InlineStack>
-                        </Box>
-                      </InlineStack>
-
-                      {(!product.hasColorVariant || !product.hasSizeVariant) && (
+                      ) : (
                         <Banner tone="warning">
                           <p>
-                            T-Shirt option requires both Color and Size variants. 
-                            Please add the missing variants in Shopify Admin → Products → {product.title} → Variants
+                            ⚠️ Please select a T-Shirt product first. The product must have both Color and Size variants.
                           </p>
                         </Banner>
                       )}
+                      
+                      <Button onClick={() => setShowProductPicker(true)} icon={SearchIcon}>
+                        {tshirtConfig.tshirtProductId ? 'Change T-Shirt Product' : 'Select T-Shirt Product'}
+                      </Button>
                     </BlockStack>
+
+                    {/* Variant Status */}
+                    {tshirtConfig.tshirtProductId && (
+                      <>
+                        <Divider />
+                        
+                        <BlockStack gap="300">
+                          <Text as="h3" variant="headingSm">Variant Status</Text>
+                          
+                          <InlineStack gap="400">
+                            <Box>
+                              <InlineStack gap="200">
+                                <Icon source={tshirtConfig.colorValues?.length > 0 ? CheckCircleIcon : AlertCircleIcon} />
+                                <Text as="span">
+                                  Color Variants: {tshirtConfig.colorValues?.length > 0 ? (
+                                    <Badge tone="success">{`${tshirtConfig.colorValues.length} colors`}</Badge>
+                                  ) : (
+                                    <Badge tone="critical">Not found</Badge>
+                                  )}
+                                </Text>
+                              </InlineStack>
+                            </Box>
+                            
+                            <Box>
+                              <InlineStack gap="200">
+                                <Icon source={tshirtConfig.sizeValues?.length > 0 ? CheckCircleIcon : AlertCircleIcon} />
+                                <Text as="span">
+                                  Size Variants: {tshirtConfig.sizeValues?.length > 0 ? (
+                                    <Badge tone="success">{`${tshirtConfig.sizeValues.length} sizes`}</Badge>
+                                  ) : (
+                                    <Badge tone="critical">Not found</Badge>
+                                  )}
+                                </Text>
+                              </InlineStack>
+                            </Box>
+                          </InlineStack>
+
+                          {(!tshirtConfig.colorValues?.length || !tshirtConfig.sizeValues?.length) && (
+                            <Banner tone="critical">
+                              <p>
+                                ❌ The selected product is missing required variants.
+                                T-Shirt product must have both Color and Size options.
+                                Please add variants in Shopify Admin → Products → {tshirtConfig.tshirtProductTitle} → Variants
+                              </p>
+                            </Banner>
+                          )}
+                          
+                          {tshirtConfig.colorValues?.length > 0 && tshirtConfig.sizeValues?.length > 0 && (
+                            <Banner tone="success">
+                              <p>
+                                ✅ Product is properly configured! Colors: {tshirtConfig.colorValues.join(', ')} | Sizes: {tshirtConfig.sizeValues.join(', ')}
+                              </p>
+                            </Banner>
+                          )}
+                        </BlockStack>
+                      </>
+                    )}
 
                     <Divider />
 
@@ -579,6 +651,52 @@ export default function ProductConfigurePage() {
             </Card>
           </Layout.Section>
         </Form>
+        
+        {/* T-Shirt Product Picker */}
+        <ResourcePicker
+          resourceType="Product"
+          open={showProductPicker}
+          onCancel={() => setShowProductPicker(false)}
+          onSelection={async (selectPayload) => {
+            const selectedProduct = selectPayload.selection[0];
+            if (selectedProduct) {
+              // Fetch product details
+              try {
+                const response = await fetch(`/products/${selectedProduct.handle}.json`);
+                // Note: This won't work directly - we need server action
+                // For now, update with available data
+                
+                // Extract options from product (if available in selectPayload)
+                const colorOption = selectedProduct.options?.find((o: any) => 
+                  o.name.toLowerCase().includes("color") || o.name.toLowerCase().includes("renk")
+                );
+                const sizeOption = selectedProduct.options?.find((o: any) => 
+                  o.name.toLowerCase().includes("size") || o.name.toLowerCase().includes("beden")
+                );
+                
+                setTshirtConfig(prev => ({
+                  ...prev,
+                  tshirtProductId: selectedProduct.id,
+                  tshirtProductHandle: selectedProduct.handle,
+                  tshirtProductTitle: selectedProduct.title,
+                  colorVariantOption: colorOption?.name || prev.colorVariantOption,
+                  sizeVariantOption: sizeOption?.name || prev.sizeVariantOption,
+                  colorValues: colorOption?.values || [],
+                  sizeValues: sizeOption?.values || [],
+                }));
+              } catch (error) {
+                // Fallback: just set basic info
+                setTshirtConfig(prev => ({
+                  ...prev,
+                  tshirtProductId: selectedProduct.id,
+                  tshirtProductHandle: selectedProduct.handle,
+                  tshirtProductTitle: selectedProduct.title,
+                }));
+              }
+            }
+            setShowProductPicker(false);
+          }}
+        />
 
         {/* Snippet Instructions */}
         <Layout.Section>

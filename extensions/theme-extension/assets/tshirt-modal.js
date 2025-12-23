@@ -1017,68 +1017,122 @@ console.log('[ULTShirtModal] Script loading...');
     },
 
     async loadProductVariants() {
-      // Fetch T-Shirt product from Shopify API
-      // Default handle - can be configured via metafield or settings
-      const tshirtHandle = this.config.tshirtProductHandle || 'basic-tshirt' || 'tshirt' || 't-shirt';
+      // Get T-Shirt product info from config (set by merchant in admin panel)
+      const tshirtConfig = this.config.tshirtConfig;
       
-      try {
-        // Try to fetch T-Shirt product by handle
-        const response = await fetch(`/products/${tshirtHandle}.js`);
+      // Check if merchant configured a T-Shirt product
+      if (tshirtConfig?.tshirtProductHandle) {
+        const tshirtHandle = tshirtConfig.tshirtProductHandle;
         
-        if (response.ok) {
-          const product = await response.json();
+        try {
+          // Fetch T-Shirt product by handle
+          const response = await fetch(`/products/${tshirtHandle}.js`);
           
-          // Store product info
-          this.product.id = product.id;
-          this.product.title = product.title;
-          this.product.variants = product.variants || [];
-          
-          // Extract unique colors and sizes from variants
-          const colorSet = new Set();
-          const sizeSet = new Set();
-          
-          product.variants.forEach(variant => {
-            // Shopify variants have option1, option2, option3
-            // Usually: option1 = Size, option2 = Color (or vice versa)
-            if (variant.option1) {
-              // Check if it looks like a size
-              if (['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', 'XXL', 'XXXL'].includes(variant.option1.toUpperCase())) {
-                sizeSet.add(variant.option1);
-              } else {
-                colorSet.add(variant.option1);
+          if (response.ok) {
+            const product = await response.json();
+            
+            // Store product info
+            this.product.id = product.id;
+            this.product.title = product.title;
+            this.product.handle = product.handle;
+            this.product.variants = product.variants || [];
+            
+            // Use colors and sizes from config if available, otherwise extract from variants
+            if (tshirtConfig.colorValues?.length > 0) {
+              this.product.colors = tshirtConfig.colorValues.map(name => ({
+                name,
+                hex: this.getColorHex(name)
+              }));
+            } else {
+              // Extract from variants
+              const colorSet = new Set();
+              product.variants.forEach(variant => {
+                const colorOpt = tshirtConfig.colorVariantOption || 'Color';
+                if (variant.option1 && !this.isSizeValue(variant.option1)) colorSet.add(variant.option1);
+                if (variant.option2 && !this.isSizeValue(variant.option2)) colorSet.add(variant.option2);
+              });
+              if (colorSet.size > 0) {
+                this.product.colors = Array.from(colorSet).map(name => ({
+                  name,
+                  hex: this.getColorHex(name)
+                }));
               }
             }
-            if (variant.option2) {
-              if (['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', 'XXL', 'XXXL'].includes(variant.option2.toUpperCase())) {
-                sizeSet.add(variant.option2);
-              } else {
-                colorSet.add(variant.option2);
+            
+            if (tshirtConfig.sizeValues?.length > 0) {
+              this.product.sizes = tshirtConfig.sizeValues;
+            } else {
+              // Extract from variants
+              const sizeSet = new Set();
+              product.variants.forEach(variant => {
+                if (variant.option1 && this.isSizeValue(variant.option1)) sizeSet.add(variant.option1);
+                if (variant.option2 && this.isSizeValue(variant.option2)) sizeSet.add(variant.option2);
+              });
+              if (sizeSet.size > 0) {
+                this.product.sizes = Array.from(sizeSet);
               }
             }
-          });
-          
-          // If we found colors from variants, use them
-          if (colorSet.size > 0) {
-            this.product.colors = Array.from(colorSet).map(name => ({
-              name,
-              hex: this.getColorHex(name)
-            }));
+            
+            console.log('[ULTShirtModal] Loaded T-Shirt product:', product.title, 
+              '| Colors:', this.product.colors.length, 
+              '| Sizes:', this.product.sizes.length,
+              '| Variants:', product.variants.length);
+            return;
           }
-          
-          // If we found sizes from variants, use them
-          if (sizeSet.size > 0) {
-            this.product.sizes = Array.from(sizeSet);
-          }
-          
-          console.log('[ULTShirtModal] Loaded T-Shirt product:', product.title, 'with', product.variants.length, 'variants');
-          return;
+        } catch (error) {
+          console.warn('[ULTShirtModal] Could not fetch configured T-Shirt product:', error);
         }
-      } catch (error) {
-        console.warn('[ULTShirtModal] Could not fetch T-Shirt product:', error);
       }
       
-      // Fallback: Use default colors/sizes if API fails
-      console.log('[ULTShirtModal] Using default colors/sizes (T-Shirt product not found)');
+      // Fallback: Try common handles if no config
+      const fallbackHandles = ['basic-tshirt', 'tshirt', 't-shirt', 'custom-tshirt', 'blank-tshirt'];
+      
+      for (const handle of fallbackHandles) {
+        try {
+          const response = await fetch(`/products/${handle}.js`);
+          if (response.ok) {
+            const product = await response.json();
+            this.product.id = product.id;
+            this.product.title = product.title;
+            this.product.handle = product.handle;
+            this.product.variants = product.variants || [];
+            
+            // Extract colors and sizes from variants
+            const colorSet = new Set();
+            const sizeSet = new Set();
+            
+            product.variants.forEach(variant => {
+              if (variant.option1) {
+                if (this.isSizeValue(variant.option1)) sizeSet.add(variant.option1);
+                else colorSet.add(variant.option1);
+              }
+              if (variant.option2) {
+                if (this.isSizeValue(variant.option2)) sizeSet.add(variant.option2);
+                else colorSet.add(variant.option2);
+              }
+            });
+            
+            if (colorSet.size > 0) {
+              this.product.colors = Array.from(colorSet).map(name => ({
+                name,
+                hex: this.getColorHex(name)
+              }));
+            }
+            
+            if (sizeSet.size > 0) {
+              this.product.sizes = Array.from(sizeSet);
+            }
+            
+            console.log('[ULTShirtModal] Found T-Shirt product via fallback:', product.title);
+            return;
+          }
+        } catch (error) {
+          // Continue to next handle
+        }
+      }
+      
+      // Final fallback: Use default colors/sizes
+      console.warn('[ULTShirtModal] No T-Shirt product found! Using defaults. Please configure in admin panel.');
       this.product.colors = [
         { name: 'White', hex: '#ffffff' },
         { name: 'Black', hex: '#1a1a1a' },
@@ -1091,6 +1145,12 @@ console.log('[ULTShirtModal] Script loading...');
       ];
       
       this.product.sizes = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'];
+    },
+    
+    // Helper to check if a value is a size
+    isSizeValue(value) {
+      const sizes = ['xs', 's', 'm', 'l', 'xl', '2xl', '3xl', 'xxl', 'xxxl', 'small', 'medium', 'large', 'x-large', 'xx-large'];
+      return sizes.includes(value.toLowerCase().trim());
     },
     
     // Helper to get hex color from color name
