@@ -1285,7 +1285,7 @@ console.log('[ULTShirtModal] Script loading...');
     // ==========================================================================
     
     // DEBUG MODE - Set to true to see UV grid overlay
-    DEBUG_UV_GRID: true, // ENABLED for calibration
+    DEBUG_UV_GRID: false, // DISABLED for production
     
     // Draw debug grid to visualize UV mapping
     drawDebugGrid() {
@@ -2323,8 +2323,61 @@ console.log('[ULTShirtModal] Script loading...');
       // Get design data
       const designData = this.step1.useInheritedDesign ? this.inheritedDesign : this.step1.newUpload;
       
-      // Find matching variant (simplified - in production, match by color + size)
-      const variantId = this.product.variants[0]?.id || 'VARIANT_ID';
+      // Find matching variant by size
+      const selectedSize = this.step2.tshirtSize;
+      let variantId = null;
+      let selectedVariant = null;
+      
+      // Method 1: Check our loaded variants
+      if (this.product.variants && this.product.variants.length > 0) {
+        selectedVariant = this.product.variants.find(v => 
+          v.title?.includes(selectedSize) || v.option1 === selectedSize || v.option2 === selectedSize
+        ) || this.product.variants[0];
+        variantId = selectedVariant?.id;
+      }
+      
+      // Method 2: Try Shopify's global product object
+      if (!variantId && window.ShopifyAnalytics?.meta?.product?.variants) {
+        const variants = window.ShopifyAnalytics.meta.product.variants;
+        selectedVariant = variants.find(v => 
+          v.title?.includes(selectedSize) || v.option1 === selectedSize || v.option2 === selectedSize
+        ) || variants[0];
+        variantId = selectedVariant?.id;
+      }
+      
+      // Method 3: Try meta tag or hidden input
+      if (!variantId) {
+        const metaVariant = document.querySelector('meta[itemprop="sku"]')?.content ||
+                           document.querySelector('input[name="id"]')?.value ||
+                           document.querySelector('select[name="id"]')?.value ||
+                           document.querySelector('[data-product-id]')?.dataset?.variantId;
+        if (metaVariant) {
+          variantId = metaVariant;
+        }
+      }
+      
+      // Method 4: Try URL parameter
+      if (!variantId) {
+        const urlParams = new URLSearchParams(window.location.search);
+        variantId = urlParams.get('variant');
+      }
+      
+      // Final fallback: Get from form
+      if (!variantId) {
+        const productForm = document.querySelector('form[action*="/cart/add"]');
+        if (productForm) {
+          const idInput = productForm.querySelector('input[name="id"], select[name="id"]');
+          variantId = idInput?.value;
+        }
+      }
+      
+      if (!variantId) {
+        console.error('[ULTShirtModal] No variant ID found');
+        this.showToast('Error: Could not find product variant. Please refresh and try again.', 'error');
+        return false;
+      }
+      
+      console.log('[ULTShirtModal] Using variant ID:', variantId, 'for size:', selectedSize);
       
       // Prepare line item properties
       const properties = {
