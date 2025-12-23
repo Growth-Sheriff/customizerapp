@@ -1433,7 +1433,10 @@ console.log('[ULTShirtModal] Script loading...');
       
       return new Promise((resolve) => {
         const loader = new THREE.TextureLoader();
-        loader.crossOrigin = 'anonymous';
+        loader.setCrossOrigin('anonymous');
+        
+        // Log for debugging
+        console.log('[ULTShirtModal] TextureLoader created, loading:', designUrl);
         
         loader.load(
           designUrl,
@@ -1467,16 +1470,64 @@ console.log('[ULTShirtModal] Script loading...');
             console.log('[ULTShirtModal] Decal added to scene');
             resolve();
           },
-          undefined,
+          (progress) => {
+            console.log('[ULTShirtModal] Texture loading progress:', progress.loaded, '/', progress.total);
+          },
           (error) => {
-            console.error('[ULTShirtModal] Texture load error:', error);
-            if (window.ULErrorHandler) {
-              window.ULErrorHandler.show('THREE_TEXTURE_FAILED');
-            }
-            resolve();
+            // Log more details about the error
+            console.error('[ULTShirtModal] Texture load error type:', error?.type);
+            console.error('[ULTShirtModal] Texture load error message:', error?.message);
+            console.error('[ULTShirtModal] Texture load error target src:', error?.target?.src);
+            console.error('[ULTShirtModal] Full error:', JSON.stringify(error, Object.getOwnPropertyNames(error || {})));
+            
+            // Fallback: try loading via fetch + createImageBitmap
+            console.log('[ULTShirtModal] Trying fallback fetch method...');
+            fetch(designUrl, { mode: 'cors' })
+              .then(res => {
+                console.log('[ULTShirtModal] Fetch response:', res.status, res.headers.get('content-type'));
+                if (!res.ok) throw new Error('Fetch failed: ' + res.status);
+                return res.blob();
+              })
+              .then(blob => createImageBitmap(blob))
+              .then(bitmap => {
+                console.log('[ULTShirtModal] Fallback: ImageBitmap created');
+                const texture = new THREE.CanvasTexture(bitmap);
+                this.createDecalFromTexture(texture);
+                resolve();
+              })
+              .catch(fetchErr => {
+                console.error('[ULTShirtModal] Fallback also failed:', fetchErr.message);
+                if (window.ULErrorHandler) {
+                  window.ULErrorHandler.show('THREE_TEXTURE_FAILED');
+                }
+                resolve();
+              });
           }
         );
       });
+    },
+
+    // Helper method to create decal from texture
+    createDecalFromTexture(texture) {
+      const decalGeom = new THREE.PlaneGeometry(1.2, 1.2);
+      const decalMat = new THREE.MeshBasicMaterial({
+        map: texture,
+        transparent: true,
+        side: THREE.DoubleSide,
+        depthWrite: false
+      });
+      
+      const decal = new THREE.Mesh(decalGeom, decalMat);
+      decal.position.set(0, 0.3, 0.55);
+      decal.renderOrder = 1;
+      
+      if (this.three.decals.front) {
+        this.three.scene.remove(this.three.decals.front);
+      }
+      
+      this.three.decals.front = decal;
+      this.three.scene.add(decal);
+      console.log('[ULTShirtModal] Decal added via fallback method');
     },
 
     update3DColor(hex) {
