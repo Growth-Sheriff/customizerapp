@@ -62,17 +62,32 @@ function getStorageClient(provider: string): S3Client | null {
   });
 }
 
-// Download file from local storage
+// Download file from local storage with Unicode normalization
 async function downloadLocalFile(storageKey: string, localPath: string): Promise<void> {
   const uploadsDir = process.env.LOCAL_UPLOAD_DIR || path.join(process.cwd(), "uploads");
-  const sourcePath = path.join(uploadsDir, storageKey);
+  const dir = path.join(uploadsDir, path.dirname(storageKey));
+  const expectedFileName = path.basename(storageKey);
+  
+  // Find file with matching NFC normalized name (handles NFD/NFC differences)
+  const files = await fs.readdir(dir);
+  const matchingFile = files.find(
+    f => f.normalize("NFC") === expectedFileName.normalize("NFC")
+  );
+  
+  if (!matchingFile) {
+    throw new Error(`File not found: ${storageKey}`);
+  }
+  
+  const sourcePath = path.join(dir, matchingFile);
   await fs.copyFile(sourcePath, localPath);
 }
 
-// Upload file to local storage
+// Upload file to local storage with Unicode normalization
 async function uploadLocalFile(storageKey: string, localPath: string): Promise<void> {
   const uploadsDir = process.env.LOCAL_UPLOAD_DIR || path.join(process.cwd(), "uploads");
-  const destPath = path.join(uploadsDir, storageKey);
+  // Normalize storage key to NFC for consistent naming
+  const normalizedKey = storageKey.normalize("NFC");
+  const destPath = path.join(uploadsDir, normalizedKey);
   await fs.mkdir(path.dirname(destPath), { recursive: true });
   await fs.copyFile(localPath, destPath);
 }
