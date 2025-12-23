@@ -412,6 +412,135 @@
 <!-- Three.js CDN -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.min.js" defer></script>
 
+<!-- GLTFLoader CDN for 3D model loading -->
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    if (typeof THREE === 'undefined') return;
+    
+    // GLTFLoader implementation for loading GLB models
+    THREE.GLTFLoader = function(manager) {
+      THREE.Loader.call(this, manager);
+    };
+    
+    THREE.GLTFLoader.prototype = Object.assign(Object.create(THREE.Loader.prototype), {
+      constructor: THREE.GLTFLoader,
+      
+      load: function(url, onLoad, onProgress, onError) {
+        const loader = new THREE.FileLoader(this.manager);
+        loader.setResponseType('arraybuffer');
+        loader.setRequestHeader(this.requestHeader);
+        loader.setPath(this.path);
+        loader.setWithCredentials(this.withCredentials);
+        
+        loader.load(url, (data) => {
+          try {
+            this.parse(data, this.resourcePath || url.substring(0, url.lastIndexOf('/') + 1), onLoad, onError);
+          } catch (e) {
+            if (onError) onError(e);
+            console.error('THREE.GLTFLoader: Unable to parse model', e);
+          }
+        }, onProgress, onError);
+      },
+      
+      parse: function(data, path, onLoad, onError) {
+        // Simplified GLB parser
+        const magic = new Uint32Array(data.slice(0, 4))[0];
+        if (magic !== 0x46546C67) { // 'glTF' in ASCII
+          if (onError) onError(new Error('Not a valid GLB file'));
+          return;
+        }
+        
+        const dataView = new DataView(data);
+        const version = dataView.getUint32(4, true);
+        const length = dataView.getUint32(8, true);
+        
+        let chunkOffset = 12;
+        let jsonContent = null;
+        let binBuffer = null;
+        
+        while (chunkOffset < length) {
+          const chunkLength = dataView.getUint32(chunkOffset, true);
+          const chunkType = dataView.getUint32(chunkOffset + 4, true);
+          
+          if (chunkType === 0x4E4F534A) { // JSON
+            const jsonSlice = new Uint8Array(data, chunkOffset + 8, chunkLength);
+            jsonContent = JSON.parse(new TextDecoder().decode(jsonSlice));
+          } else if (chunkType === 0x004E4942) { // BIN
+            binBuffer = data.slice(chunkOffset + 8, chunkOffset + 8 + chunkLength);
+          }
+          
+          chunkOffset += chunkLength + 8;
+        }
+        
+        if (!jsonContent) {
+          if (onError) onError(new Error('Invalid GLB: no JSON chunk'));
+          return;
+        }
+        
+        // Parse geometry from glTF
+        const scene = new THREE.Scene();
+        
+        // Simplified mesh extraction
+        if (jsonContent.meshes && jsonContent.meshes.length > 0) {
+          jsonContent.meshes.forEach((meshData) => {
+            meshData.primitives.forEach((primitive) => {
+              const geometry = new THREE.BufferGeometry();
+              
+              // Get accessors and buffer views
+              const posAccessor = jsonContent.accessors[primitive.attributes.POSITION];
+              const posBufferView = jsonContent.bufferViews[posAccessor.bufferView];
+              
+              // Extract position data
+              const posData = new Float32Array(binBuffer, posBufferView.byteOffset || 0, posAccessor.count * 3);
+              geometry.setAttribute('position', new THREE.BufferAttribute(posData.slice(), 3));
+              
+              // Normals if available
+              if (primitive.attributes.NORMAL !== undefined) {
+                const normAccessor = jsonContent.accessors[primitive.attributes.NORMAL];
+                const normBufferView = jsonContent.bufferViews[normAccessor.bufferView];
+                const normData = new Float32Array(binBuffer, normBufferView.byteOffset || 0, normAccessor.count * 3);
+                geometry.setAttribute('normal', new THREE.BufferAttribute(normData.slice(), 3));
+              }
+              
+              // UVs if available
+              if (primitive.attributes.TEXCOORD_0 !== undefined) {
+                const uvAccessor = jsonContent.accessors[primitive.attributes.TEXCOORD_0];
+                const uvBufferView = jsonContent.bufferViews[uvAccessor.bufferView];
+                const uvData = new Float32Array(binBuffer, uvBufferView.byteOffset || 0, uvAccessor.count * 2);
+                geometry.setAttribute('uv', new THREE.BufferAttribute(uvData.slice(), 2));
+              }
+              
+              // Indices if available
+              if (primitive.indices !== undefined) {
+                const indAccessor = jsonContent.accessors[primitive.indices];
+                const indBufferView = jsonContent.bufferViews[indAccessor.bufferView];
+                const IndArrayType = indAccessor.componentType === 5123 ? Uint16Array : Uint32Array;
+                const indData = new IndArrayType(binBuffer, indBufferView.byteOffset || 0, indAccessor.count);
+                geometry.setIndex(new THREE.BufferAttribute(indData.slice(), 1));
+              }
+              
+              geometry.computeBoundingSphere();
+              
+              // Create material
+              const material = new THREE.MeshStandardMaterial({
+                color: 0xffffff,
+                roughness: 0.7,
+                metalness: 0.0,
+                side: THREE.DoubleSide
+              });
+              
+              const mesh = new THREE.Mesh(geometry, material);
+              scene.add(mesh);
+            });
+          });
+        }
+        
+        if (onLoad) onLoad({ scene: scene, scenes: [scene] });
+      }
+    });
+  });
+</script>
+
 <!-- OrbitControls CDN (ES5 version for compatibility) -->
 <script>
   // OrbitControls inline for compatibility (Three.js r160)

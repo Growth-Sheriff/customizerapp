@@ -1331,10 +1331,66 @@ console.log('[ULTShirtModal] Script loading...');
     },
 
     async createTShirtMesh() {
-      // Simple plane geometry (in production, load a proper GLB model)
+      const color = parseInt(this.step2.tshirtColor.replace('#', '0x'));
+      
+      // Try to load GLB model
+      if (typeof THREE.GLTFLoader !== 'undefined') {
+        return new Promise((resolve) => {
+          const loader = new THREE.GLTFLoader();
+          const glbUrl = window.UL_TSHIRT_GLB_URL || '/shirt_baked.glb';
+          
+          console.log('[ULTShirtModal] Loading GLB model from:', glbUrl);
+          
+          loader.load(
+            glbUrl,
+            (gltf) => {
+              console.log('[ULTShirtModal] GLB model loaded successfully');
+              this.three.tshirtMesh = gltf.scene;
+              
+              // Apply color to all meshes in the model
+              this.three.tshirtMesh.traverse((child) => {
+                if (child.isMesh) {
+                  child.material = new THREE.MeshStandardMaterial({
+                    color: color,
+                    roughness: 0.8,
+                    metalness: 0.0,
+                    side: THREE.DoubleSide
+                  });
+                }
+              });
+              
+              // Scale and position the model
+              this.three.tshirtMesh.scale.set(1.5, 1.5, 1.5);
+              this.three.tshirtMesh.position.set(0, 0, 0);
+              
+              this.three.scene.add(this.three.tshirtMesh);
+              resolve();
+            },
+            (progress) => {
+              // Loading progress
+              if (progress.total) {
+                const pct = Math.round((progress.loaded / progress.total) * 100);
+                console.log('[ULTShirtModal] GLB loading:', pct + '%');
+              }
+            },
+            (error) => {
+              console.warn('[ULTShirtModal] GLB load failed, using fallback plane:', error);
+              this.createFallbackPlane(color);
+              resolve();
+            }
+          );
+        });
+      } else {
+        console.log('[ULTShirtModal] GLTFLoader not available, using fallback plane');
+        this.createFallbackPlane(color);
+      }
+    },
+
+    createFallbackPlane(color) {
+      // Fallback plane geometry when GLB loading fails
       const geometry = new THREE.PlaneGeometry(2, 2.8);
       const material = new THREE.MeshStandardMaterial({
-        color: parseInt(this.step2.tshirtColor.replace('#', '0x')),
+        color: color,
         side: THREE.DoubleSide,
         roughness: 0.8
       });
@@ -1386,7 +1442,17 @@ console.log('[ULTShirtModal] Script loading...');
 
     update3DColor(hex) {
       if (this.three.tshirtMesh) {
-        this.three.tshirtMesh.material.color.set(hex);
+        // For GLB models, traverse all children and update materials
+        if (this.three.tshirtMesh.traverse) {
+          this.three.tshirtMesh.traverse((child) => {
+            if (child.isMesh && child.material) {
+              child.material.color.set(hex);
+            }
+          });
+        } else if (this.three.tshirtMesh.material) {
+          // For simple plane fallback
+          this.three.tshirtMesh.material.color.set(hex);
+        }
       }
     },
 
