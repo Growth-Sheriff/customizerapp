@@ -127,30 +127,31 @@ console.log('[ULTShirtModal] Script loading...');
     
     // UV Regions for Texture Baking (calibrated from user grid analysis)
     // Decal is drawn directly to texture canvas at these UV coordinates
-    // Grid format: ROW,COL where ROW=V*10, COL=U*10 → U=COL/10, V=ROW/10
+    // Grid format: ROW,COL - Canvas Y is inverted vs UV V!
+    // U = (COL + 0.5) / 10, V = 1 - (ROW + 0.5) / 10
     UV_REGIONS: {
       front: {
-        // User identified: cell 2,7 → U=0.7, V=0.2
-        bounds: { uMin: 0.55, uMax: 0.85, vMin: 0.05, vMax: 0.35 },
-        center: { u: 0.70, v: 0.20 },
+        // User identified: cell 2,7 → U=0.75, V=1-(2.5/10)=0.75
+        bounds: { uMin: 0.55, uMax: 0.95, vMin: 0.55, vMax: 0.95 },
+        center: { u: 0.75, v: 0.75 },
         defaultSize: 0.5
       },
       back: {
-        // User identified: cell 7,7 → U=0.7, V=0.7
-        bounds: { uMin: 0.55, uMax: 0.85, vMin: 0.55, vMax: 0.85 },
-        center: { u: 0.70, v: 0.70 },
+        // User identified: cell 7,7 → U=0.75, V=1-(7.5/10)=0.25
+        bounds: { uMin: 0.55, uMax: 0.95, vMin: 0.05, vMax: 0.45 },
+        center: { u: 0.75, v: 0.25 },
         defaultSize: 0.5
       },
       left_sleeve: {
-        // User identified: between 1,1 and 1,2 → U=0.15, V=0.1
-        bounds: { uMin: 0.05, uMax: 0.25, vMin: 0.0, vMax: 0.20 },
-        center: { u: 0.15, v: 0.10 },
+        // User identified: between 1,1 and 1,2 → U=0.175, V=1-(1.5/10)=0.85
+        bounds: { uMin: 0.05, uMax: 0.30, vMin: 0.70, vMax: 1.0 },
+        center: { u: 0.175, v: 0.85 },
         defaultSize: 0.3
       },
       right_sleeve: {
-        // User identified: between 5,1 and 6,1 → U=0.1, V=0.55
-        bounds: { uMin: 0.0, uMax: 0.20, vMin: 0.45, vMax: 0.65 },
-        center: { u: 0.10, v: 0.55 },
+        // User identified: between 5,1 and 6,1 → U=0.15, V=1-(5.5/10)=0.45
+        bounds: { uMin: 0.0, uMax: 0.30, vMin: 0.25, vMax: 0.65 },
+        center: { u: 0.15, v: 0.45 },
         defaultSize: 0.3
       }
     },
