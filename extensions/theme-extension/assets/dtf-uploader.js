@@ -837,8 +837,10 @@
 
           const data = await response.json();
 
-          if (data.status === 'ready' || data.status === 'completed') {
-            // Success!
+          // Accept all "finished" statuses - including blocked/warning (DPI issues etc.)
+          const finishedStatuses = ['ready', 'completed', 'blocked', 'needs_review', 'uploaded'];
+          if (finishedStatuses.includes(data.status)) {
+            // Success - upload processing complete (may have warnings)
             state.upload.status = 'ready';
             state.upload.result = {
               thumbnailUrl: data.thumbnailUrl || '',
