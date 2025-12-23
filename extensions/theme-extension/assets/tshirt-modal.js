@@ -2058,6 +2058,9 @@ console.log('[ULTShirtModal] Script loading...');
         return map[id] || id;
       });
       
+      // Generate location snapshots
+      this.generateLocationSnapshots(enabledLocs);
+      
       // Update review details
       if (this.el.reviewColor) this.el.reviewColor.textContent = this.step2.tshirtColorName;
       if (this.el.reviewSize) this.el.reviewSize.textContent = this.step2.tshirtSize;
@@ -2130,6 +2133,82 @@ console.log('[ULTShirtModal] Script loading...');
       `;
       
       this.el.reviewPriceBreakdown.innerHTML = html;
+    },
+
+    // Generate snapshots for each enabled location
+    async generateLocationSnapshots(enabledLocs) {
+      const grid = document.getElementById('ul-review-preview-grid');
+      if (!grid) return;
+      
+      const locNames = {
+        front: 'Front',
+        back: 'Back',
+        left_sleeve: 'Left Sleeve',
+        right_sleeve: 'Right Sleeve'
+      };
+      
+      const cameraRotations = {
+        front: 0,
+        back: Math.PI,
+        left_sleeve: -Math.PI / 2,
+        right_sleeve: Math.PI / 2
+      };
+      
+      // Clear existing grid
+      grid.innerHTML = '';
+      
+      // If no 3D renderer, show placeholder
+      if (!this.three.renderer || !this.three.scene || !this.three.camera) {
+        enabledLocs.forEach(locId => {
+          const item = document.createElement('div');
+          item.className = 'ul-review-preview-item';
+          item.innerHTML = `
+            <div class="ul-review-preview-label">${locNames[locId]}</div>
+            <div class="ul-review-preview-box">👕</div>
+          `;
+          grid.appendChild(item);
+        });
+        return;
+      }
+      
+      // Generate snapshot for each location
+      for (const locId of enabledLocs) {
+        // Rotate camera to this location
+        const targetRotation = cameraRotations[locId] || 0;
+        
+        if (this.three.tshirtModel) {
+          this.three.tshirtModel.rotation.y = targetRotation;
+        } else if (this.three.tshirtMesh) {
+          this.three.tshirtMesh.rotation.y = targetRotation;
+        }
+        
+        // Render the scene
+        this.three.renderer.render(this.three.scene, this.three.camera);
+        
+        // Capture snapshot
+        const dataUrl = this.three.renderer.domElement.toDataURL('image/png');
+        
+        // Create preview item
+        const item = document.createElement('div');
+        item.className = 'ul-review-preview-item';
+        item.innerHTML = `
+          <div class="ul-review-preview-label">${locNames[locId]}</div>
+          <div class="ul-review-preview-box">
+            <img src="${dataUrl}" alt="${locNames[locId]} preview" style="width: 100%; height: 100%; object-fit: contain; border-radius: 8px;">
+          </div>
+        `;
+        grid.appendChild(item);
+        
+        // Small delay between snapshots
+        await new Promise(r => setTimeout(r, 100));
+      }
+      
+      // Reset rotation to front
+      if (this.three.tshirtModel) {
+        this.three.tshirtModel.rotation.y = 0;
+      } else if (this.three.tshirtMesh) {
+        this.three.tshirtMesh.rotation.y = 0;
+      }
     },
 
     updateActionButtons() {
