@@ -1452,7 +1452,7 @@ console.log('[ULTShirtModal] Script loading...');
       const centerX = region.center.u * size + offsetX;
       const centerY = (1 - region.center.v) * size + offsetY; // INVERT V for canvas
       
-      // Draw decal centered at position
+      // Draw decal centered at position with HORIZONTAL FLIP
       const drawX = centerX - decalWidth / 2;
       const drawY = centerY - decalHeight / 2;
       
@@ -1463,7 +1463,16 @@ console.log('[ULTShirtModal] Script loading...');
         h: Math.round(decalHeight)
       });
       
-      ctx.drawImage(this.decalImage, drawX, drawY, decalWidth, decalHeight);
+      // Save context state
+      ctx.save();
+      
+      // Move to center of where we want to draw, flip horizontally, then draw
+      ctx.translate(centerX, centerY);
+      ctx.scale(-1, 1); // Horizontal flip
+      ctx.drawImage(this.decalImage, -decalWidth / 2, -decalHeight / 2, decalWidth, decalHeight);
+      
+      // Restore context state
+      ctx.restore();
     },
     
     // Apply the baked canvas texture to the 3D mesh
