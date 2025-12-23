@@ -92,6 +92,9 @@ console.log('[ULTShirtModal] Script loading...');
       animationId: null
     },
     
+    // Current loaded texture for decals
+    currentTexture: null,
+    
     // Product data
     product: {
       id: null,
@@ -110,6 +113,30 @@ console.log('[ULTShirtModal] Script loading...');
     // DOM elements cache
     el: {},
     
+    // Decal location presets for shirt_baked.glb
+    DECAL_LOCATIONS: {
+      front: {
+        position: { x: -0.001, y: 0.028, z: 0.149 },
+        rotation: { x: 0, y: 0, z: 0 },
+        baseScale: 0.15
+      },
+      back: {
+        position: { x: -0.001, y: 0.028, z: -0.130 },
+        rotation: { x: 0, y: Math.PI, z: 0 },
+        baseScale: 0.15
+      },
+      left_sleeve: {
+        position: { x: -0.18, y: 0.12, z: 0.02 },
+        rotation: { x: 0, y: Math.PI / 2, z: 0 },
+        baseScale: 0.08
+      },
+      right_sleeve: {
+        position: { x: 0.18, y: 0.12, z: 0.02 },
+        rotation: { x: 0, y: -Math.PI / 2, z: 0 },
+        baseScale: 0.08
+      }
+    },
+
     // Color map
     colorMap: {
       'white': '#ffffff', 'black': '#1a1a1a', 'navy': '#1e3a5f',
@@ -1285,9 +1312,9 @@ console.log('[ULTShirtModal] Script loading...');
         this.three.scene = new THREE.Scene();
         this.three.scene.background = new THREE.Color(0xf0f0f0);
         
-        // Camera
+        // Camera - closer view since model is at original scale
         this.three.camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
-        this.three.camera.position.set(0, 0, 4);
+        this.three.camera.position.set(0, 0, 2);
         
         // Renderer
         this.three.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -1379,9 +1406,9 @@ console.log('[ULTShirtModal] Script loading...');
                 }
               });
               
-              // Scale and position the model
-              this.three.tshirtMesh.scale.set(1.5, 1.5, 1.5);
-              this.three.tshirtMesh.position.set(0, 0, 0);
+              // Keep original scale - camera distance handles size
+              // Model center is at approximately (0, -0.045, 0.01)
+              this.three.tshirtMesh.position.set(0, 0.05, 0); // Slight Y offset to center in view
               
               this.three.scene.add(this.three.tshirtMesh);
               resolve();
@@ -1485,88 +1512,126 @@ console.log('[ULTShirtModal] Script loading...');
       });
     },
 
-    // Helper method to create decal from texture
+    // Helper method to create decal from texture - uses shirt_baked.glb positions
     createDecalFromTexture(texture) {
       // Configure texture
       texture.flipY = true;
       texture.needsUpdate = true;
+      if (texture.colorSpace !== undefined) {
+        texture.colorSpace = THREE.SRGBColorSpace;
+      }
       
-      // Method 1: Find the front-facing mesh of the T-shirt and apply texture as decal
-      if (this.three.tshirtMesh) {
-        let frontMesh = null;
+      // Store texture reference for later use
+      this.currentTexture = texture;
+      
+      if (!this.three.tshirtMesh) {
+        console.warn('[ULTShirtModal] No T-shirt mesh found');
+        return;
+      }
+      
+      // Find the T_Shirt_male mesh
+      let targetMesh = null;
+      this.three.tshirtMesh.traverse((child) => {
+        if (child.isMesh && (child.name === 'T_Shirt_male' || !targetMesh)) {
+          targetMesh = child;
+        }
+      });
+      
+      if (!targetMesh) {
+        console.warn('[ULTShirtModal] No mesh found in T-shirt model');
+        return;
+      }
+      
+      console.log('[ULTShirtModal] Found mesh:', targetMesh.name);
+      
+      // Create decals for all enabled locations
+      const enabledLocations = this.getEnabledLocations();
+      
+      enabledLocations.forEach(locationId => {
+        this.createDecalForLocation(texture, locationId, targetMesh);
+      });
+      
+      console.log('[ULTShirtModal] Created decals for locations:', enabledLocations.join(', '));
+    },
+    
+    // Create decal for a specific location
+    createDecalForLocation(texture, locationId, targetMesh) {
+      const config = this.DECAL_LOCATIONS[locationId];
+      if (!config) {
+        console.warn('[ULTShirtModal] Unknown location:', locationId);
+        return;
+      }
+      
+      // Calculate aspect ratio for proper scaling
+      const aspectRatio = texture.image ? texture.image.width / texture.image.height : 1;
+      
+      // Get scale from location settings
+      const locSettings = this.step2.locations[locationId];
+      const scaleMultiplier = (locSettings?.scale || 100) / 100;
+      const baseScale = config.baseScale * scaleMultiplier;
+      
+      // Create plane geometry (1x1, will be scaled)
+      const geometry = new THREE.PlaneGeometry(1, 1);
+      
+      // Material with JSM-style settings
+      const material = new THREE.MeshBasicMaterial({
+        map: texture,
+        transparent: true,
+        depthTest: false,       // Always visible (like JSM)
+        depthWrite: true,
+        side: THREE.DoubleSide,
+        polygonOffset: true,
+        polygonOffsetFactor: -4
+      });
+      
+      const decal = new THREE.Mesh(geometry, material);
+      
+      // Apply position from config
+      decal.position.set(config.position.x, config.position.y, config.position.z);
+      
+      // Apply rotation from config
+      decal.rotation.set(config.rotation.x, config.rotation.y, config.rotation.z);
+      
+      // Apply scale with aspect ratio
+      if (aspectRatio > 1) {
+        // Wide image
+        decal.scale.set(baseScale, baseScale / aspectRatio, 1);
+      } else {
+        // Tall image
+        decal.scale.set(baseScale * aspectRatio, baseScale, 1);
+      }
+      
+      // Apply position offsets from UI
+      if (locSettings) {
+        const offsetX = (locSettings.positionX || 0) / 500;
+        const offsetY = (locSettings.positionY || 0) / 500;
         
-        // Find the main body mesh
-        this.three.tshirtMesh.traverse((child) => {
-          if (child.isMesh && !frontMesh) {
-            frontMesh = child;
-          }
-        });
-        
-        if (frontMesh) {
-          console.log('[ULTShirtModal] Applying decal to T-shirt mesh');
-          
-          // Create a decal plane that follows the T-shirt surface
-          const aspectRatio = texture.image ? texture.image.width / texture.image.height : 1;
-          const decalHeight = 0.8;
-          const decalWidth = decalHeight * aspectRatio;
-          
-          const decalGeom = new THREE.PlaneGeometry(decalWidth, decalHeight);
-          const decalMat = new THREE.MeshBasicMaterial({
-            map: texture,
-            transparent: true,
-            side: THREE.FrontSide,
-            depthTest: true,
-            depthWrite: false,
-            polygonOffset: true,
-            polygonOffsetFactor: -1,
-            polygonOffsetUnits: -1
-          });
-          
-          const decal = new THREE.Mesh(decalGeom, decalMat);
-          
-          // Position decal on front of T-shirt - close to surface
-          decal.position.set(0, 0.35, 0.42);
-          decal.renderOrder = 999;
-          
-          // Remove old decal if exists
-          if (this.three.decals.front) {
-            if (this.three.decals.front.parent) {
-              this.three.decals.front.parent.remove(this.three.decals.front);
-            } else {
-              this.three.scene.remove(this.three.decals.front);
-            }
-          }
-          
-          this.three.decals.front = decal;
-          
-          // Add decal as child of T-shirt so it rotates together
-          this.three.tshirtMesh.add(decal);
-          console.log('[ULTShirtModal] Decal attached to T-shirt mesh');
-          return;
+        // Apply offsets based on location
+        if (locationId === 'front' || locationId === 'back') {
+          decal.position.x += offsetX;
+          decal.position.y += offsetY;
+        } else {
+          decal.position.z += offsetX;
+          decal.position.y += offsetY;
         }
       }
       
-      // Fallback: Simple plane decal
-      console.log('[ULTShirtModal] Using fallback plane decal');
-      const decalGeom = new THREE.PlaneGeometry(1.0, 1.0);
-      const decalMat = new THREE.MeshBasicMaterial({
-        map: texture,
-        transparent: true,
-        side: THREE.DoubleSide,
-        depthWrite: false
-      });
-      
-      const decal = new THREE.Mesh(decalGeom, decalMat);
-      decal.position.set(0, 0.3, 0.55);
-      decal.renderOrder = 1;
-      
-      if (this.three.decals.front) {
-        this.three.scene.remove(this.three.decals.front);
+      // Remove old decal for this location
+      if (this.three.decals[locationId]) {
+        const oldDecal = this.three.decals[locationId];
+        if (oldDecal.parent) {
+          oldDecal.parent.remove(oldDecal);
+        }
+        oldDecal.geometry?.dispose();
+        oldDecal.material?.map?.dispose();
+        oldDecal.material?.dispose();
       }
       
-      this.three.decals.front = decal;
-      this.three.scene.add(decal);
-      console.log('[ULTShirtModal] Decal added via fallback method');
+      // Add as child of T-shirt mesh (rotates together)
+      this.three.tshirtMesh.add(decal);
+      this.three.decals[locationId] = decal;
+      
+      console.log(`[ULTShirtModal] Decal created for ${locationId} at`, config.position);
     },
 
     update3DColor(hex) {
@@ -1586,32 +1651,66 @@ console.log('[ULTShirtModal] Script loading...');
     },
 
     update3DDecal(locationId, enabled) {
-      // Simplified: just show/hide front decal
-      if (this.three.decals.front) {
-        this.three.decals.front.visible = this.step2.locations.front.enabled;
+      // Show/hide the specific location's decal
+      if (this.three.decals[locationId]) {
+        this.three.decals[locationId].visible = enabled;
+      }
+      
+      // If enabling and no decal exists yet, create it
+      if (enabled && !this.three.decals[locationId] && this.currentTexture) {
+        let targetMesh = null;
+        this.three.tshirtMesh?.traverse((child) => {
+          if (child.isMesh && !targetMesh) targetMesh = child;
+        });
+        if (targetMesh) {
+          this.createDecalForLocation(this.currentTexture, locationId, targetMesh);
+        }
       }
     },
 
     update3DDecalTransform() {
-      const loc = this.step2.locations[this.step2.activeLocation];
-      const decal = this.three.decals[this.step2.activeLocation];
+      const locationId = this.step2.activeLocation;
+      const locSettings = this.step2.locations[locationId];
+      const decal = this.three.decals[locationId];
+      const config = this.DECAL_LOCATIONS[locationId];
       
-      if (decal && loc) {
-        const scale = loc.scale / 100;
-        decal.scale.set(scale, scale, 1);
-        decal.position.x = loc.positionX / 100;
-        decal.position.y = loc.positionY / 100;
+      if (!decal || !locSettings || !config) return;
+      
+      // Get texture aspect ratio
+      const texture = decal.material?.map;
+      const aspectRatio = texture?.image ? texture.image.width / texture.image.height : 1;
+      
+      // Calculate scale
+      const scaleMultiplier = locSettings.scale / 100;
+      const baseScale = config.baseScale * scaleMultiplier;
+      
+      // Apply scale with aspect ratio
+      if (aspectRatio > 1) {
+        decal.scale.set(baseScale, baseScale / aspectRatio, 1);
+      } else {
+        decal.scale.set(baseScale * aspectRatio, baseScale, 1);
       }
+      
+      // Reset to base position then apply offsets
+      const offsetX = (locSettings.positionX || 0) / 500;
+      const offsetY = (locSettings.positionY || 0) / 500;
+      
+      decal.position.set(
+        config.position.x + (locationId === 'front' || locationId === 'back' ? offsetX : 0),
+        config.position.y + offsetY,
+        config.position.z + (locationId !== 'front' && locationId !== 'back' ? offsetX : 0)
+      );
     },
 
     moveCamera(view) {
       if (!this.three.camera) return;
       
+      // Camera positions adjusted for z=2 base distance
       const positions = {
-        front: { x: 0, y: 0, z: 4 },
-        back: { x: 0, y: 0, z: -4 },
-        left: { x: -4, y: 0, z: 0 },
-        right: { x: 4, y: 0, z: 0 }
+        front: { x: 0, y: 0, z: 2 },
+        back: { x: 0, y: 0, z: -2 },
+        left: { x: -2, y: 0, z: 0 },
+        right: { x: 2, y: 0, z: 0 }
       };
       
       const pos = positions[view] || positions.front;
@@ -1652,9 +1751,20 @@ console.log('[ULTShirtModal] Script loading...');
         this.three.animationId = null;
       }
       
+      // Dispose decals
+      Object.values(this.three.decals).forEach(decal => {
+        if (decal) {
+          decal.geometry?.dispose();
+          decal.material?.map?.dispose();
+          decal.material?.dispose();
+        }
+      });
+      
       if (this.three.renderer) {
         this.three.renderer.dispose();
       }
+      
+      this.currentTexture = null;
       
       this.three = {
         scene: null,
