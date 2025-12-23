@@ -410,12 +410,23 @@
 <div class="ul-toast" id="ul-toast"></div>
 
 <!-- Three.js CDN -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.min.js"></script>
 
 <!-- GLTFLoader CDN for 3D model loading -->
 <script>
-  document.addEventListener('DOMContentLoaded', function() {
-    if (typeof THREE === 'undefined') return;
+  // Wait for THREE.js to be available before defining GLTFLoader
+  (function initGLTFLoader() {
+    function defineGLTFLoader() {
+      if (typeof THREE === 'undefined' || typeof THREE.Loader === 'undefined') {
+        // THREE.js not ready yet, wait and retry
+        setTimeout(defineGLTFLoader, 50);
+        return;
+      }
+      
+      // GLTFLoader already defined, skip
+      if (THREE.GLTFLoader) return;
+      
+      console.log('[UL] Defining GLTFLoader - THREE.js is ready');
     
     // GLTFLoader implementation for loading GLB models
     THREE.GLTFLoader = function(manager) {
@@ -538,15 +549,29 @@
         if (onLoad) onLoad({ scene: scene, scenes: [scene] });
       }
     });
-  });
+    }
+    
+    // Start checking for THREE.js
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', defineGLTFLoader);
+    } else {
+      defineGLTFLoader();
+    }
+  })();
 </script>
 
 <!-- OrbitControls CDN (ES5 version for compatibility) -->
 <script>
   // OrbitControls inline for compatibility (Three.js r160)
-  // This is loaded after Three.js via defer
-  document.addEventListener('DOMContentLoaded', function() {
-    if (typeof THREE === 'undefined') return;
+  // Wait for THREE.js to be available
+  (function initOrbitControls() {
+    function defineOrbitControls() {
+      if (typeof THREE === 'undefined') {
+        setTimeout(defineOrbitControls, 50);
+        return;
+      }
+      
+      if (THREE.OrbitControls) return;
     
     // Simple OrbitControls implementation for T-Shirt preview
     THREE.OrbitControls = function(camera, domElement) {
@@ -637,7 +662,15 @@
         domElement.removeEventListener('touchend', onTouchEnd);
       };
     };
-  });
+    }
+    
+    // Start checking for THREE.js
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', defineOrbitControls);
+    } else {
+      defineOrbitControls();
+    }
+  })();
 </script>
 
 <!-- FAZ 8: Analytics (conditional - may already be loaded by dtf-uploader) -->

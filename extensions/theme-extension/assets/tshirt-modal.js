@@ -1333,11 +1333,31 @@ console.log('[ULTShirtModal] Script loading...');
     async createTShirtMesh() {
       const color = parseInt(this.step2.tshirtColor.replace('#', '0x'));
       
+      // Wait for GLTFLoader to be available (async script loading)
+      const waitForGLTFLoader = () => {
+        return new Promise((resolve) => {
+          let attempts = 0;
+          const check = () => {
+            if (typeof THREE !== 'undefined' && typeof THREE.GLTFLoader !== 'undefined') {
+              resolve(true);
+            } else if (attempts < 50) { // Wait up to 2.5 seconds
+              attempts++;
+              setTimeout(check, 50);
+            } else {
+              resolve(false);
+            }
+          };
+          check();
+        });
+      };
+      
+      const glTFLoaderReady = await waitForGLTFLoader();
+      
       // Try to load GLB model
-      if (typeof THREE.GLTFLoader !== 'undefined') {
+      if (glTFLoaderReady) {
         return new Promise((resolve) => {
           const loader = new THREE.GLTFLoader();
-          const glbUrl = window.UL_TSHIRT_GLB_URL || '/shirt_baked.glb';
+          const glbUrl = window.UL_TSHIRT_GLB_URL || 'https://customizerapp.dev/shirt_baked.glb';
           
           console.log('[ULTShirtModal] Loading GLB model from:', glbUrl);
           
@@ -1381,7 +1401,7 @@ console.log('[ULTShirtModal] Script loading...');
           );
         });
       } else {
-        console.log('[ULTShirtModal] GLTFLoader not available, using fallback plane');
+        console.log('[ULTShirtModal] GLTFLoader not available after waiting, using fallback plane');
         this.createFallbackPlane(color);
       }
     },
