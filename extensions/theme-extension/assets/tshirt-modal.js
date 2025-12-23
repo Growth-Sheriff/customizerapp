@@ -127,31 +127,30 @@ console.log('[ULTShirtModal] Script loading...');
     
     // UV Regions for Texture Baking (calibrated from user grid analysis)
     // Decal is drawn directly to texture canvas at these UV coordinates
-    // Grid format: ROW,COL - Canvas Y is inverted vs UV V!
-    // U = (COL + 0.5) / 10, V = 1 - (ROW + 0.5) / 10
+    // Grid format: ROW,COL → U = COL/10, V = ROW/10 (code handles Y inversion)
     UV_REGIONS: {
       front: {
-        // User identified: cell 2,7 → U=0.75, V=1-(2.5/10)=0.75
-        bounds: { uMin: 0.55, uMax: 0.95, vMin: 0.55, vMax: 0.95 },
-        center: { u: 0.75, v: 0.75 },
+        // User identified: cell 2,7 → U=0.7, V=0.2
+        bounds: { uMin: 0.50, uMax: 0.90, vMin: 0.05, vMax: 0.40 },
+        center: { u: 0.70, v: 0.20 },
         defaultSize: 0.5
       },
       back: {
-        // User identified: cell 7,7 → U=0.75, V=1-(7.5/10)=0.25
-        bounds: { uMin: 0.55, uMax: 0.95, vMin: 0.05, vMax: 0.45 },
-        center: { u: 0.75, v: 0.25 },
+        // User identified: cell 7,7 → U=0.7, V=0.7
+        bounds: { uMin: 0.50, uMax: 0.90, vMin: 0.50, vMax: 0.90 },
+        center: { u: 0.70, v: 0.70 },
         defaultSize: 0.5
       },
       left_sleeve: {
-        // User identified: between 1,1 and 1,2 → U=0.175, V=1-(1.5/10)=0.85
-        bounds: { uMin: 0.05, uMax: 0.30, vMin: 0.70, vMax: 1.0 },
-        center: { u: 0.175, v: 0.85 },
+        // User identified: between 1,1 and 1,2 → U=0.15, V=0.1
+        bounds: { uMin: 0.0, uMax: 0.30, vMin: 0.0, vMax: 0.25 },
+        center: { u: 0.15, v: 0.10 },
         defaultSize: 0.3
       },
       right_sleeve: {
-        // User identified: between 5,1 and 6,1 → U=0.15, V=1-(5.5/10)=0.45
-        bounds: { uMin: 0.0, uMax: 0.30, vMin: 0.25, vMax: 0.65 },
-        center: { u: 0.15, v: 0.45 },
+        // User identified: between 5,1 and 6,1 → U=0.1, V=0.55
+        bounds: { uMin: 0.0, uMax: 0.25, vMin: 0.40, vMax: 0.70 },
+        center: { u: 0.10, v: 0.55 },
         defaultSize: 0.3
       }
     },
@@ -1445,12 +1444,13 @@ console.log('[ULTShirtModal] Script loading...');
       }
       
       // Calculate center position in pixels (UV coordinates are 0-1)
+      // Canvas Y is inverted vs UV V: Canvas Y=0 is TOP, UV V=0 is BOTTOM
       // Apply position offsets from UI (-50 to +50 range)
       const offsetX = (locSettings.positionX || 0) / 100 * regionWidth * 0.5;
       const offsetY = (locSettings.positionY || 0) / 100 * regionHeight * 0.5;
       
       const centerX = region.center.u * size + offsetX;
-      const centerY = region.center.v * size + offsetY;
+      const centerY = (1 - region.center.v) * size + offsetY; // INVERT V for canvas
       
       // Draw decal centered at position
       const drawX = centerX - decalWidth / 2;
