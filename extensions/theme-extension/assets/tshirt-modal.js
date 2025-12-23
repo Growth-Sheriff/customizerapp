@@ -1424,7 +1424,12 @@ console.log('[ULTShirtModal] Script loading...');
         ? this.inheritedDesign.thumbnailUrl 
         : this.step1.newUpload.thumbnailUrl;
       
-      if (!designUrl) return;
+      console.log('[ULTShirtModal] Applying design texture:', designUrl);
+      
+      if (!designUrl) {
+        console.log('[ULTShirtModal] No design URL available');
+        return;
+      }
       
       return new Promise((resolve) => {
         const loader = new THREE.TextureLoader();
@@ -1433,28 +1438,42 @@ console.log('[ULTShirtModal] Script loading...');
         loader.load(
           designUrl,
           (texture) => {
-            const decalGeom = new THREE.PlaneGeometry(0.8, 0.8);
+            console.log('[ULTShirtModal] Texture loaded successfully');
+            
+            // Create decal plane - sized relative to T-shirt
+            const decalGeom = new THREE.PlaneGeometry(1.2, 1.2);
             const decalMat = new THREE.MeshBasicMaterial({
               map: texture,
               transparent: true,
-              side: THREE.DoubleSide
+              side: THREE.DoubleSide,
+              depthWrite: false
             });
             
             const decal = new THREE.Mesh(decalGeom, decalMat);
-            decal.position.z = 0.01;
+            
+            // Position decal on front of T-shirt
+            // Adjust these values based on your GLB model
+            decal.position.set(0, 0.3, 0.55); // x, y (height), z (forward)
+            decal.renderOrder = 1; // Render on top
+            
+            // Remove old decal if exists
+            if (this.three.decals.front) {
+              this.three.scene.remove(this.three.decals.front);
+            }
+            
             this.three.decals.front = decal;
             this.three.scene.add(decal);
             
+            console.log('[ULTShirtModal] Decal added to scene');
             resolve();
           },
           undefined,
           (error) => {
-            // FAZ 7: Handle texture load failure
             console.error('[ULTShirtModal] Texture load error:', error);
             if (window.ULErrorHandler) {
               window.ULErrorHandler.show('THREE_TEXTURE_FAILED');
             }
-            resolve(); // Continue without texture
+            resolve();
           }
         );
       });

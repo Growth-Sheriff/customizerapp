@@ -79,10 +79,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     clientStatus = 'ready';
   }
 
-  // Build download URL for local storage
+  // Build download URLs for local storage
   const host = process.env.HOST || "https://customizerapp.dev";
   const firstItem = upload.items[0];
   const downloadUrl = firstItem?.storageKey ? `${host}/api/files/${encodeURIComponent(firstItem.storageKey)}` : null;
+  const thumbnailUrl = firstItem?.thumbnailKey ? `${host}/api/files/${encodeURIComponent(firstItem.thumbnailKey)}` : null;
 
   return corsJson({
     uploadId: upload.id,
@@ -94,6 +95,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     preflightSummary: upload.preflightSummary,
     items: upload.items,
     downloadUrl,
+    thumbnailUrl,
     createdAt: upload.createdAt,
     updatedAt: upload.updatedAt,
   }, request);
