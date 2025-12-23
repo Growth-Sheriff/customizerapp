@@ -144,7 +144,7 @@ console.log('[ULTShirtModal] Script loading...');
       left_sleeve: {
         // Upper left corner of UV (sleeve)
         bounds: { uMin: 0.0, uMax: 0.15, vMin: 0.0, vMax: 0.25 },
-        center: { u: 0.15, v: 0.85 },
+        center: { u: 0.20, v: 0.85 },
         defaultSize: 0.70
       },
       right_sleeve: {
