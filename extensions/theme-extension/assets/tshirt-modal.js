@@ -87,7 +87,8 @@ console.log('[ULTShirtModal] Script loading...');
       camera: null,
       renderer: null,
       controls: null,
-      tshirtMesh: null,
+      tshirtModel: null,  // The whole GLB scene (for transforms)
+      tshirtMesh: null,   // The actual mesh (for decal attachment)
       decals: {},
       animationId: null,
       // Mouse drag rotation state
@@ -121,22 +122,22 @@ console.log('[ULTShirtModal] Script loading...');
     // Decal location presets for shirt_baked.glb
     DECAL_LOCATIONS: {
       front: {
-        position: { x: 0, y: 0.04, z: 0.135 },
+        position: { x: 0, y: 0.04, z: 0.12 },  // Reduced to sit on surface
         rotation: { x: 0, y: 0, z: 0 },
         baseScale: 0.15
       },
       back: {
-        position: { x: 0, y: 0.04, z: -0.125 },
+        position: { x: 0, y: 0.04, z: -0.11 },  // Adjusted to sit on surface
         rotation: { x: 0, y: Math.PI, z: 0 },
         baseScale: 0.15
       },
       left_sleeve: {
-        position: { x: -0.16, y: 0.14, z: 0 },
+        position: { x: -0.14, y: 0.14, z: 0 },  // Adjusted
         rotation: { x: 0, y: Math.PI / 2, z: 0 },
         baseScale: 0.06
       },
       right_sleeve: {
-        position: { x: 0.16, y: 0.14, z: 0 },
+        position: { x: 0.14, y: 0.14, z: 0 },  // Adjusted
         rotation: { x: 0, y: -Math.PI / 2, z: 0 },
         baseScale: 0.06
       }
@@ -1400,10 +1401,13 @@ console.log('[ULTShirtModal] Script loading...');
             glbUrl,
             (gltf) => {
               console.log('[ULTShirtModal] GLB model loaded successfully');
-              this.three.tshirtMesh = gltf.scene;
               
-              // Apply color to all meshes in the model
-              this.three.tshirtMesh.traverse((child) => {
+              // Store the whole scene as tshirtModel
+              this.three.tshirtModel = gltf.scene;
+              
+              // Find and store the actual mesh for decal attachment
+              let actualMesh = null;
+              this.three.tshirtModel.traverse((child) => {
                 if (child.isMesh) {
                   child.material = new THREE.MeshStandardMaterial({
                     color: color,
@@ -1411,15 +1415,23 @@ console.log('[ULTShirtModal] Script loading...');
                     metalness: 0.0,
                     side: THREE.DoubleSide
                   });
+                  // Store first mesh found (T_Shirt_male)
+                  if (!actualMesh) {
+                    actualMesh = child;
+                    console.log('[ULTShirtModal] Found T-shirt mesh:', child.name);
+                  }
                 }
               });
               
-              // Scale 2x for better visibility
-              this.three.tshirtMesh.scale.set(2, 2, 2);
-              // Model center is at approximately (0, -0.045, 0.01)
-              this.three.tshirtMesh.position.set(0, 0.1, 0); // Slight Y offset to center in view
+              // Store reference to actual mesh for decals
+              this.three.tshirtMesh = actualMesh || this.three.tshirtModel;
               
-              this.three.scene.add(this.three.tshirtMesh);
+              // Scale 2x for better visibility - apply to MODEL
+              this.three.tshirtModel.scale.set(2, 2, 2);
+              // Model center is at approximately (0, -0.045, 0.01)
+              this.three.tshirtModel.position.set(0, 0.1, 0); // Slight Y offset to center in view
+              
+              this.three.scene.add(this.three.tshirtModel);
               resolve();
             },
             (progress) => {
@@ -1590,11 +1602,14 @@ console.log('[ULTShirtModal] Script loading...');
         depthWrite: false,      // Don't write to depth buffer
         side: THREE.FrontSide,  // Only front face visible
         polygonOffset: true,
-        polygonOffsetFactor: -4,
-        polygonOffsetUnits: -4
+        polygonOffsetFactor: -10,  // More aggressive offset to prevent z-fighting
+        polygonOffsetUnits: -10
       });
       
       const decal = new THREE.Mesh(geometry, material);
+      
+      // Ensure decal renders on top
+      decal.renderOrder = 999;
       
       // Apply position from config
       decal.position.set(config.position.x, config.position.y, config.position.z);
@@ -1645,17 +1660,19 @@ console.log('[ULTShirtModal] Script loading...');
     },
 
     update3DColor(hex) {
-      if (this.three.tshirtMesh) {
+      // Use tshirtModel if available (for GLB), otherwise fallback to tshirtMesh
+      const target = this.three.tshirtModel || this.three.tshirtMesh;
+      if (target) {
         // For GLB models, traverse all children and update materials
-        if (this.three.tshirtMesh.traverse) {
-          this.three.tshirtMesh.traverse((child) => {
-            if (child.isMesh && child.material) {
+        if (target.traverse) {
+          target.traverse((child) => {
+            if (child.isMesh && child.material && !this.three.decals[child.uuid]) {
               child.material.color.set(hex);
             }
           });
-        } else if (this.three.tshirtMesh.material) {
+        } else if (target.material) {
           // For simple plane fallback
-          this.three.tshirtMesh.material.color.set(hex);
+          target.material.color.set(hex);
         }
       }
     },
@@ -1732,8 +1749,9 @@ console.log('[ULTShirtModal] Script loading...');
       // Reset rotation when changing view
       this.three.targetRotationY = 0;
       this.three.currentRotationY = 0;
-      if (this.three.tshirtMesh) {
-        this.three.tshirtMesh.rotation.y = 0;
+      const target = this.three.tshirtModel || this.three.tshirtMesh;
+      if (target) {
+        target.rotation.y = 0;
       }
     },
     
@@ -1805,12 +1823,13 @@ console.log('[ULTShirtModal] Script loading...');
       this.three.animationId = requestAnimationFrame(() => this.animate3D());
       
       // Smooth rotation interpolation
-      if (this.three.tshirtMesh) {
+      const target = this.three.tshirtModel || this.three.tshirtMesh;
+      if (target) {
         // Lerp current rotation towards target
         this.three.currentRotationY += (this.three.targetRotationY - this.three.currentRotationY) * 0.1;
         
-        // Apply rotation
-        this.three.tshirtMesh.rotation.y = this.three.currentRotationY;
+        // Apply rotation to MODEL (decals rotate with it as children)
+        target.rotation.y = this.three.currentRotationY;
       }
       
       this.three.renderer?.render(this.three.scene, this.three.camera);
@@ -1854,6 +1873,7 @@ console.log('[ULTShirtModal] Script loading...');
         camera: null,
         renderer: null,
         controls: null,
+        tshirtModel: null,
         tshirtMesh: null,
         decals: {},
         animationId: null,
