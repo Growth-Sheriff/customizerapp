@@ -409,8 +409,30 @@
 <!-- Toast Notification -->
 <div class="ul-toast" id="ul-toast"></div>
 
-<!-- Three.js CDN -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.min.js"></script>
+<!-- Three.js Import Map for ES Modules -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<!-- Three.js CDN (for backwards compat) -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+
+<!-- DecalGeometry Module Loader -->
+<script type="module">
+  import { DecalGeometry } from 'three/addons/geometries/DecalGeometry.js';
+  import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+  
+  // Expose to global scope for non-module scripts
+  window.THREE.DecalGeometry = DecalGeometry;
+  window.THREE.GLTFLoader = GLTFLoader;
+  
+  console.log('[UL] DecalGeometry and GLTFLoader loaded via ES Module');
+</script>
 
 <!-- GLTFLoader CDN for 3D model loading -->
 <script>

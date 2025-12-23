@@ -120,26 +120,27 @@ console.log('[ULTShirtModal] Script loading...');
     el: {},
     
     // Decal location presets for shirt_baked.glb
+    // baseScale values increased for 2x model scale
     DECAL_LOCATIONS: {
       front: {
-        position: { x: 0, y: 0.04, z: 0.12 },  // Reduced to sit on surface
+        position: { x: 0, y: 0.04, z: 0.12 },
         rotation: { x: 0, y: 0, z: 0 },
-        baseScale: 0.15
+        baseScale: 0.35  // Increased from 0.15
       },
       back: {
-        position: { x: 0, y: 0.04, z: -0.11 },  // Adjusted to sit on surface
+        position: { x: 0, y: 0.04, z: -0.11 },
         rotation: { x: 0, y: Math.PI, z: 0 },
-        baseScale: 0.15
+        baseScale: 0.35  // Increased from 0.15
       },
       left_sleeve: {
-        position: { x: -0.14, y: 0.14, z: 0 },  // Adjusted
+        position: { x: -0.14, y: 0.14, z: 0 },
         rotation: { x: 0, y: Math.PI / 2, z: 0 },
-        baseScale: 0.06
+        baseScale: 0.12  // Increased from 0.06
       },
       right_sleeve: {
-        position: { x: 0.14, y: 0.14, z: 0 },  // Adjusted
+        position: { x: 0.14, y: 0.14, z: 0 },
         rotation: { x: 0, y: -Math.PI / 2, z: 0 },
-        baseScale: 0.06
+        baseScale: 0.12  // Increased from 0.06
       }
     },
 
@@ -1591,54 +1592,96 @@ console.log('[ULTShirtModal] Script loading...');
       const scaleMultiplier = (locSettings?.scale || 100) / 100;
       const baseScale = config.baseScale * scaleMultiplier;
       
-      // Create plane geometry (1x1, will be scaled)
-      const geometry = new THREE.PlaneGeometry(1, 1);
-      
-      // Material with improved depth settings
-      const material = new THREE.MeshBasicMaterial({
-        map: texture,
-        transparent: true,
-        depthTest: true,        // Enable depth test for proper occlusion
-        depthWrite: false,      // Don't write to depth buffer
-        side: THREE.FrontSide,  // Only front face visible
-        polygonOffset: true,
-        polygonOffsetFactor: -10,  // More aggressive offset to prevent z-fighting
-        polygonOffsetUnits: -10
-      });
-      
-      const decal = new THREE.Mesh(geometry, material);
-      
-      // Ensure decal renders on top
-      decal.renderOrder = 999;
-      
-      // Apply position from config
-      decal.position.set(config.position.x, config.position.y, config.position.z);
-      
-      // Apply rotation from config
-      decal.rotation.set(config.rotation.x, config.rotation.y, config.rotation.z);
-      
-      // Apply scale with aspect ratio
+      // Calculate size with aspect ratio
+      let sizeX, sizeY;
       if (aspectRatio > 1) {
-        // Wide image
-        decal.scale.set(baseScale, baseScale / aspectRatio, 1);
+        sizeX = baseScale;
+        sizeY = baseScale / aspectRatio;
       } else {
-        // Tall image
-        decal.scale.set(baseScale * aspectRatio, baseScale, 1);
+        sizeX = baseScale * aspectRatio;
+        sizeY = baseScale;
       }
       
       // Apply position offsets from UI
+      let posX = config.position.x;
+      let posY = config.position.y;
+      let posZ = config.position.z;
+      
       if (locSettings) {
         const offsetX = (locSettings.positionX || 0) / 500;
         const offsetY = (locSettings.positionY || 0) / 500;
         
-        // Apply offsets based on location
         if (locationId === 'front' || locationId === 'back') {
-          decal.position.x += offsetX;
-          decal.position.y += offsetY;
+          posX += offsetX;
+          posY += offsetY;
         } else {
-          decal.position.z += offsetX;
-          decal.position.y += offsetY;
+          posZ += offsetX;
+          posY += offsetY;
         }
+      }
+      
+      // Create position and orientation vectors
+      const position = new THREE.Vector3(posX, posY, posZ);
+      const orientation = new THREE.Euler(config.rotation.x, config.rotation.y, config.rotation.z);
+      const size = new THREE.Vector3(sizeX, sizeY, 0.1); // Z is depth of projection
+      
+      let decal;
+      let geometry;
+      
+      // Try to use DecalGeometry if available (ES Module loaded)
+      if (typeof THREE.DecalGeometry !== 'undefined') {
+        console.log('[ULTShirtModal] Using DecalGeometry for', locationId);
+        
+        try {
+          geometry = new THREE.DecalGeometry(targetMesh, position, orientation, size);
+          
+          const material = new THREE.MeshBasicMaterial({
+            map: texture,
+            transparent: true,
+            depthTest: true,
+            depthWrite: false,
+            polygonOffset: true,
+            polygonOffsetFactor: -4,
+            polygonOffsetUnits: -4
+          });
+          
+          decal = new THREE.Mesh(geometry, material);
+          decal.renderOrder = 999;
+          
+        } catch (err) {
+          console.warn('[ULTShirtModal] DecalGeometry failed, falling back to plane:', err);
+          decal = null;
+        }
+      }
+      
+      // Fallback to plane geometry if DecalGeometry not available or failed
+      if (!decal) {
+        console.log('[ULTShirtModal] Using PlaneGeometry fallback for', locationId);
+        
+        geometry = new THREE.PlaneGeometry(1, 1);
+        
+        const material = new THREE.MeshBasicMaterial({
+          map: texture,
+          transparent: true,
+          depthTest: true,
+          depthWrite: false,
+          side: THREE.FrontSide,
+          polygonOffset: true,
+          polygonOffsetFactor: -10,
+          polygonOffsetUnits: -10
+        });
+        
+        decal = new THREE.Mesh(geometry, material);
+        decal.renderOrder = 999;
+        
+        // Apply position
+        decal.position.set(posX, posY, posZ);
+        
+        // Apply rotation
+        decal.rotation.set(config.rotation.x, config.rotation.y, config.rotation.z);
+        
+        // Apply scale
+        decal.scale.set(sizeX, sizeY, 1);
       }
       
       // Remove old decal for this location
@@ -1652,11 +1695,21 @@ console.log('[ULTShirtModal] Script loading...');
         oldDecal.material?.dispose();
       }
       
-      // Add as child of T-shirt mesh (rotates together)
-      this.three.tshirtMesh.add(decal);
+      // Add decal to scene
+      // DecalGeometry: add to scene directly (already in world coords)
+      // Plane fallback: add as child of tshirtMesh (rotates with it)
+      if (typeof THREE.DecalGeometry !== 'undefined' && geometry instanceof THREE.DecalGeometry) {
+        this.three.scene.add(decal);
+        decal._isDecalGeometry = true;
+      } else {
+        // Plane: add as child of T-shirt mesh (rotates together)
+        this.three.tshirtMesh.add(decal);
+        decal._isDecalGeometry = false;
+      }
+      
       this.three.decals[locationId] = decal;
       
-      console.log(`[ULTShirtModal] Decal created for ${locationId} at`, config.position);
+      console.log(`[ULTShirtModal] Decal created for ${locationId} using ${decal._isDecalGeometry ? 'DecalGeometry' : 'PlaneGeometry'}`);
     },
 
     update3DColor(hex) {
