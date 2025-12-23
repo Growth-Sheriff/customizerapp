@@ -26,7 +26,6 @@ const STAGED_UPLOAD_MUTATION = `
       userErrors {
         field
         message
-        code
       }
     }
   }
@@ -241,11 +240,9 @@ export async function action({ request }: ActionFunctionArgs) {
 
         if (userErrors?.length > 0) {
           console.error("[Shopify Files] User errors:", userErrors);
-          const errorCode = userErrors[0].code;
           const errorMsg = userErrors[0].message;
           return corsJson({ 
             error: errorMsg, 
-            code: errorCode,
             details: userErrors 
           }, request, { status: 400 });
         }
