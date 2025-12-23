@@ -101,6 +101,12 @@ console.log('[ULTShirtModal] Script loading...');
     // Current loaded texture for decals
     currentTexture: null,
     
+    // Texture Baking - Canvas for UV projection
+    textureCanvas: null,
+    textureCtx: null,
+    baseTextureSize: 2048, // 2K texture resolution
+    decalImage: null, // Loaded design image
+    
     // Product data
     product: {
       id: null,
@@ -119,29 +125,37 @@ console.log('[ULTShirtModal] Script loading...');
     // DOM elements cache
     el: {},
     
-    // Decal location presets for shirt_baked.glb
-    // baseScale values increased for 2x model scale
-    DECAL_LOCATIONS: {
+    // UV Regions for Texture Baking (extracted from shirt_baked.glb UV analysis)
+    // Decal is drawn directly to texture canvas at these UV coordinates
+    UV_REGIONS: {
       front: {
-        position: { x: 0, y: 0.04, z: 0.12 },
-        rotation: { x: 0, y: 0, z: 0 },
-        baseScale: 0.35
+        bounds: { uMin: 0.078, uMax: 0.439, vMin: 0.112, vMax: 0.425 },
+        center: { u: 0.259, v: 0.268 },
+        defaultSize: 0.7 // 70% of region
       },
       back: {
-        position: { x: 0, y: 0.04, z: -0.12 },
-        rotation: { x: 0, y: Math.PI, z: 0 },
-        baseScale: 0.35
+        bounds: { uMin: 0.564, uMax: 0.930, vMin: 0.095, vMax: 0.414 },
+        center: { u: 0.747, v: 0.254 },
+        defaultSize: 0.7
       },
       left_sleeve: {
-        position: { x: -0.18, y: 0.12, z: 0.05 },
-        rotation: { x: 0, y: 0, z: 0 },
-        baseScale: 0.12
+        bounds: { uMin: 0.02, uMax: 0.20, vMin: 0.50, vMax: 0.75 },
+        center: { u: 0.11, v: 0.625 },
+        defaultSize: 0.5
       },
       right_sleeve: {
-        position: { x: 0.18, y: 0.12, z: 0.05 },
-        rotation: { x: 0, y: 0, z: 0 },
-        baseScale: 0.12
+        bounds: { uMin: 0.80, uMax: 0.98, vMin: 0.50, vMax: 0.75 },
+        center: { u: 0.89, v: 0.625 },
+        defaultSize: 0.5
       }
+    },
+
+    // Legacy 3D positions (kept for fallback/camera rotation)
+    DECAL_LOCATIONS: {
+      front: { position: { x: 0, y: 0.04, z: 0.12 }, rotation: { x: 0, y: 0, z: 0 } },
+      back: { position: { x: 0, y: 0.04, z: -0.12 }, rotation: { x: 0, y: Math.PI, z: 0 } },
+      left_sleeve: { position: { x: -0.18, y: 0.12, z: 0.05 }, rotation: { x: 0, y: 0, z: 0 } },
+      right_sleeve: { position: { x: 0.18, y: 0.12, z: 0.05 }, rotation: { x: 0, y: 0, z: 0 } }
     },
 
     // Color map
@@ -170,10 +184,21 @@ console.log('[ULTShirtModal] Script loading...');
         console.log('[ULTShirtModal] Elements cached, overlay:', !!this.el.overlay);
         this.bindEvents();
         console.log('[ULTShirtModal] Events bound');
-        console.log('[ULTShirtModal] Initialized v4.1.0');
+        this.createTextureCanvas();
+        console.log('[ULTShirtModal] Texture canvas created');
+        console.log('[ULTShirtModal] Initialized v5.0.0 - Texture Baking Strategy');
       } catch (err) {
         console.error('[ULTShirtModal] Init error:', err);
       }
+    },
+
+    // Create off-screen canvas for texture baking
+    createTextureCanvas() {
+      this.textureCanvas = document.createElement('canvas');
+      this.textureCanvas.width = this.baseTextureSize;
+      this.textureCanvas.height = this.baseTextureSize;
+      this.textureCtx = this.textureCanvas.getContext('2d');
+      console.log('[ULTShirtModal] Texture canvas:', this.baseTextureSize + 'x' + this.baseTextureSize);
     },
 
     cacheElements() {
@@ -1237,17 +1262,165 @@ console.log('[ULTShirtModal] Script loading...');
       }
     },
     
-    // Debounced decal update to prevent excessive recreations during slider drag
+    // Debounced texture update for smooth slider performance
     debouncedUpdateDecal() {
       // Clear previous timeout
       if (this._decalUpdateTimeout) {
         clearTimeout(this._decalUpdateTimeout);
       }
       
-      // Set new timeout - wait 150ms after last input
+      // Set new timeout - wait 50ms after last input (faster for texture baking)
       this._decalUpdateTimeout = setTimeout(() => {
-        this.update3DDecalTransform();
-      }, 150);
+        this.updateBakedTexture();
+      }, 50);
+    },
+
+    // ==========================================================================
+    // TEXTURE BAKING - Core Strategy
+    // ==========================================================================
+    
+    // Load design image for texture baking
+    loadDecalImage(url) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        
+        img.onload = () => {
+          console.log('[ULTShirtModal] Decal image loaded:', img.width, 'x', img.height);
+          this.decalImage = img;
+          resolve(img);
+        };
+        
+        img.onerror = (err) => {
+          console.error('[ULTShirtModal] Failed to load decal image:', err);
+          reject(err);
+        };
+        
+        img.src = url;
+      });
+    },
+    
+    // Update the baked texture with all enabled decals
+    updateBakedTexture() {
+      if (!this.textureCtx || !this.decalImage) {
+        console.log('[ULTShirtModal] No texture context or decal image');
+        return;
+      }
+      
+      const ctx = this.textureCtx;
+      const size = this.baseTextureSize;
+      
+      console.log('[ULTShirtModal] Updating baked texture...');
+      
+      // Clear and fill with T-shirt color
+      ctx.fillStyle = this.step2.tshirtColor;
+      ctx.fillRect(0, 0, size, size);
+      
+      // Draw decals for each enabled location
+      Object.entries(this.step2.locations).forEach(([locationId, loc]) => {
+        if (loc.enabled) {
+          this.drawDecalToTexture(locationId, loc);
+        }
+      });
+      
+      // Apply texture to 3D mesh
+      this.applyBakedTextureToMesh();
+      
+      console.log('[ULTShirtModal] Baked texture updated');
+    },
+    
+    // Draw a single decal to the texture canvas at UV coordinates
+    drawDecalToTexture(locationId, locSettings) {
+      const ctx = this.textureCtx;
+      const size = this.baseTextureSize;
+      const region = this.UV_REGIONS[locationId];
+      
+      if (!region || !this.decalImage) {
+        console.log('[ULTShirtModal] No region or decal for:', locationId);
+        return;
+      }
+      
+      // Calculate UV region dimensions in pixels
+      const regionWidth = (region.bounds.uMax - region.bounds.uMin) * size;
+      const regionHeight = (region.bounds.vMax - region.bounds.vMin) * size;
+      
+      // Calculate decal size based on scale setting
+      const scaleMultiplier = (locSettings.scale || 100) / 100;
+      const defaultSize = region.defaultSize * scaleMultiplier;
+      
+      // Preserve aspect ratio of original image
+      const aspectRatio = this.decalImage.width / this.decalImage.height;
+      let decalWidth, decalHeight;
+      
+      if (aspectRatio > 1) {
+        // Wider than tall
+        decalWidth = regionWidth * defaultSize;
+        decalHeight = decalWidth / aspectRatio;
+      } else {
+        // Taller than wide
+        decalHeight = regionHeight * defaultSize;
+        decalWidth = decalHeight * aspectRatio;
+      }
+      
+      // Calculate center position in pixels (UV coordinates are 0-1)
+      // Apply position offsets from UI (-50 to +50 range)
+      const offsetX = (locSettings.positionX || 0) / 100 * regionWidth * 0.5;
+      const offsetY = (locSettings.positionY || 0) / 100 * regionHeight * 0.5;
+      
+      const centerX = region.center.u * size + offsetX;
+      const centerY = region.center.v * size + offsetY;
+      
+      // Draw decal centered at position
+      const drawX = centerX - decalWidth / 2;
+      const drawY = centerY - decalHeight / 2;
+      
+      console.log(`[ULTShirtModal] Drawing decal at ${locationId}:`, {
+        x: Math.round(drawX),
+        y: Math.round(drawY),
+        w: Math.round(decalWidth),
+        h: Math.round(decalHeight)
+      });
+      
+      ctx.drawImage(this.decalImage, drawX, drawY, decalWidth, decalHeight);
+    },
+    
+    // Apply the baked canvas texture to the 3D mesh
+    applyBakedTextureToMesh() {
+      if (!this.three.tshirtMesh || typeof THREE === 'undefined') {
+        console.log('[ULTShirtModal] No mesh or THREE not loaded');
+        return;
+      }
+      
+      // Create texture from canvas
+      const texture = new THREE.CanvasTexture(this.textureCanvas);
+      texture.flipY = true;
+      texture.needsUpdate = true;
+      
+      if (texture.colorSpace !== undefined) {
+        texture.colorSpace = THREE.SRGBColorSpace;
+      }
+      
+      // Apply to mesh material
+      const target = this.three.tshirtModel || this.three.tshirtMesh;
+      
+      if (target.traverse) {
+        target.traverse((child) => {
+          if (child.isMesh && child.material) {
+            // Dispose old map
+            if (child.material.map && child.material.map !== texture) {
+              child.material.map.dispose();
+            }
+            
+            child.material.map = texture;
+            child.material.needsUpdate = true;
+          }
+        });
+      } else if (target.material) {
+        target.material.map = texture;
+        target.material.needsUpdate = true;
+      }
+      
+      console.log('[ULTShirtModal] Baked texture applied to mesh');
     },
 
     getEnabledLocations() {
@@ -1305,30 +1478,8 @@ console.log('[ULTShirtModal] Script loading...');
     },
 
     // ==========================================================================
-    // THREE.JS 3D SCENE - FAZ 7: Enhanced Error Handling
+    // THREE.JS 3D SCENE - v5.0 Texture Baking Strategy
     // ==========================================================================
-    
-    // Load DecalGeometry from CDN if not already loaded
-    async loadDecalGeometry() {
-      if (typeof THREE !== 'undefined' && typeof THREE.DecalGeometry !== 'undefined') {
-        return true; // Already loaded
-      }
-      
-      return new Promise((resolve) => {
-        // Try to load from jsDelivr CDN
-        const script = document.createElement('script');
-        script.src = 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/geometries/DecalGeometry.js';
-        script.onload = () => {
-          console.log('[ULTShirtModal] DecalGeometry loaded from CDN');
-          resolve(true);
-        };
-        script.onerror = () => {
-          console.warn('[ULTShirtModal] Failed to load DecalGeometry from CDN');
-          resolve(false);
-        };
-        document.head.appendChild(script);
-      });
-    },
     
     async init3D() {
       if (typeof THREE === 'undefined') {
@@ -1342,9 +1493,6 @@ console.log('[ULTShirtModal] Script loading...');
         this.show2DFallback();
         return;
       }
-      
-      // Try to load DecalGeometry
-      await this.loadDecalGeometry();
       
       const canvas = this.el.canvas;
       if (!canvas) return;
@@ -1512,313 +1660,93 @@ console.log('[ULTShirtModal] Script loading...');
         ? this.inheritedDesign.thumbnailUrl 
         : this.step1.newUpload.thumbnailUrl;
       
-      console.log('[ULTShirtModal] Applying design texture:', designUrl);
+      console.log('[ULTShirtModal] Applying design texture (Texture Baking):', designUrl);
       
       if (!designUrl) {
         console.log('[ULTShirtModal] No design URL available');
+        // Still apply base color texture
+        this.updateBakedTexture();
         return;
       }
       
-      return new Promise((resolve) => {
-        console.log('[ULTShirtModal] Loading texture via Image API:', designUrl);
+      try {
+        // Load decal image for texture baking
+        await this.loadDecalImage(designUrl);
+        console.log('[ULTShirtModal] Decal image loaded, updating baked texture...');
         
-        // Use Image API directly - more reliable for cross-origin
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
+        // Update baked texture with all enabled decals
+        this.updateBakedTexture();
         
-        img.onload = () => {
-          console.log('[ULTShirtModal] Image loaded:', img.width, 'x', img.height);
+      } catch (error) {
+        console.error('[ULTShirtModal] Failed to load decal image:', error);
+        
+        // Try fetch fallback for CORS issues
+        try {
+          const res = await fetch(designUrl, { mode: 'cors', credentials: 'omit' });
+          if (!res.ok) throw new Error('Fetch failed: ' + res.status);
           
-          // Create texture from image
-          const texture = new THREE.Texture(img);
-          texture.needsUpdate = true;
+          const blob = await res.blob();
+          const bitmap = await createImageBitmap(blob);
           
-          this.createDecalFromTexture(texture);
-          console.log('[ULTShirtModal] Decal created successfully');
-          resolve();
-        };
-        
-        img.onerror = (error) => {
-          console.error('[ULTShirtModal] Image load error:', error?.type, error?.message);
+          // Convert bitmap to img for canvas drawing
+          const canvas = document.createElement('canvas');
+          canvas.width = bitmap.width;
+          canvas.height = bitmap.height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(bitmap, 0, 0);
           
-          // Fallback: try fetch + createImageBitmap
-          console.log('[ULTShirtModal] Trying fetch fallback...');
-          fetch(designUrl, { mode: 'cors', credentials: 'omit' })
-            .then(res => {
-              console.log('[ULTShirtModal] Fetch status:', res.status);
-              if (!res.ok) throw new Error('Fetch failed: ' + res.status);
-              return res.blob();
-            })
-            .then(blob => {
-              console.log('[ULTShirtModal] Blob created, size:', blob.size);
-              return createImageBitmap(blob);
-            })
-            .then(bitmap => {
-              console.log('[ULTShirtModal] ImageBitmap created');
-              const texture = new THREE.CanvasTexture(bitmap);
-              this.createDecalFromTexture(texture);
-              resolve();
-            })
-            .catch(fetchErr => {
-              console.error('[ULTShirtModal] Fetch fallback failed:', fetchErr.message);
-              if (window.ULErrorHandler) {
-                window.ULErrorHandler.show('THREE_TEXTURE_FAILED');
-              }
-              resolve();
-            });
-        };
-        
-        // Start loading
-        img.src = designUrl;
-      });
+          // Create img from canvas
+          const img = new Image();
+          img.src = canvas.toDataURL();
+          await new Promise(resolve => img.onload = resolve);
+          
+          this.decalImage = img;
+          this.updateBakedTexture();
+          console.log('[ULTShirtModal] Texture baking via fetch fallback successful');
+          
+        } catch (fetchErr) {
+          console.error('[ULTShirtModal] Fetch fallback failed:', fetchErr.message);
+          if (window.ULErrorHandler) {
+            window.ULErrorHandler.show('THREE_TEXTURE_FAILED');
+          }
+          // Apply base color only
+          this.updateBakedTexture();
+        }
+      }
     },
 
-    // Helper method to create decal from texture - uses shirt_baked.glb positions
+    // ==========================================================================
+    // LEGACY DECAL METHODS (Deprecated - kept for reference)
+    // Texture Baking strategy replaces these with updateBakedTexture()
+    // ==========================================================================
+    
+    // Legacy: No longer used - Texture Baking handles this
     createDecalFromTexture(texture) {
-      // Configure texture
-      texture.flipY = true;
-      texture.needsUpdate = true;
-      if (texture.colorSpace !== undefined) {
-        texture.colorSpace = THREE.SRGBColorSpace;
-      }
-      
-      // Store texture reference for later use
+      console.log('[ULTShirtModal] createDecalFromTexture called - using Texture Baking instead');
+      // Store reference for compatibility
       this.currentTexture = texture;
-      
-      if (!this.three.tshirtMesh) {
-        console.warn('[ULTShirtModal] No T-shirt mesh found');
-        return;
-      }
-      
-      // Find the T_Shirt_male mesh
-      let targetMesh = null;
-      this.three.tshirtMesh.traverse((child) => {
-        if (child.isMesh && (child.name === 'T_Shirt_male' || !targetMesh)) {
-          targetMesh = child;
-        }
-      });
-      
-      if (!targetMesh) {
-        console.warn('[ULTShirtModal] No mesh found in T-shirt model');
-        return;
-      }
-      
-      console.log('[ULTShirtModal] Found mesh:', targetMesh.name);
-      
-      // Create decals for all enabled locations
-      const enabledLocations = this.getEnabledLocations();
-      
-      enabledLocations.forEach(locationId => {
-        this.createDecalForLocation(texture, locationId, targetMesh);
-      });
-      
-      console.log('[ULTShirtModal] Created decals for locations:', enabledLocations.join(', '));
     },
     
-    // Create decal for a specific location using DecalGeometry
+    // Legacy: No longer used - Texture Baking handles this  
     createDecalForLocation(texture, locationId, targetMesh) {
-      const config = this.DECAL_LOCATIONS[locationId];
-      if (!config) {
-        console.warn('[ULTShirtModal] Unknown location:', locationId);
-        return;
-      }
-      
-      // Remove old decal for this location first
-      if (this.three.decals[locationId]) {
-        const oldDecal = this.three.decals[locationId];
-        if (oldDecal.parent) {
-          oldDecal.parent.remove(oldDecal);
-        }
-        oldDecal.geometry?.dispose();
-        oldDecal.material?.map?.dispose();
-        oldDecal.material?.dispose();
-      }
-      
-      // Calculate aspect ratio for proper scaling
-      const aspectRatio = texture.image ? texture.image.width / texture.image.height : 1;
-      
-      // Get scale from location settings
-      const locSettings = this.step2.locations[locationId];
-      const scaleMultiplier = (locSettings?.scale || 100) / 100;
-      const baseScale = config.baseScale * scaleMultiplier;
-      
-      // Calculate size with aspect ratio
-      let sizeX, sizeY;
-      if (aspectRatio > 1) {
-        sizeX = baseScale;
-        sizeY = baseScale / aspectRatio;
-      } else {
-        sizeX = baseScale * aspectRatio;
-        sizeY = baseScale;
-      }
-      
-      // Apply position offsets from UI
-      let posX = config.position.x;
-      let posY = config.position.y;
-      let posZ = config.position.z;
-      
-      if (locSettings) {
-        const offsetX = (locSettings.positionX || 0) / 500;
-        const offsetY = (locSettings.positionY || 0) / 500;
-        
-        if (locationId === 'front' || locationId === 'back') {
-          posX += offsetX;
-          posY += offsetY;
-        } else {
-          posZ += offsetX;
-          posY += offsetY;
-        }
-      }
-      
-      // Check if DecalGeometry is available
-      if (typeof THREE.DecalGeometry !== 'undefined') {
-        // Use DecalGeometry for realistic projection onto mesh surface
-        const position = new THREE.Vector3(posX, posY, posZ);
-        const orientation = new THREE.Euler(config.rotation.x, config.rotation.y, config.rotation.z);
-        const size = new THREE.Vector3(sizeX, sizeY, 0.1); // Z depth for projection
-        
-        try {
-          const decalGeometry = new THREE.DecalGeometry(targetMesh, position, orientation, size);
-          
-          const decalMaterial = new THREE.MeshBasicMaterial({
-            map: texture,
-            transparent: true,
-            depthTest: true,
-            depthWrite: false,
-            polygonOffset: true,
-            polygonOffsetFactor: -4,
-            polygonOffsetUnits: -4
-          });
-          
-          const decal = new THREE.Mesh(decalGeometry, decalMaterial);
-          decal.renderOrder = 999;
-          
-          // Add to tshirtModel so it rotates with the shirt
-          const model = this.three.tshirtModel || this.three.scene;
-          model.add(decal);
-          this.three.decals[locationId] = decal;
-          
-          console.log(`[ULTShirtModal] DecalGeometry created for ${locationId}`, { position: position.toArray(), size: size.toArray() });
-          return;
-        } catch (err) {
-          console.warn('[ULTShirtModal] DecalGeometry failed, falling back to plane:', err.message);
-        }
-      }
-      
-      // Fallback: Use PlaneGeometry if DecalGeometry not available
-      console.log('[ULTShirtModal] Using PlaneGeometry fallback for', locationId);
-      
-      const geometry = new THREE.PlaneGeometry(1, 1);
-      const material = new THREE.MeshBasicMaterial({
-        map: texture,
-        transparent: true,
-        depthTest: true,
-        depthWrite: false,
-        side: THREE.FrontSide,
-        polygonOffset: true,
-        polygonOffsetFactor: -10,
-        polygonOffsetUnits: -10
-      });
-      
-      const decal = new THREE.Mesh(geometry, material);
-      decal.renderOrder = 999;
-      
-      decal.position.set(posX, posY, posZ);
-      decal.rotation.set(config.rotation.x, config.rotation.y, config.rotation.z);
-      decal.scale.set(sizeX, sizeY, 1);
-      
-      // Add as child of T-shirt mesh (rotates together)
-      this.three.tshirtMesh.add(decal);
-      this.three.decals[locationId] = decal;
-      
-      console.log(`[ULTShirtModal] Plane decal created for ${locationId} at`, { x: posX, y: posY, z: posZ });
+      console.log('[ULTShirtModal] createDecalForLocation called - using Texture Baking instead');
     },
 
     update3DColor(hex) {
-      // Use tshirtModel if available (for GLB), otherwise fallback to tshirtMesh
-      const target = this.three.tshirtModel || this.three.tshirtMesh;
-      if (target) {
-        // For GLB models, traverse all children and update materials
-        if (target.traverse) {
-          target.traverse((child) => {
-            if (child.isMesh && child.material && !this.three.decals[child.uuid]) {
-              child.material.color.set(hex);
-            }
-          });
-        } else if (target.material) {
-          // For simple plane fallback
-          target.material.color.set(hex);
-        }
-      }
+      // With Texture Baking, color is part of the baked texture
+      // Just update the baked texture - it will redraw with new color
+      this.updateBakedTexture();
     },
 
     update3DDecal(locationId, enabled) {
-      // Show/hide the specific location's decal
-      if (this.three.decals[locationId]) {
-        this.three.decals[locationId].visible = enabled;
-      }
-      
-      // If enabling and no decal exists yet, create it
-      if (enabled && !this.three.decals[locationId] && this.currentTexture) {
-        let targetMesh = null;
-        this.three.tshirtMesh?.traverse((child) => {
-          if (child.isMesh && !targetMesh) targetMesh = child;
-        });
-        if (targetMesh) {
-          this.createDecalForLocation(this.currentTexture, locationId, targetMesh);
-        }
-      }
+      // With Texture Baking, just update the baked texture
+      // Enabled/disabled locations are handled by updateBakedTexture
+      this.updateBakedTexture();
     },
 
     update3DDecalTransform() {
-      const locationId = this.step2.activeLocation;
-      const locSettings = this.step2.locations[locationId];
-      const decal = this.three.decals[locationId];
-      const config = this.DECAL_LOCATIONS[locationId];
-      
-      if (!decal || !locSettings || !config) return;
-      
-      // DecalGeometry cannot be scaled after creation - must recreate
-      if (decal._isDecalGeometry) {
-        console.log('[ULTShirtModal] Recreating DecalGeometry for scale/position change');
-        
-        // Find target mesh
-        let targetMesh = null;
-        this.three.tshirtMesh?.traverse((child) => {
-          if (child.isMesh && !targetMesh) targetMesh = child;
-        });
-        
-        if (targetMesh && this.currentTexture) {
-          this.createDecalForLocation(this.currentTexture, locationId, targetMesh);
-        }
-        return;
-      }
-      
-      // PlaneGeometry can be transformed directly
-      // Get texture aspect ratio
-      const texture = decal.material?.map;
-      const aspectRatio = texture?.image ? texture.image.width / texture.image.height : 1;
-      
-      // Calculate scale
-      const scaleMultiplier = locSettings.scale / 100;
-      const baseScale = config.baseScale * scaleMultiplier;
-      
-      // Apply scale with aspect ratio
-      if (aspectRatio > 1) {
-        decal.scale.set(baseScale, baseScale / aspectRatio, 1);
-      } else {
-        decal.scale.set(baseScale * aspectRatio, baseScale, 1);
-      }
-      
-      // Reset to base position then apply offsets
-      const offsetX = (locSettings.positionX || 0) / 500;
-      const offsetY = (locSettings.positionY || 0) / 500;
-      
-      decal.position.set(
-        config.position.x + (locationId === 'front' || locationId === 'back' ? offsetX : 0),
-        config.position.y + offsetY,
-        config.position.z + (locationId !== 'front' && locationId !== 'back' ? offsetX : 0)
-      );
+      // With Texture Baking, transform changes are handled by updateBakedTexture
+      this.updateBakedTexture();
     },
 
     moveCamera(view) {
