@@ -21,6 +21,10 @@ function createPrismaClient() {
       "OrderLink",
       "ExportJob",
       "AuditLog",
+      "TeamMember",
+      "ApiKey",
+      "WhiteLabelConfig",
+      "FlowTrigger",
     ];
 
     if (tenantScopedModels.includes(params.model ?? "")) {
@@ -38,9 +42,10 @@ function createPrismaClient() {
           where?.shopId_fileKey?.shopId;
         
         if (!hasShopScope) {
-          console.warn(`[TENANT GUARD] Query to ${params.model} without shopId scope!`);
-          // In production, you might want to throw an error here
-          // throw new Error(`Tenant scope required for ${params.model}`);
+          console.error(`[TENANT GUARD] Query to ${params.model} without shopId scope!`);
+          if (process.env.NODE_ENV === "production") {
+            throw new Error(`Tenant scope required for ${params.model}`);
+          }
         }
       }
     }

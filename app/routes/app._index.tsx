@@ -1,5 +1,5 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
-import { json } from "@remix-run/node";
+import { json, redirect } from "@remix-run/node";
 import { useLoaderData, useNavigate } from "@remix-run/react";
 import {
   Page, Layout, Card, Text, BlockStack, Banner,
@@ -33,9 +33,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
         plan: "starter",
         billingStatus: "active",
         storageProvider: "r2",
+        onboardingCompleted: false,
+        onboardingStep: 0,
         settings: {},
       },
     });
+  }
+
+  // Redirect to onboarding if not completed
+  if (!shop.onboardingCompleted) {
+    return redirect("/app/onboarding");
   }
 
   // Get uploads
