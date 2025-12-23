@@ -1484,8 +1484,6 @@ console.log('[ULTShirtModal] Script loading...');
         img.src = designUrl;
       });
     },
-      });
-    },
 
     // Helper method to create decal from texture
     createDecalFromTexture(texture) {
