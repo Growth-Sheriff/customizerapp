@@ -1,20 +1,95 @@
 import { json, type ActionFunctionArgs } from "@remix-run/node";
 import { Form, useActionData, useNavigation } from "@remix-run/react";
 import { useState } from "react";
+import prisma from "~/lib/prisma.server";
+import { sendTicketConfirmation, sendTicketNotification } from "~/lib/email.server";
+
+// Generate ticket number: UL-XXXXX
+function generateTicketNumber(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // Exclude confusing chars
+  let result = "UL-";
+  for (let i = 0; i < 5; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
 
 export async function action({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
   const name = formData.get("name") as string;
   const email = formData.get("email") as string;
+  const category = formData.get("category") as string;
   const subject = formData.get("subject") as string;
   const message = formData.get("message") as string;
 
   if (!name || !email || !subject || !message) {
-    return json({ success: false, error: "All fields are required" });
+    return json({ success: false, error: "All fields are required", ticketId: null });
   }
 
-  console.log("Contact form submission:", { name, email, subject, message });
-  return json({ success: true, error: null });
+  // Email validation
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    return json({ success: false, error: "Please enter a valid email address", ticketId: null });
+  }
+
+  try {
+    // Generate unique ticket number
+    let ticketNumber = generateTicketNumber();
+    let attempts = 0;
+    while (attempts < 5) {
+      const existing = await prisma.supportTicket.findUnique({ where: { ticketNumber } });
+      if (!existing) break;
+      ticketNumber = generateTicketNumber();
+      attempts++;
+    }
+
+    // Create support ticket
+    const ticket = await prisma.supportTicket.create({
+      data: {
+        ticketNumber,
+        name,
+        email,
+        category: category || "general",
+        subject,
+        message,
+        priority: category === "bug" ? "high" : "normal",
+      },
+    });
+
+    // Send confirmation email to customer
+    const confirmResult = await sendTicketConfirmation({
+      ticketId: ticket.ticketNumber,
+      name,
+      email,
+      subject,
+      category: category || "general",
+      message,
+    });
+
+    // Send notification to support team
+    await sendTicketNotification({
+      ticketId: ticket.ticketNumber,
+      name,
+      email,
+      subject,
+      category: category || "general",
+      message,
+    });
+
+    // Update email sent timestamp
+    if (confirmResult.success) {
+      await prisma.supportTicket.update({
+        where: { id: ticket.id },
+        data: { emailSentAt: new Date() },
+      });
+    }
+
+    console.log("[SUPPORT] Ticket created:", ticket.ticketNumber);
+    return json({ success: true, error: null, ticketId: ticket.ticketNumber });
+  } catch (error) {
+    console.error("[SUPPORT] Error creating ticket:", error);
+    return json({ success: false, error: "Failed to submit ticket. Please try again.", ticketId: null });
+  }
 }
 
 const styles = {
@@ -99,8 +174,12 @@ export default function Contact() {
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [subject, setSubject] = useState("general");
+  const [category, setCategory] = useState("general");
+  const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
+
+  // Reset form on successful submission
+  const formReset = actionData?.success ? true : false;
 
   return (
     <div>
@@ -109,9 +188,10 @@ export default function Contact() {
 
       <div style={styles.divider} />
 
-      {actionData?.success && (
+      {actionData?.success && actionData.ticketId && (
         <div style={{ ...styles.banner, ...styles.success }}>
-          <strong>Message Sent!</strong> Thank you for contacting us. We'll get back to you within 24 hours.
+          <strong>🎫 Ticket Created!</strong> Your ticket ID is <code style={{ background: "#bbf7d0", padding: "2px 6px", borderRadius: "4px" }}>{actionData.ticketId}</code>.
+          <br />We've sent a confirmation to your email. Our team will respond within 24 hours.
         </div>
       )}
 
@@ -131,9 +211,10 @@ export default function Contact() {
                 <input
                   type="text"
                   name="name"
-                  value={name}
+                  value={formReset ? "" : name}
                   onChange={(e) => setName(e.target.value)}
                   style={styles.input}
+                  placeholder="John Doe"
                   required
                 />
               </div>
@@ -143,19 +224,20 @@ export default function Contact() {
                 <input
                   type="email"
                   name="email"
-                  value={email}
+                  value={formReset ? "" : email}
                   onChange={(e) => setEmail(e.target.value)}
                   style={styles.input}
+                  placeholder="john@example.com"
                   required
                 />
               </div>
 
               <div style={styles.formGroup}>
-                <label style={styles.label}>Subject</label>
+                <label style={styles.label}>Category</label>
                 <select
-                  name="subject"
-                  value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
+                  name="category"
+                  value={formReset ? "general" : category}
+                  onChange={(e) => setCategory(e.target.value)}
                   style={styles.select}
                 >
                   {subjectOptions.map((opt) => (
@@ -165,18 +247,32 @@ export default function Contact() {
               </div>
 
               <div style={styles.formGroup}>
+                <label style={styles.label}>Subject *</label>
+                <input
+                  type="text"
+                  name="subject"
+                  value={formReset ? "" : subject}
+                  onChange={(e) => setSubject(e.target.value)}
+                  style={styles.input}
+                  placeholder="Brief description of your inquiry"
+                  required
+                />
+              </div>
+
+              <div style={styles.formGroup}>
                 <label style={styles.label}>Message *</label>
                 <textarea
                   name="message"
-                  value={message}
+                  value={formReset ? "" : message}
                   onChange={(e) => setMessage(e.target.value)}
                   style={styles.textarea}
+                  placeholder="Please describe your question or issue in detail..."
                   required
                 />
               </div>
 
               <button type="submit" style={styles.btn} disabled={isSubmitting}>
-                {isSubmitting ? "Sending..." : "Send Message"}
+                {isSubmitting ? "Creating Ticket..." : "Submit Ticket"}
               </button>
             </Form>
           </div>

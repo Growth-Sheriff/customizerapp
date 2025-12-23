@@ -156,6 +156,12 @@ export function AppFrame({ shop, pendingUploads = 0, pendingQueue = 0 }: AppFram
             icon: PaintBrushFlatIcon,
             selected: isSelected("/app/white-label"),
           },
+          {
+            url: "/app/support",
+            label: "Support Tickets",
+            icon: ChatIcon,
+            selected: isSelected("/app/support"),
+          },
         ]}
       />
 
@@ -165,14 +171,14 @@ export function AppFrame({ shop, pendingUploads = 0, pendingQueue = 0 }: AppFram
         separator
         items={[
           {
-            url: "https://docs.customizerapp.dev",
+            url: "https://customizerapp.dev/legal/docs",
             label: "Documentation",
             icon: QuestionCircleIcon,
             external: true,
           },
           {
-            url: "mailto:support@customizerapp.dev",
-            label: "Support",
+            url: "https://customizerapp.dev/legal/contact",
+            label: "Contact Us",
             icon: ChatIcon,
             external: true,
           },
