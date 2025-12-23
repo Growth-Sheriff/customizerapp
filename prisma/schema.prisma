@@ -1,4 +1,4 @@
-// Prisma Schema - Upload Lift Pro
+// Prisma Schema - Product 3D Customizer & Upload
 // Tenant-scoped multi-shop model
 
 generator client {

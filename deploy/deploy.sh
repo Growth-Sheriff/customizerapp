@@ -1,6 +1,6 @@
 #!/bin/bash
 # ===========================================
-# 3D Customizer - Deployment Script
+# Product 3D Customizer & Upload - Deployment Script
 # ===========================================
 # Run this after git pull to deploy changes
 # Usage: bash deploy/deploy.sh

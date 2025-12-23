@@ -94,7 +94,7 @@ async function uploadLocalFile(storageKey: string, localPath: string): Promise<v
 
 // Download file from storage (S3/R2)
 async function downloadFile(client: S3Client, key: string, localPath: string): Promise<void> {
-  const bucket = process.env.R2_BUCKET_NAME || process.env.S3_BUCKET_NAME || "upload-lift";
+  const bucket = process.env.R2_BUCKET_NAME || process.env.S3_BUCKET_NAME || "product-3d-customizer";
 
   const response = await client.send(new GetObjectCommand({
     Bucket: bucket,
@@ -115,7 +115,7 @@ async function downloadFile(client: S3Client, key: string, localPath: string): P
 
 // Upload file to storage
 async function uploadFile(client: S3Client, key: string, localPath: string, contentType: string): Promise<void> {
-  const bucket = process.env.R2_BUCKET_NAME || process.env.S3_BUCKET_NAME || "upload-lift";
+  const bucket = process.env.R2_BUCKET_NAME || process.env.S3_BUCKET_NAME || "product-3d-customizer";
   const content = await fs.readFile(localPath);
 
   await client.send(new PutObjectCommand({

@@ -1,4 +1,6 @@
-# Upload Lift Pro
+# Product 3D Customizer & Upload
+
+> Shopify App for DTF Transfer Printing with 3D T-Shirt Designer
 
 DTF/özel baskı için Shopify customizer uygulaması.
 

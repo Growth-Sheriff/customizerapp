@@ -1,5 +1,5 @@
 [Unit]
-Description=Upload Lift Pro - Export Worker
+Description=Product 3D Customizer - Export Worker
 After=network.target redis.service postgresql.service upload-lift.service
 
 [Service]

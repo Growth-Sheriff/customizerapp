@@ -1,5 +1,5 @@
 /**
- * Upload Lift - Global State Manager
+ * Product 3D Customizer - Global State Manager
  * ====================================
  * FAZ 4: Centralized State Management
  * 

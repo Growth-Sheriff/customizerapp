@@ -1,9 +1,17 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
 client_id = "b3dfbb5aae7397a26e4073b0196a594e"
-name = "3D Customizer Architecture"
-application_url = "https://customizerapp.dev/"
+name = "Product 3D Customizer & Upload"
+handle = "product-3d-customizer"
+application_url = "https://customizerapp.dev"
 embedded = true
+
+# App Store required URLs
+privacy_policy_url = "https://customizerapp.dev/legal/privacy"
+terms_of_service_url = "https://customizerapp.dev/legal/terms"
+
+[app_home]
+url = "https://customizerapp.dev/app"
 
 [webhooks]
 api_version = "2025-10"
@@ -36,6 +44,18 @@ api_version = "2025-10"
   topics = [ "products/update" ]
   uri = "/webhooks/products-update"
 
+  [[webhooks.subscriptions]]
+  topics = [ "customers/data_request" ]
+  uri = "/api/gdpr/customers/data_request"
+
+  [[webhooks.subscriptions]]
+  topics = [ "customers/redact" ]
+  uri = "/api/gdpr/customers/redact"
+
+  [[webhooks.subscriptions]]
+  topics = [ "shop/redact" ]
+  uri = "/api/gdpr/shop/redact"
+
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
 # write_files: Required for Shopify Files API (fileCreate, stagedUploadsCreate)
@@ -52,4 +72,13 @@ redirect_urls = [
 
 [pos]
 embedded = false
+
+[app_proxy]
+url = "https://customizerapp.dev/api"
+subpath = "customizer"
+prefix = "apps"
+
+[build]
+automatically_update_urls_on_dev = false
+dev_store_url = "tester-12345678908798.myshopify.com"
 

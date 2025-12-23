@@ -425,7 +425,7 @@
       if (window.ShopifyAnalytics && window.ShopifyAnalytics.lib) {
         events.forEach(event => {
           try {
-            window.ShopifyAnalytics.lib.track('Upload Lift', {
+            window.ShopifyAnalytics.lib.track('Product 3D Customizer', {
               eventName: event.event,
               ...event.properties
             });
@@ -478,7 +478,7 @@
       events.forEach(event => {
         try {
           window.gtag('event', `ul_${event.event}`, {
-            event_category: 'Upload Lift',
+            event_category: 'Product 3D Customizer',
             event_label: event.properties.productId || '',
             ...event.properties
           });

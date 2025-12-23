@@ -52,7 +52,7 @@ function getStorageClient(): S3Client {
 }
 
 function getBucketName(): string {
-  return process.env.R2_BUCKET_NAME || process.env.S3_BUCKET_NAME || "upload-lift";
+  return process.env.R2_BUCKET_NAME || process.env.S3_BUCKET_NAME || "product-3d-customizer";
 }
 
 // Download file from storage

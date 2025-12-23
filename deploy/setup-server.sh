@@ -1,6 +1,6 @@
 #!/bin/bash
 # ===========================================
-# 3D Customizer - Server Setup Script
+# Product 3D Customizer & Upload - Server Setup Script
 # ===========================================
 # Run this ONCE on a fresh Ubuntu 24 LTS server
 # Usage: bash deploy/setup-server.sh
@@ -8,7 +8,7 @@
 set -e
 
 echo "=========================================="
-echo "3D Customizer - Server Setup"
+echo "Product 3D Customizer & Upload - Server Setup"
 echo "=========================================="
 
 # Colors

@@ -1,5 +1,5 @@
 /**
- * UL DTF Uploader v4.1.0
+ * Product 3D Customizer - DTF Uploader v4.1.0
  * ======================
  * FAZ 1: Core DTF Upload Widget
  * FAZ 4: Global State Integration
