@@ -258,19 +258,26 @@
     open(data = {}) {
       console.log('[TShirtModal] Opening with data:', data);
 
-      if (data.imageUrl || data.thumbnailUrl) {
+      // Handle both direct data and uploadData wrapper from dtf-uploader
+      const uploadData = data.uploadData || data;
+      const thumbnailUrl = uploadData.thumbnailUrl || data.thumbnailUrl || data.imageUrl;
+      const imageUrl = uploadData.originalUrl || uploadData.imageUrl || thumbnailUrl;
+
+      if (thumbnailUrl || imageUrl) {
         this.inheritedDesign = {
-          imageUrl: data.imageUrl || data.thumbnailUrl,
-          thumbnailUrl: data.thumbnailUrl || data.imageUrl,
-          name: data.name || 'Uploaded Design',
-          dimensions: data.dimensions || { width: 0, height: 0 }
+          imageUrl: imageUrl,
+          thumbnailUrl: thumbnailUrl || imageUrl,
+          name: uploadData.name || data.name || 'Uploaded Design',
+          dimensions: uploadData.dimensions || data.dimensions || { width: 0, height: 0 }
         };
         this.showInheritedDesign();
+        
+        // Auto-select inherited design and load decal
+        this.upload.useInherited = true;
+        this.loadDecalImage(imageUrl);
       }
 
       this.currentStep = 1;
-      this.upload.useInherited = false;
-      this.upload.newImage = null;
       this.confirmed = false;
 
       this.el.overlay?.classList.add('active');
