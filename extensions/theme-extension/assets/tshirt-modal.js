@@ -130,15 +130,15 @@ console.log('[ULTShirtModal] Script loading...');
     // RIGHT side of UV = FRONT of shirt
     UV_REGIONS: {
       front: {
-        // RIGHT side of UV map = FRONT of shirt (cell ~7,2 area)
-        bounds: { uMin: 0.50, uMax: 0.95, vMin: 0.10, vMax: 0.50 },
-        center: { u: 0.72, v: 0.30 },
+        // LEFT side of UV map = FRONT of shirt (swapped)
+        bounds: { uMin: 0.05, uMax: 0.45, vMin: 0.10, vMax: 0.50 },
+        center: { u: 0.25, v: 0.30 },
         defaultSize: 0.55
       },
       back: {
-        // LEFT side of UV map = BACK of shirt (cell ~2,2 area)
-        bounds: { uMin: 0.05, uMax: 0.45, vMin: 0.10, vMax: 0.50 },
-        center: { u: 0.25, v: 0.30 },
+        // RIGHT side of UV map = BACK of shirt (swapped)
+        bounds: { uMin: 0.50, uMax: 0.95, vMin: 0.10, vMax: 0.50 },
+        center: { u: 0.72, v: 0.30 },
         defaultSize: 0.55
       },
       left_sleeve: {
