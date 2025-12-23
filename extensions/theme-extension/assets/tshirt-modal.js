@@ -1468,7 +1468,7 @@ console.log('[ULTShirtModal] Script loading...');
       
       // Move to center of where we want to draw, flip horizontally, then draw
       ctx.translate(centerX, centerY);
-      ctx.scale(-1, 1); // Horizontal flip
+      ctx.scale(-1, -1); // 180 derece döndür (hem yatay hem dikey flip)
       ctx.drawImage(this.decalImage, -decalWidth / 2, -decalHeight / 2, decalWidth, decalHeight);
       
       // Restore context state
