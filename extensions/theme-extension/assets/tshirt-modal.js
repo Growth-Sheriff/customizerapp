@@ -125,22 +125,22 @@ console.log('[ULTShirtModal] Script loading...');
       front: {
         position: { x: 0, y: 0.04, z: 0.12 },
         rotation: { x: 0, y: 0, z: 0 },
-        baseScale: 0.35  // Increased from 0.15
+        baseScale: 0.35
       },
       back: {
-        position: { x: 0, y: 0.04, z: -0.11 },
+        position: { x: 0, y: 0.04, z: -0.12 },
         rotation: { x: 0, y: Math.PI, z: 0 },
-        baseScale: 0.35  // Increased from 0.15
+        baseScale: 0.35
       },
       left_sleeve: {
-        position: { x: -0.14, y: 0.14, z: 0 },
-        rotation: { x: 0, y: Math.PI / 2, z: 0 },
-        baseScale: 0.12  // Increased from 0.06
+        position: { x: -0.18, y: 0.12, z: 0.05 },
+        rotation: { x: 0, y: 0, z: 0 },
+        baseScale: 0.12
       },
       right_sleeve: {
-        position: { x: 0.14, y: 0.14, z: 0 },
-        rotation: { x: 0, y: -Math.PI / 2, z: 0 },
-        baseScale: 0.12  // Increased from 0.06
+        position: { x: 0.18, y: 0.12, z: 0.05 },
+        rotation: { x: 0, y: 0, z: 0 },
+        baseScale: 0.12
       }
     },
 
