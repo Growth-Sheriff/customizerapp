@@ -125,33 +125,33 @@ console.log('[ULTShirtModal] Script loading...');
     // DOM elements cache
     el: {},
     
-    // UV Regions for Texture Baking (extracted from debug grid analysis)
+    // UV Regions for Texture Baking (calibrated from user grid analysis)
     // Decal is drawn directly to texture canvas at these UV coordinates
-    // Grid format: ROW,COL where ROW=V*10, COL=U*10
+    // Grid format: ROW,COL where ROW=V*10, COL=U*10 → U=COL/10, V=ROW/10
     UV_REGIONS: {
       front: {
-        // Grid cells: 3,5 | 3,6 | 4,5 | 4,6 → V=0.35-0.45, U=0.55-0.65
-        bounds: { uMin: 0.40, uMax: 0.70, vMin: 0.25, vMax: 0.55 },
-        center: { u: 0.55, v: 0.40 },
-        defaultSize: 0.6
+        // User identified: cell 2,7 → U=0.7, V=0.2
+        bounds: { uMin: 0.55, uMax: 0.85, vMin: 0.05, vMax: 0.35 },
+        center: { u: 0.70, v: 0.20 },
+        defaultSize: 0.5
       },
       back: {
-        // Grid cells: 1,6 | 2,7 | 3,7 → V=0.15-0.35, U=0.65-0.80
-        bounds: { uMin: 0.55, uMax: 0.90, vMin: 0.10, vMax: 0.45 },
-        center: { u: 0.72, v: 0.25 },
-        defaultSize: 0.6
+        // User identified: cell 7,7 → U=0.7, V=0.7
+        bounds: { uMin: 0.55, uMax: 0.85, vMin: 0.55, vMax: 0.85 },
+        center: { u: 0.70, v: 0.70 },
+        defaultSize: 0.5
       },
       left_sleeve: {
-        // Grid cells: 0,0 | 1,0 | 2,0 → V=0.0-0.25, U=0.0-0.15
-        bounds: { uMin: 0.0, uMax: 0.18, vMin: 0.0, vMax: 0.30 },
-        center: { u: 0.08, v: 0.15 },
-        defaultSize: 0.4
+        // User identified: between 1,1 and 1,2 → U=0.15, V=0.1
+        bounds: { uMin: 0.05, uMax: 0.25, vMin: 0.0, vMax: 0.20 },
+        center: { u: 0.15, v: 0.10 },
+        defaultSize: 0.3
       },
       right_sleeve: {
-        // Grid cells: 2,9 | 3,9 | 4,9 → V=0.25-0.55, U=0.85-1.0
-        bounds: { uMin: 0.85, uMax: 1.0, vMin: 0.20, vMax: 0.55 },
-        center: { u: 0.94, v: 0.35 },
-        defaultSize: 0.4
+        // User identified: between 5,1 and 6,1 → U=0.1, V=0.55
+        bounds: { uMin: 0.0, uMax: 0.20, vMin: 0.45, vMax: 0.65 },
+        center: { u: 0.10, v: 0.55 },
+        defaultSize: 0.3
       }
     },
 
@@ -1285,7 +1285,7 @@ console.log('[ULTShirtModal] Script loading...');
     // ==========================================================================
     
     // DEBUG MODE - Set to true to see UV grid overlay
-    DEBUG_UV_GRID: true, // RE-ENABLED for accurate calibration
+    DEBUG_UV_GRID: false, // Disabled - UV coordinates calibrated from user input
     
     // Draw debug grid to visualize UV mapping
     drawDebugGrid() {
