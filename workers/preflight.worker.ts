@@ -31,11 +31,17 @@ interface PreflightJobData {
   storageKey: string;
 }
 
-// Get S3/R2 client
-function getStorageClient(): S3Client {
-  const provider = process.env.STORAGE_PROVIDER || "r2";
+// Get S3/R2 client for remote storage
+function getStorageClient(provider: string): S3Client | null {
+  if (provider === "local") {
+    return null; // Local storage doesn't use S3 client
+  }
 
   if (provider === "r2") {
+    if (!process.env.R2_ACCOUNT_ID) {
+      console.warn("[Preflight] R2_ACCOUNT_ID not set, cannot use R2 storage");
+      return null;
+    }
     return new S3Client({
       region: "auto",
       endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
@@ -46,6 +52,7 @@ function getStorageClient(): S3Client {
     });
   }
 
+  // S3
   return new S3Client({
     region: process.env.S3_REGION || "us-east-1",
     credentials: {
@@ -55,7 +62,22 @@ function getStorageClient(): S3Client {
   });
 }
 
-// Download file from storage
+// Download file from local storage
+async function downloadLocalFile(storageKey: string, localPath: string): Promise<void> {
+  const uploadsDir = process.env.LOCAL_UPLOAD_DIR || path.join(process.cwd(), "uploads");
+  const sourcePath = path.join(uploadsDir, storageKey);
+  await fs.copyFile(sourcePath, localPath);
+}
+
+// Upload file to local storage
+async function uploadLocalFile(storageKey: string, localPath: string): Promise<void> {
+  const uploadsDir = process.env.LOCAL_UPLOAD_DIR || path.join(process.cwd(), "uploads");
+  const destPath = path.join(uploadsDir, storageKey);
+  await fs.mkdir(path.dirname(destPath), { recursive: true });
+  await fs.copyFile(localPath, destPath);
+}
+
+// Download file from storage (S3/R2)
 async function downloadFile(client: S3Client, key: string, localPath: string): Promise<void> {
   const bucket = process.env.R2_BUCKET_NAME || process.env.S3_BUCKET_NAME || "upload-lift";
 
@@ -121,6 +143,7 @@ const preflightWorker = new Worker<PreflightJobData>(
       }
 
       const config: PreflightConfig = PLAN_CONFIGS[shop.plan] || PLAN_CONFIGS.free;
+      const storageProvider = shop.storageProvider || "local";
 
       // Get upload item
       const item = await prisma.uploadItem.findUnique({ where: { id: itemId } });
@@ -129,13 +152,21 @@ const preflightWorker = new Worker<PreflightJobData>(
       }
 
       await job.updateProgress(10);
-      console.log(`[Preflight] Downloading ${storageKey}`);
+      console.log(`[Preflight] Downloading ${storageKey} from ${storageProvider} storage`);
 
-      // Download file
-      const client = getStorageClient();
+      // Download file based on storage provider
       const ext = path.extname(storageKey) || ".tmp";
       const originalPath = path.join(tempDir, `original${ext}`);
-      await downloadFile(client, storageKey, originalPath);
+      
+      if (storageProvider === "local") {
+        await downloadLocalFile(storageKey, originalPath);
+      } else {
+        const client = getStorageClient(storageProvider);
+        if (!client) {
+          throw new Error(`Cannot initialize storage client for provider: ${storageProvider}`);
+        }
+        await downloadFile(client, storageKey, originalPath);
+      }
 
       await job.updateProgress(20);
 
@@ -152,6 +183,9 @@ const preflightWorker = new Worker<PreflightJobData>(
       // Convert if needed (PDF, AI, EPS)
       let processedPath = originalPath;
       let convertedKey: string | null = null;
+      
+      // Get S3 client for remote storage (reuse for uploads)
+      const client = storageProvider !== "local" ? getStorageClient(storageProvider) : null;
 
       if (detectedType === "application/pdf") {
         console.log(`[Preflight] Converting PDF to PNG`);
@@ -161,7 +195,11 @@ const preflightWorker = new Worker<PreflightJobData>(
 
         // Upload converted file
         convertedKey = storageKey.replace(/\.[^.]+$/, "_converted.png");
-        await uploadFile(client, convertedKey, pngPath, "image/png");
+        if (storageProvider === "local") {
+          await uploadLocalFile(convertedKey, pngPath);
+        } else if (client) {
+          await uploadFile(client, convertedKey, pngPath, "image/png");
+        }
       } else if (detectedType === "application/postscript") {
         console.log(`[Preflight] Converting AI/EPS to PNG`);
         const pngPath = path.join(tempDir, "converted.png");
@@ -170,7 +208,11 @@ const preflightWorker = new Worker<PreflightJobData>(
 
         // Upload converted file
         convertedKey = storageKey.replace(/\.[^.]+$/, "_converted.png");
-        await uploadFile(client, convertedKey, pngPath, "image/png");
+        if (storageProvider === "local") {
+          await uploadLocalFile(convertedKey, pngPath);
+        } else if (client) {
+          await uploadFile(client, convertedKey, pngPath, "image/png");
+        }
       }
 
       await job.updateProgress(50);
@@ -188,7 +230,11 @@ const preflightWorker = new Worker<PreflightJobData>(
 
       // Upload thumbnail
       const thumbnailKey = storageKey.replace(/\.[^.]+$/, "_thumb.webp");
-      await uploadFile(client, thumbnailKey, thumbnailPath, "image/webp");
+      if (storageProvider === "local") {
+        await uploadLocalFile(thumbnailKey, thumbnailPath);
+      } else if (client) {
+        await uploadFile(client, thumbnailKey, thumbnailPath, "image/webp");
+      }
 
       await job.updateProgress(90);
 
