@@ -17,6 +17,12 @@
 {% endcomment %}
 
 {% comment %}
+  Load Remote Logger (DEBUG)
+  Captures console logs and sends to server
+{% endcomment %}
+<script src="{{ 'ul-remote-logger.js' | asset_url }}"></script>
+
+{% comment %}
   Load Global State Manager (FAZ 4)
   MUST load before other components
 {% endcomment %}
