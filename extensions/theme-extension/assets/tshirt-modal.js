@@ -1487,7 +1487,68 @@ console.log('[ULTShirtModal] Script loading...');
 
     // Helper method to create decal from texture
     createDecalFromTexture(texture) {
-      const decalGeom = new THREE.PlaneGeometry(1.2, 1.2);
+      // Configure texture
+      texture.flipY = true;
+      texture.needsUpdate = true;
+      
+      // Method 1: Find the front-facing mesh of the T-shirt and apply texture as decal
+      if (this.three.tshirtMesh) {
+        let frontMesh = null;
+        
+        // Find the main body mesh
+        this.three.tshirtMesh.traverse((child) => {
+          if (child.isMesh && !frontMesh) {
+            frontMesh = child;
+          }
+        });
+        
+        if (frontMesh) {
+          console.log('[ULTShirtModal] Applying decal to T-shirt mesh');
+          
+          // Create a decal plane that follows the T-shirt surface
+          const aspectRatio = texture.image ? texture.image.width / texture.image.height : 1;
+          const decalHeight = 0.8;
+          const decalWidth = decalHeight * aspectRatio;
+          
+          const decalGeom = new THREE.PlaneGeometry(decalWidth, decalHeight);
+          const decalMat = new THREE.MeshBasicMaterial({
+            map: texture,
+            transparent: true,
+            side: THREE.FrontSide,
+            depthTest: true,
+            depthWrite: false,
+            polygonOffset: true,
+            polygonOffsetFactor: -1,
+            polygonOffsetUnits: -1
+          });
+          
+          const decal = new THREE.Mesh(decalGeom, decalMat);
+          
+          // Position decal on front of T-shirt - close to surface
+          decal.position.set(0, 0.35, 0.42);
+          decal.renderOrder = 999;
+          
+          // Remove old decal if exists
+          if (this.three.decals.front) {
+            if (this.three.decals.front.parent) {
+              this.three.decals.front.parent.remove(this.three.decals.front);
+            } else {
+              this.three.scene.remove(this.three.decals.front);
+            }
+          }
+          
+          this.three.decals.front = decal;
+          
+          // Add decal as child of T-shirt so it rotates together
+          this.three.tshirtMesh.add(decal);
+          console.log('[ULTShirtModal] Decal attached to T-shirt mesh');
+          return;
+        }
+      }
+      
+      // Fallback: Simple plane decal
+      console.log('[ULTShirtModal] Using fallback plane decal');
+      const decalGeom = new THREE.PlaneGeometry(1.0, 1.0);
       const decalMat = new THREE.MeshBasicMaterial({
         map: texture,
         transparent: true,
@@ -1565,17 +1626,10 @@ console.log('[ULTShirtModal] Script loading...');
       
       this.three.animationId = requestAnimationFrame(() => this.animate3D());
       
-      // Subtle rotation
+      // Subtle rotation - decals rotate with T-shirt since they're children
       if (this.three.tshirtMesh) {
         this.three.tshirtMesh.rotation.y = Math.sin(Date.now() * 0.0008) * 0.15;
       }
-      
-      // Sync decal rotation
-      Object.values(this.three.decals).forEach(decal => {
-        if (decal && this.three.tshirtMesh) {
-          decal.rotation.y = this.three.tshirtMesh.rotation.y;
-        }
-      });
       
       this.three.renderer?.render(this.three.scene, this.three.camera);
     },
