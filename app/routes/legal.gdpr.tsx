@@ -1,162 +1,158 @@
-import { Text, BlockStack, Divider, List, Badge, InlineStack, Box, Card } from "@shopify/polaris";
+const styles = {
+  title: { fontSize: "2rem", fontWeight: 700, color: "#1f2937", marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" as const },
+  badge: { background: "linear-gradient(135deg, #10b981, #059669)", color: "white", padding: "6px 16px", borderRadius: "20px", fontSize: "0.75rem", fontWeight: 600 },
+  subtitle: { fontSize: "0.875rem", color: "#6b7280", marginBottom: "2rem" },
+  divider: { height: "1px", background: "linear-gradient(90deg, #667eea, #764ba2)", margin: "1.5rem 0", opacity: 0.3 },
+  section: { marginBottom: "2rem" },
+  heading: { fontSize: "1.25rem", fontWeight: 600, color: "#1f2937", marginBottom: "0.75rem" },
+  text: { color: "#4b5563", lineHeight: 1.7, marginBottom: "1rem" },
+  list: { paddingLeft: "1.5rem", color: "#4b5563", lineHeight: 1.8, margin: 0 },
+  listItem: { marginBottom: "0.5rem" },
+  strong: { fontWeight: 600, color: "#1f2937" },
+  card: { 
+    background: "white", 
+    borderRadius: "12px", 
+    padding: "1.5rem", 
+    marginBottom: "1.5rem",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+    border: "1px solid #e5e7eb"
+  },
+  webhookItem: { 
+    display: "flex", 
+    alignItems: "flex-start", 
+    gap: "0.75rem", 
+    padding: "1rem",
+    background: "#f9fafb",
+    borderRadius: "8px",
+    marginBottom: "0.75rem"
+  },
+  activeBadge: { 
+    background: "#dcfce7", 
+    color: "#166534", 
+    padding: "4px 10px", 
+    borderRadius: "12px", 
+    fontSize: "0.7rem", 
+    fontWeight: 600 
+  },
+  webhookName: { fontWeight: 600, color: "#1f2937", marginBottom: "0.25rem" },
+  webhookDesc: { color: "#6b7280", fontSize: "0.875rem", lineHeight: 1.5 },
+};
 
 export default function GDPRCompliance() {
+  const webhooks = [
+    {
+      name: "customers/data_request",
+      desc: "When a customer requests their data, we provide all stored information including uploads, configurations, and order customizations."
+    },
+    {
+      name: "customers/redact",
+      desc: "When a customer requests deletion, we remove all their personal data and uploaded files within 30 days."
+    },
+    {
+      name: "shop/redact",
+      desc: "When a shop uninstalls our app, we delete all shop data within 48 hours."
+    }
+  ];
+
   return (
-    <BlockStack gap="600">
-      <BlockStack gap="200">
-        <InlineStack gap="300" align="start">
-          <Text variant="headingLg" as="h1">
-            GDPR Compliance
-          </Text>
-          <Badge tone="success">Compliant</Badge>
-        </InlineStack>
-        <Text variant="bodySm" as="p" tone="subdued">
-          Last updated: {new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
-        </Text>
-      </BlockStack>
+    <div>
+      <h1 style={styles.title}>
+        🌍 GDPR Compliance
+        <span style={styles.badge}>✓ Compliant</span>
+      </h1>
+      <p style={styles.subtitle}>
+        Last updated: {new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
+      </p>
 
-      <Divider />
+      <div style={styles.divider} />
 
-      <BlockStack gap="400">
-        <Text variant="headingMd" as="h2">
-          Overview
-        </Text>
-        <Text as="p">
+      <section style={styles.section}>
+        <h2 style={styles.heading}>Overview</h2>
+        <p style={styles.text}>
           Product 3D Customizer & Upload is fully compliant with the General Data Protection Regulation (GDPR) 
           and other applicable data protection laws. We are committed to protecting the privacy and rights 
           of our users and their customers.
-        </Text>
-      </BlockStack>
+        </p>
+      </section>
 
-      <BlockStack gap="400">
-        <Text variant="headingMd" as="h2">
-          Data Controller & Processor
-        </Text>
-        <Text as="p">
-          When you use our App:
-        </Text>
-        <List type="bullet">
-          <List.Item><strong>You (Merchant)</strong> are the Data Controller for your customers' data</List.Item>
-          <List.Item><strong>We</strong> act as a Data Processor on your behalf</List.Item>
-          <List.Item><strong>Shopify</strong> provides the underlying platform infrastructure</List.Item>
-        </List>
-      </BlockStack>
+      <section style={styles.section}>
+        <h2 style={styles.heading}>Data Controller & Processor</h2>
+        <p style={styles.text}>When you use our App:</p>
+        <ul style={styles.list}>
+          <li style={styles.listItem}><span style={styles.strong}>You (Merchant)</span> are the Data Controller for your customers' data</li>
+          <li style={styles.listItem}><span style={styles.strong}>We</span> act as a Data Processor on your behalf</li>
+          <li style={styles.listItem}><span style={styles.strong}>Shopify</span> provides the underlying platform infrastructure</li>
+        </ul>
+      </section>
 
-      <Box paddingBlockStart="400">
-        <Card>
-          <Box padding="400">
-            <BlockStack gap="400">
-              <Text variant="headingMd" as="h2">
-                Shopify GDPR Webhooks
-              </Text>
-              <Text as="p">
-                We implement all required Shopify GDPR webhooks:
-              </Text>
-              
-              <BlockStack gap="300">
-                <InlineStack gap="200" align="start">
-                  <Badge tone="success">Active</Badge>
-                  <Text as="span" fontWeight="semibold">customers/data_request</Text>
-                </InlineStack>
-                <Text as="p" tone="subdued">
-                  When a customer requests their data, we provide all stored information including 
-                  uploads, configurations, and order customizations.
-                </Text>
-              </BlockStack>
+      <div style={styles.card}>
+        <h2 style={styles.heading}>🔗 Shopify GDPR Webhooks</h2>
+        <p style={styles.text}>We implement all required Shopify GDPR webhooks:</p>
+        
+        {webhooks.map((wh, idx) => (
+          <div key={idx} style={styles.webhookItem}>
+            <span style={styles.activeBadge}>✓ Active</span>
+            <div>
+              <div style={styles.webhookName}>{wh.name}</div>
+              <div style={styles.webhookDesc}>{wh.desc}</div>
+            </div>
+          </div>
+        ))}
+      </div>
 
-              <BlockStack gap="300">
-                <InlineStack gap="200" align="start">
-                  <Badge tone="success">Active</Badge>
-                  <Text as="span" fontWeight="semibold">customers/redact</Text>
-                </InlineStack>
-                <Text as="p" tone="subdued">
-                  When a customer requests deletion, we remove all their personal data and 
-                  uploaded files within 30 days.
-                </Text>
-              </BlockStack>
+      <section style={styles.section}>
+        <h2 style={styles.heading}>Data Subject Rights</h2>
+        <p style={styles.text}>We support all GDPR data subject rights:</p>
+        <ul style={styles.list}>
+          <li style={styles.listItem}><span style={styles.strong}>Right to Access:</span> Request a copy of stored data</li>
+          <li style={styles.listItem}><span style={styles.strong}>Right to Rectification:</span> Correct inaccurate data</li>
+          <li style={styles.listItem}><span style={styles.strong}>Right to Erasure:</span> Request data deletion</li>
+          <li style={styles.listItem}><span style={styles.strong}>Right to Portability:</span> Export data in standard format</li>
+          <li style={styles.listItem}><span style={styles.strong}>Right to Restrict Processing:</span> Limit data usage</li>
+          <li style={styles.listItem}><span style={styles.strong}>Right to Object:</span> Opt out of certain processing</li>
+        </ul>
+      </section>
 
-              <BlockStack gap="300">
-                <InlineStack gap="200" align="start">
-                  <Badge tone="success">Active</Badge>
-                  <Text as="span" fontWeight="semibold">shop/redact</Text>
-                </InlineStack>
-                <Text as="p" tone="subdued">
-                  When a shop uninstalls our app, we delete all shop data within 48 hours.
-                </Text>
-              </BlockStack>
-            </BlockStack>
-          </Box>
-        </Card>
-      </Box>
+      <section style={styles.section}>
+        <h2 style={styles.heading}>🔒 Data Security Measures</h2>
+        <ul style={styles.list}>
+          <li style={styles.listItem}>✅ TLS 1.3 encryption for all data in transit</li>
+          <li style={styles.listItem}>✅ AES-256 encryption for data at rest</li>
+          <li style={styles.listItem}>✅ Row-level database security with tenant isolation</li>
+          <li style={styles.listItem}>✅ Regular security audits and penetration testing</li>
+          <li style={styles.listItem}>✅ Access logging and monitoring</li>
+          <li style={styles.listItem}>✅ Employee access controls and training</li>
+        </ul>
+      </section>
 
-      <BlockStack gap="400">
-        <Text variant="headingMd" as="h2">
-          Data Subject Rights
-        </Text>
-        <Text as="p">
-          We support all GDPR data subject rights:
-        </Text>
-        <List type="bullet">
-          <List.Item><strong>Right to Access:</strong> Request a copy of stored data</List.Item>
-          <List.Item><strong>Right to Rectification:</strong> Correct inaccurate data</List.Item>
-          <List.Item><strong>Right to Erasure:</strong> Request data deletion</List.Item>
-          <List.Item><strong>Right to Portability:</strong> Export data in standard format</List.Item>
-          <List.Item><strong>Right to Restrict Processing:</strong> Limit data usage</List.Item>
-          <List.Item><strong>Right to Object:</strong> Opt out of certain processing</List.Item>
-        </List>
-      </BlockStack>
-
-      <BlockStack gap="400">
-        <Text variant="headingMd" as="h2">
-          Data Security Measures
-        </Text>
-        <List type="bullet">
-          <List.Item>TLS 1.3 encryption for all data in transit</List.Item>
-          <List.Item>AES-256 encryption for data at rest</List.Item>
-          <List.Item>Row-level database security with tenant isolation</List.Item>
-          <List.Item>Regular security audits and penetration testing</List.Item>
-          <List.Item>Access logging and monitoring</List.Item>
-          <List.Item>Employee access controls and training</List.Item>
-        </List>
-      </BlockStack>
-
-      <BlockStack gap="400">
-        <Text variant="headingMd" as="h2">
-          Data Processing Agreement (DPA)
-        </Text>
-        <Text as="p">
+      <section style={styles.section}>
+        <h2 style={styles.heading}>Data Processing Agreement (DPA)</h2>
+        <p style={styles.text}>
           A Data Processing Agreement is available for Enterprise customers upon request. 
-          Contact enterprise@customizerapp.dev for more information.
-        </Text>
-      </BlockStack>
+          Contact <a href="mailto:enterprise@customizerapp.dev" style={{ color: "#667eea" }}>enterprise@customizerapp.dev</a> for more information.
+        </p>
+      </section>
 
-      <BlockStack gap="400">
-        <Text variant="headingMd" as="h2">
-          International Data Transfers
-        </Text>
-        <Text as="p">
-          Our servers are located in the EU (Germany). For data transfers outside the EU, 
-          we rely on:
-        </Text>
-        <List type="bullet">
-          <List.Item>Standard Contractual Clauses (SCCs)</List.Item>
-          <List.Item>Cloudflare's GDPR-compliant infrastructure</List.Item>
-          <List.Item>Shopify's data processing terms</List.Item>
-        </List>
-      </BlockStack>
+      <section style={styles.section}>
+        <h2 style={styles.heading}>🌐 International Data Transfers</h2>
+        <p style={styles.text}>
+          Our servers are located in the EU (Germany). For data transfers outside the EU, we rely on:
+        </p>
+        <ul style={styles.list}>
+          <li style={styles.listItem}>Standard Contractual Clauses (SCCs)</li>
+          <li style={styles.listItem}>Cloudflare's GDPR-compliant infrastructure</li>
+          <li style={styles.listItem}>Shopify's data processing terms</li>
+        </ul>
+      </section>
 
-      <BlockStack gap="400">
-        <Text variant="headingMd" as="h2">
-          Contact Our DPO
-        </Text>
-        <Text as="p">
-          For GDPR-related inquiries, contact our Data Protection Officer:
-        </Text>
-        <List type="bullet">
-          <List.Item>Email: dpo@customizerapp.dev</List.Item>
-          <List.Item>Response time: Within 72 hours</List.Item>
-        </List>
-      </BlockStack>
-    </BlockStack>
+      <section style={styles.section}>
+        <h2 style={styles.heading}>📧 Contact Our DPO</h2>
+        <p style={styles.text}>For GDPR-related inquiries, contact our Data Protection Officer:</p>
+        <ul style={styles.list}>
+          <li style={styles.listItem}>Email: <a href="mailto:dpo@customizerapp.dev" style={{ color: "#667eea" }}>dpo@customizerapp.dev</a></li>
+          <li style={styles.listItem}>Response time: Within 72 hours</li>
+        </ul>
+      </section>
+    </div>
   );
 }

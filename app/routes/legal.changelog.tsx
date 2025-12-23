@@ -1,5 +1,3 @@
-import { Text, BlockStack, Divider, Badge, Card, Box, InlineStack } from "@shopify/polaris";
-
 interface ChangelogEntry {
   version: string;
   date: string;
@@ -39,85 +37,108 @@ const changelog: ChangelogEntry[] = [
   },
 ];
 
-function getBadgeTone(type: string): "success" | "info" | "attention" | "warning" | "critical" {
-  switch (type) {
-    case "feature": return "success";
-    case "fix": return "critical";
-    case "improvement": return "info";
-    case "security": return "warning";
-    case "breaking": return "attention";
-    default: return "info";
-  }
+const styles = {
+  title: { fontSize: "2rem", fontWeight: 700, color: "#1f2937", marginBottom: "0.5rem" },
+  subtitle: { fontSize: "0.875rem", color: "#6b7280", marginBottom: "2rem" },
+  divider: { height: "1px", background: "linear-gradient(90deg, #667eea, #764ba2)", margin: "1.5rem 0", opacity: 0.3 },
+  card: { 
+    background: "white", 
+    borderRadius: "12px", 
+    padding: "1.5rem", 
+    marginBottom: "1.5rem",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+    border: "1px solid #e5e7eb"
+  },
+  versionRow: { display: "flex", alignItems: "center", gap: "1rem", marginBottom: "1rem", flexWrap: "wrap" as const },
+  version: { fontSize: "1.25rem", fontWeight: 600, color: "#1f2937" },
+  dateBadge: { 
+    background: "linear-gradient(135deg, #667eea, #764ba2)", 
+    color: "white", 
+    padding: "4px 12px", 
+    borderRadius: "20px", 
+    fontSize: "0.75rem",
+    fontWeight: 500
+  },
+  changeRow: { display: "flex", alignItems: "flex-start", gap: "0.75rem", marginBottom: "0.5rem" },
+  changeText: { color: "#4b5563", lineHeight: 1.6 },
+  section: { marginTop: "2rem" },
+  heading: { fontSize: "1.25rem", fontWeight: 600, color: "#1f2937", marginBottom: "0.75rem" },
+  text: { color: "#6b7280", marginBottom: "1rem", lineHeight: 1.6 },
+  list: { paddingLeft: "1.5rem", color: "#4b5563", lineHeight: 1.8 },
+  strong: { fontWeight: 600, color: "#1f2937" },
+};
+
+function getBadgeStyle(type: string): React.CSSProperties {
+  const colors: Record<string, { bg: string; color: string }> = {
+    feature: { bg: "#dcfce7", color: "#166534" },
+    fix: { bg: "#fee2e2", color: "#991b1b" },
+    improvement: { bg: "#dbeafe", color: "#1e40af" },
+    security: { bg: "#fef3c7", color: "#92400e" },
+    breaking: { bg: "#fce7f3", color: "#9d174d" },
+  };
+  const c = colors[type] || colors.feature;
+  return {
+    background: c.bg,
+    color: c.color,
+    padding: "2px 10px",
+    borderRadius: "12px",
+    fontSize: "0.7rem",
+    fontWeight: 600,
+    textTransform: "uppercase",
+    minWidth: "85px",
+    textAlign: "center",
+    display: "inline-block"
+  };
 }
 
-function getBadgeLabel(type: string): string {
+function getEmoji(type: string): string {
   switch (type) {
-    case "feature": return "FEATURE";
-    case "fix": return "FIX";
-    case "improvement": return "IMPROVEMENT";
-    case "security": return "SECURITY";
-    case "breaking": return "BREAKING";
-    default: return type.toUpperCase();
+    case "feature": return "✨";
+    case "fix": return "🐛";
+    case "improvement": return "⚡";
+    case "security": return "🔒";
+    case "breaking": return "💥";
+    default: return "📝";
   }
 }
 
 export default function Changelog() {
   return (
-    <BlockStack gap="600">
-      <BlockStack gap="200">
-        <Text variant="headingLg" as="h1">
-          Changelog
-        </Text>
-        <Text variant="bodyMd" as="p" tone="subdued">
-          All notable changes to Product 3D Customizer & Upload
-        </Text>
-      </BlockStack>
+    <div>
+      <h1 style={styles.title}>📋 Changelog</h1>
+      <p style={styles.subtitle}>All notable changes to Product 3D Customizer & Upload</p>
 
-      <Divider />
+      <div style={styles.divider} />
 
-      <BlockStack gap="600">
-        {changelog.map((entry) => (
-          <Card key={entry.version}>
-            <Box padding="400">
-              <BlockStack gap="400">
-                <InlineStack gap="300" align="start" blockAlign="center">
-                  <Text variant="headingMd" as="h2">
-                    v{entry.version}
-                  </Text>
-                  <Badge>{entry.date}</Badge>
-                </InlineStack>
+      {changelog.map((entry) => (
+        <div key={entry.version} style={styles.card}>
+          <div style={styles.versionRow}>
+            <span style={styles.version}>v{entry.version}</span>
+            <span style={styles.dateBadge}>{entry.date}</span>
+          </div>
 
-                <BlockStack gap="200">
-                  {entry.changes.map((change, index) => (
-                    <InlineStack key={index} gap="200" align="start" wrap={false}>
-                      <div style={{ minWidth: "100px" }}>
-                        <Badge tone={getBadgeTone(change.type)}>
-                          {getBadgeLabel(change.type)}
-                        </Badge>
-                      </div>
-                      <Text as="p">{change.description}</Text>
-                    </InlineStack>
-                  ))}
-                </BlockStack>
-              </BlockStack>
-            </Box>
-          </Card>
-        ))}
-      </BlockStack>
+          {entry.changes.map((change, index) => (
+            <div key={index} style={styles.changeRow}>
+              <span style={getBadgeStyle(change.type)}>
+                {getEmoji(change.type)} {change.type}
+              </span>
+              <span style={styles.changeText}>{change.description}</span>
+            </div>
+          ))}
+        </div>
+      ))}
 
-      <BlockStack gap="200">
-        <Text variant="headingMd" as="h2">
-          Versioning
-        </Text>
-        <Text as="p" tone="subdued">
+      <div style={styles.section}>
+        <h2 style={styles.heading}>Versioning</h2>
+        <p style={styles.text}>
           We use Semantic Versioning (SemVer). Given a version number MAJOR.MINOR.PATCH:
-        </Text>
-        <ul style={{ margin: 0, paddingLeft: "1.5rem" }}>
-          <li><strong>MAJOR</strong>: Incompatible API changes</li>
-          <li><strong>MINOR</strong>: New features (backwards compatible)</li>
-          <li><strong>PATCH</strong>: Bug fixes (backwards compatible)</li>
+        </p>
+        <ul style={styles.list}>
+          <li><span style={styles.strong}>MAJOR</span>: Incompatible API changes</li>
+          <li><span style={styles.strong}>MINOR</span>: New features (backwards compatible)</li>
+          <li><span style={styles.strong}>PATCH</span>: Bug fixes (backwards compatible)</li>
         </ul>
-      </BlockStack>
-    </BlockStack>
+      </div>
+    </div>
   );
 }
