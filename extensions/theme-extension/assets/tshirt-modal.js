@@ -119,7 +119,8 @@ console.log('[ULTShirtModal] Script loading...');
     config: {
       tshirtProductHandle: null,
       extraQuestions: [],
-      sizePricing: { 'XS': 0, 'S': 0, 'M': 0, 'L': 2, 'XL': 2, '2XL': 5, '3XL': 5 }
+      sizePricing: { 'XS': 0, 'S': 0, 'M': 0, 'L': 2, 'XL': 2, '2XL': 5, '3XL': 5 },
+      allowedPositions: ['front', 'back', 'left_sleeve', 'right_sleeve'] // Default all
     },
     
     // DOM elements cache
@@ -1073,10 +1074,17 @@ console.log('[ULTShirtModal] Script loading...');
               }
             }
             
+            // Apply allowed positions from config
+            if (tshirtConfig.positions?.length > 0) {
+              this.config.allowedPositions = tshirtConfig.positions;
+              this.applyAllowedLocations();
+            }
+            
             console.log('[ULTShirtModal] Loaded T-Shirt product:', product.title, 
               '| Colors:', this.product.colors.length, 
               '| Sizes:', this.product.sizes.length,
-              '| Variants:', product.variants.length);
+              '| Variants:', product.variants.length,
+              '| Allowed Positions:', this.config.allowedPositions);
             return;
           }
         } catch (error) {
@@ -1378,6 +1386,40 @@ console.log('[ULTShirtModal] Script loading...');
       if (this.el.locationSettings) {
         this.el.locationSettings.classList.toggle('visible', loc.enabled);
       }
+    },
+
+    /**
+     * Apply allowed locations from admin config
+     * Hide locations that are not in the allowed list
+     */
+    applyAllowedLocations() {
+      const allowed = this.config.allowedPositions || ['front', 'back', 'left_sleeve', 'right_sleeve'];
+      const allLocations = ['front', 'back', 'left_sleeve', 'right_sleeve'];
+      
+      allLocations.forEach(loc => {
+        const item = document.querySelector(`.ul-location-item[data-location="${loc}"]`);
+        if (item) {
+          if (allowed.includes(loc)) {
+            item.style.display = '';
+          } else {
+            item.style.display = 'none';
+            // Disable this location in state
+            if (this.step2.locations[loc]) {
+              this.step2.locations[loc].enabled = false;
+            }
+          }
+        }
+      });
+      
+      // Make sure at least one allowed location is active
+      const firstAllowed = allowed[0] || 'front';
+      if (!allowed.includes(this.step2.activeLocation)) {
+        this.step2.activeLocation = firstAllowed;
+        this.step2.locations[firstAllowed].enabled = true;
+        this.selectLocation(firstAllowed);
+      }
+      
+      console.log('[ULTShirtModal] Applied allowed locations:', allowed);
     },
 
     setLocationScale(value) {
