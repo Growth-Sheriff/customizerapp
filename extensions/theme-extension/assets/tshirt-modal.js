@@ -1017,8 +1017,68 @@ console.log('[ULTShirtModal] Script loading...');
     },
 
     async loadProductVariants() {
-      // Try to get variants from window or API
-      // For now, use default colors/sizes
+      // Fetch T-Shirt product from Shopify API
+      // Default handle - can be configured via metafield or settings
+      const tshirtHandle = this.config.tshirtProductHandle || 'basic-tshirt' || 'tshirt' || 't-shirt';
+      
+      try {
+        // Try to fetch T-Shirt product by handle
+        const response = await fetch(`/products/${tshirtHandle}.js`);
+        
+        if (response.ok) {
+          const product = await response.json();
+          
+          // Store product info
+          this.product.id = product.id;
+          this.product.title = product.title;
+          this.product.variants = product.variants || [];
+          
+          // Extract unique colors and sizes from variants
+          const colorSet = new Set();
+          const sizeSet = new Set();
+          
+          product.variants.forEach(variant => {
+            // Shopify variants have option1, option2, option3
+            // Usually: option1 = Size, option2 = Color (or vice versa)
+            if (variant.option1) {
+              // Check if it looks like a size
+              if (['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', 'XXL', 'XXXL'].includes(variant.option1.toUpperCase())) {
+                sizeSet.add(variant.option1);
+              } else {
+                colorSet.add(variant.option1);
+              }
+            }
+            if (variant.option2) {
+              if (['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', 'XXL', 'XXXL'].includes(variant.option2.toUpperCase())) {
+                sizeSet.add(variant.option2);
+              } else {
+                colorSet.add(variant.option2);
+              }
+            }
+          });
+          
+          // If we found colors from variants, use them
+          if (colorSet.size > 0) {
+            this.product.colors = Array.from(colorSet).map(name => ({
+              name,
+              hex: this.getColorHex(name)
+            }));
+          }
+          
+          // If we found sizes from variants, use them
+          if (sizeSet.size > 0) {
+            this.product.sizes = Array.from(sizeSet);
+          }
+          
+          console.log('[ULTShirtModal] Loaded T-Shirt product:', product.title, 'with', product.variants.length, 'variants');
+          return;
+        }
+      } catch (error) {
+        console.warn('[ULTShirtModal] Could not fetch T-Shirt product:', error);
+      }
+      
+      // Fallback: Use default colors/sizes if API fails
+      console.log('[ULTShirtModal] Using default colors/sizes (T-Shirt product not found)');
       this.product.colors = [
         { name: 'White', hex: '#ffffff' },
         { name: 'Black', hex: '#1a1a1a' },
@@ -1031,6 +1091,44 @@ console.log('[ULTShirtModal] Script loading...');
       ];
       
       this.product.sizes = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'];
+    },
+    
+    // Helper to get hex color from color name
+    getColorHex(colorName) {
+      const colorMap = {
+        'white': '#ffffff',
+        'black': '#1a1a1a',
+        'navy': '#1e3a5f',
+        'red': '#dc2626',
+        'blue': '#3b82f6',
+        'green': '#22c55e',
+        'gray': '#6b7280',
+        'grey': '#6b7280',
+        'pink': '#ec4899',
+        'yellow': '#eab308',
+        'orange': '#f97316',
+        'purple': '#a855f7',
+        'brown': '#78350f',
+        'beige': '#d4c4a8',
+        'cream': '#fffdd0',
+        'maroon': '#800000',
+        'teal': '#14b8a6',
+        'olive': '#808000',
+        'coral': '#ff7f50',
+        'mint': '#98ff98',
+        'lavender': '#e6e6fa',
+        'burgundy': '#800020',
+        'charcoal': '#36454f',
+        'sand': '#c2b280',
+        'sky blue': '#87ceeb',
+        'forest green': '#228b22',
+        'royal blue': '#4169e1',
+        'heather gray': '#9a9a9a',
+        'heather grey': '#9a9a9a'
+      };
+      
+      const normalized = colorName.toLowerCase().trim();
+      return colorMap[normalized] || '#cccccc';
     },
 
     renderColors() {
@@ -2323,61 +2421,62 @@ console.log('[ULTShirtModal] Script loading...');
       // Get design data
       const designData = this.step1.useInheritedDesign ? this.inheritedDesign : this.step1.newUpload;
       
-      // Find matching variant by size
+      // Find matching variant from T-SHIRT product (NOT the page product!)
       const selectedSize = this.step2.tshirtSize;
+      const selectedColor = this.step2.tshirtColorName;
       let variantId = null;
       let selectedVariant = null;
       
-      // Method 1: Check our loaded variants
+      // IMPORTANT: We must use variants from the T-Shirt product we loaded
+      // NOT from the current page product (which is DTF Gang Sheets)
       if (this.product.variants && this.product.variants.length > 0) {
-        selectedVariant = this.product.variants.find(v => 
-          v.title?.includes(selectedSize) || v.option1 === selectedSize || v.option2 === selectedSize
-        ) || this.product.variants[0];
-        variantId = selectedVariant?.id;
-      }
-      
-      // Method 2: Try Shopify's global product object
-      if (!variantId && window.ShopifyAnalytics?.meta?.product?.variants) {
-        const variants = window.ShopifyAnalytics.meta.product.variants;
-        selectedVariant = variants.find(v => 
-          v.title?.includes(selectedSize) || v.option1 === selectedSize || v.option2 === selectedSize
-        ) || variants[0];
-        variantId = selectedVariant?.id;
-      }
-      
-      // Method 3: Try meta tag or hidden input
-      if (!variantId) {
-        const metaVariant = document.querySelector('meta[itemprop="sku"]')?.content ||
-                           document.querySelector('input[name="id"]')?.value ||
-                           document.querySelector('select[name="id"]')?.value ||
-                           document.querySelector('[data-product-id]')?.dataset?.variantId;
-        if (metaVariant) {
-          variantId = metaVariant;
+        // Try to find exact match (size + color)
+        selectedVariant = this.product.variants.find(v => {
+          const title = (v.title || '').toLowerCase();
+          const opt1 = (v.option1 || '').toLowerCase();
+          const opt2 = (v.option2 || '').toLowerCase();
+          
+          const sizeMatch = opt1 === selectedSize.toLowerCase() || 
+                           opt2 === selectedSize.toLowerCase() ||
+                           title.includes(selectedSize.toLowerCase());
+          
+          const colorMatch = opt1 === selectedColor.toLowerCase() || 
+                            opt2 === selectedColor.toLowerCase() ||
+                            title.includes(selectedColor.toLowerCase());
+          
+          return sizeMatch && colorMatch;
+        });
+        
+        // If no exact match, try size only
+        if (!selectedVariant) {
+          selectedVariant = this.product.variants.find(v => {
+            const title = (v.title || '').toLowerCase();
+            const opt1 = (v.option1 || '').toLowerCase();
+            const opt2 = (v.option2 || '').toLowerCase();
+            
+            return opt1 === selectedSize.toLowerCase() || 
+                   opt2 === selectedSize.toLowerCase() ||
+                   title.includes(selectedSize.toLowerCase());
+          });
         }
-      }
-      
-      // Method 4: Try URL parameter
-      if (!variantId) {
-        const urlParams = new URLSearchParams(window.location.search);
-        variantId = urlParams.get('variant');
-      }
-      
-      // Final fallback: Get from form
-      if (!variantId) {
-        const productForm = document.querySelector('form[action*="/cart/add"]');
-        if (productForm) {
-          const idInput = productForm.querySelector('input[name="id"], select[name="id"]');
-          variantId = idInput?.value;
+        
+        // Final fallback: first available variant
+        if (!selectedVariant) {
+          selectedVariant = this.product.variants.find(v => v.available !== false) || this.product.variants[0];
         }
+        
+        variantId = selectedVariant?.id;
+        console.log('[ULTShirtModal] Found T-Shirt variant:', selectedVariant?.title, 'ID:', variantId);
       }
       
+      // If T-Shirt product wasn't loaded, show error
       if (!variantId) {
-        console.error('[ULTShirtModal] No variant ID found');
-        this.showToast('Error: Could not find product variant. Please refresh and try again.', 'error');
+        console.error('[ULTShirtModal] No T-Shirt variant found. Product variants:', this.product.variants);
+        this.showToast('Error: T-Shirt product not configured. Please contact support.', 'error');
         return false;
       }
       
-      console.log('[ULTShirtModal] Using variant ID:', variantId, 'for size:', selectedSize);
+      console.log('[ULTShirtModal] Adding T-Shirt to cart - Variant:', variantId, 'Size:', selectedSize, 'Color:', selectedColor);
       
       // Prepare line item properties
       const properties = {
