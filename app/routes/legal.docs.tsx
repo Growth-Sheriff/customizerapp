@@ -1,9 +1,9 @@
 const styles = {
-  title: { fontSize: "2rem", fontWeight: 700, color: "#1f2937", marginBottom: "0.5rem" },
+  title: { fontSize: "1.875rem", fontWeight: 700, color: "#1f2937", marginBottom: "0.5rem" },
   subtitle: { fontSize: "0.875rem", color: "#6b7280", marginBottom: "2rem" },
-  divider: { height: "1px", background: "linear-gradient(90deg, #667eea, #764ba2)", margin: "1.5rem 0", opacity: 0.3 },
+  divider: { height: "1px", background: "#e5e7eb", margin: "1.5rem 0" },
   section: { marginBottom: "2rem" },
-  heading: { fontSize: "1.25rem", fontWeight: 600, color: "#1f2937", marginBottom: "0.75rem" },
+  heading: { fontSize: "1.125rem", fontWeight: 600, color: "#1f2937", marginBottom: "0.75rem" },
   text: { color: "#4b5563", lineHeight: 1.7, marginBottom: "1rem" },
   list: { paddingLeft: "1.5rem", color: "#4b5563", lineHeight: 1.8, margin: 0 },
   listItem: { marginBottom: "0.5rem" },
@@ -13,7 +13,7 @@ const styles = {
     alignItems: "center", 
     gap: "0.5rem",
     padding: "10px 20px", 
-    borderRadius: "8px", 
+    borderRadius: "6px", 
     textDecoration: "none", 
     fontWeight: 500, 
     fontSize: "0.875rem",
@@ -21,18 +21,16 @@ const styles = {
     border: "none",
     cursor: "pointer"
   },
-  btnPrimary: { background: "linear-gradient(135deg, #667eea, #764ba2)", color: "white" },
+  btnPrimary: { background: "#667eea", color: "white" },
   btnSecondary: { background: "#f3f4f6", color: "#374151", border: "1px solid #e5e7eb" },
   card: { 
-    background: "white", 
-    borderRadius: "12px", 
-    padding: "1.5rem", 
+    background: "#f9fafb", 
+    borderRadius: "8px", 
+    padding: "1.25rem", 
     marginBottom: "1rem",
-    boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
     border: "1px solid #e5e7eb"
   },
-  cardHeader: { display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1rem" },
-  cardTitle: { fontSize: "1.1rem", fontWeight: 600, color: "#1f2937" },
+  cardTitle: { fontSize: "1rem", fontWeight: 600, color: "#1f2937", marginBottom: "0.75rem" },
   itemRow: { display: "flex", gap: "0.5rem", marginBottom: "0.5rem", lineHeight: 1.6 },
   strong: { fontWeight: 600, color: "#1f2937" },
   subdued: { color: "#6b7280" },
@@ -41,7 +39,6 @@ const styles = {
 const sections = [
   {
     title: "Getting Started",
-    icon: "⚙️",
     items: [
       { title: "Installation Guide", description: "How to install and set up the app" },
       { title: "Initial Configuration", description: "Configure your first product" },
@@ -50,7 +47,6 @@ const sections = [
   },
   {
     title: "Product Configuration",
-    icon: "📦",
     items: [
       { title: "Asset Sets", description: "Create and manage asset sets" },
       { title: "Print Locations", description: "Define print areas on products" },
@@ -60,7 +56,6 @@ const sections = [
   },
   {
     title: "Order Management",
-    icon: "🛒",
     items: [
       { title: "Processing Orders", description: "Handle customized orders" },
       { title: "Export Files", description: "Generate print-ready files" },
@@ -69,7 +64,6 @@ const sections = [
   },
   {
     title: "API Reference",
-    icon: "💻",
     items: [
       { title: "REST API", description: "API endpoints documentation" },
       { title: "Webhooks", description: "Available webhook events" },
@@ -78,7 +72,6 @@ const sections = [
   },
   {
     title: "Analytics",
-    icon: "📊",
     items: [
       { title: "Dashboard Overview", description: "Understanding your metrics" },
       { title: "Conversion Tracking", description: "Track customization conversions" },
@@ -90,7 +83,7 @@ const sections = [
 export default function Documentation() {
   return (
     <div>
-      <h1 style={styles.title}>📚 Documentation</h1>
+      <h1 style={styles.title}>Documentation</h1>
       <p style={styles.subtitle}>Complete guide to using Product 3D Customizer & Upload</p>
 
       <div style={styles.divider} />
@@ -99,23 +92,20 @@ export default function Documentation() {
         <h2 style={styles.heading}>Quick Links</h2>
         <div style={styles.btnRow}>
           <a href="/app" style={{ ...styles.btn, ...styles.btnPrimary }}>
-            🚀 Open App Dashboard
+            Open App Dashboard
           </a>
           <a href="/legal/tutorial" style={{ ...styles.btn, ...styles.btnSecondary }}>
-            🎬 Video Tutorial
+            Video Tutorial
           </a>
           <a href="/legal/changelog" style={{ ...styles.btn, ...styles.btnSecondary }}>
-            📋 View Changelog
+            View Changelog
           </a>
         </div>
       </section>
 
       {sections.map((section) => (
         <div key={section.title} style={styles.card}>
-          <div style={styles.cardHeader}>
-            <span style={{ fontSize: "1.25rem" }}>{section.icon}</span>
-            <span style={styles.cardTitle}>{section.title}</span>
-          </div>
+          <h3 style={styles.cardTitle}>{section.title}</h3>
           {section.items.map((item) => (
             <div key={item.title} style={styles.itemRow}>
               <span style={styles.strong}>{item.title}</span>
@@ -129,9 +119,9 @@ export default function Documentation() {
         <h2 style={styles.heading}>Need More Help?</h2>
         <p style={styles.text}>Can't find what you're looking for? Our support team is here to help:</p>
         <ul style={styles.list}>
-          <li style={styles.listItem}>📧 Email: <a href="mailto:support@customizerapp.dev" style={{ color: "#667eea" }}>support@customizerapp.dev</a></li>
-          <li style={styles.listItem}>⏱️ Response time: Within 24 hours (business days)</li>
-          <li style={styles.listItem}>🌟 Enterprise customers: Priority support available</li>
+          <li style={styles.listItem}>Email: <a href="mailto:support@customizerapp.dev" style={{ color: "#667eea" }}>support@customizerapp.dev</a></li>
+          <li style={styles.listItem}>Response time: Within 24 hours (business days)</li>
+          <li style={styles.listItem}>Enterprise customers: Priority support available</li>
         </ul>
       </section>
     </div>

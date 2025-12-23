@@ -18,26 +18,25 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 const styles = {
-  title: { fontSize: "2rem", fontWeight: 700, color: "#1f2937", marginBottom: "0.5rem" },
+  title: { fontSize: "1.875rem", fontWeight: 700, color: "#1f2937", marginBottom: "0.5rem" },
   subtitle: { fontSize: "0.875rem", color: "#6b7280", marginBottom: "2rem" },
-  divider: { height: "1px", background: "linear-gradient(90deg, #667eea, #764ba2)", margin: "1.5rem 0", opacity: 0.3 },
+  divider: { height: "1px", background: "#e5e7eb", margin: "1.5rem 0" },
   grid: { display: "grid", gridTemplateColumns: "2fr 1fr", gap: "2rem" },
   card: { 
-    background: "white", 
-    borderRadius: "12px", 
+    background: "#f9fafb", 
+    borderRadius: "8px", 
     padding: "1.5rem",
-    boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
     border: "1px solid #e5e7eb",
     marginBottom: "1rem"
   },
-  cardTitle: { fontSize: "1.1rem", fontWeight: 600, color: "#1f2937", marginBottom: "1rem" },
+  cardTitle: { fontSize: "1rem", fontWeight: 600, color: "#1f2937", marginBottom: "1rem" },
   formGroup: { marginBottom: "1rem" },
   label: { display: "block", fontWeight: 500, color: "#374151", marginBottom: "0.5rem", fontSize: "0.875rem" },
   input: { 
     width: "100%", 
     padding: "10px 14px", 
     border: "1px solid #d1d5db", 
-    borderRadius: "8px", 
+    borderRadius: "6px", 
     fontSize: "0.9rem",
     outline: "none",
     transition: "border-color 0.2s",
@@ -47,7 +46,7 @@ const styles = {
     width: "100%", 
     padding: "10px 14px", 
     border: "1px solid #d1d5db", 
-    borderRadius: "8px", 
+    borderRadius: "6px", 
     fontSize: "0.9rem",
     background: "white",
     cursor: "pointer",
@@ -57,7 +56,7 @@ const styles = {
     width: "100%", 
     padding: "10px 14px", 
     border: "1px solid #d1d5db", 
-    borderRadius: "8px", 
+    borderRadius: "6px", 
     fontSize: "0.9rem",
     minHeight: "120px",
     resize: "vertical" as const,
@@ -65,17 +64,17 @@ const styles = {
     boxSizing: "border-box" as const
   },
   btn: { 
-    background: "linear-gradient(135deg, #667eea, #764ba2)", 
+    background: "#667eea", 
     color: "white", 
     padding: "12px 24px", 
     border: "none", 
-    borderRadius: "8px", 
+    borderRadius: "6px", 
     fontWeight: 600, 
     cursor: "pointer",
     fontSize: "0.9rem",
     width: "100%"
   },
-  banner: { padding: "1rem", borderRadius: "8px", marginBottom: "1.5rem", display: "flex", alignItems: "center", gap: "0.5rem" },
+  banner: { padding: "1rem", borderRadius: "6px", marginBottom: "1.5rem" },
   success: { background: "#dcfce7", color: "#166534", border: "1px solid #86efac" },
   error: { background: "#fee2e2", color: "#991b1b", border: "1px solid #fecaca" },
   text: { color: "#4b5563", lineHeight: 1.6, marginBottom: "0.75rem" },
@@ -105,20 +104,20 @@ export default function Contact() {
 
   return (
     <div>
-      <h1 style={styles.title}>💬 Contact Us</h1>
+      <h1 style={styles.title}>Contact Us</h1>
       <p style={styles.subtitle}>Have questions? We'd love to hear from you.</p>
 
       <div style={styles.divider} />
 
       {actionData?.success && (
         <div style={{ ...styles.banner, ...styles.success }}>
-          ✅ <strong>Message Sent!</strong> Thank you for contacting us. We'll get back to you within 24 hours.
+          <strong>Message Sent!</strong> Thank you for contacting us. We'll get back to you within 24 hours.
         </div>
       )}
 
       {actionData?.error && (
         <div style={{ ...styles.banner, ...styles.error }}>
-          ❌ <strong>Error:</strong> {actionData.error}
+          <strong>Error:</strong> {actionData.error}
         </div>
       )}
 
@@ -177,7 +176,7 @@ export default function Contact() {
               </div>
 
               <button type="submit" style={styles.btn} disabled={isSubmitting}>
-                {isSubmitting ? "Sending..." : "📤 Send Message"}
+                {isSubmitting ? "Sending..." : "Send Message"}
               </button>
             </Form>
           </div>
@@ -185,7 +184,7 @@ export default function Contact() {
 
         <div>
           <div style={styles.card}>
-            <h3 style={styles.cardTitle}>📧 Direct Contact</h3>
+            <h3 style={styles.cardTitle}>Direct Contact</h3>
             <p style={styles.text}>
               <span style={styles.strong}>General:</span><br />
               <a href="mailto:support@customizerapp.dev" style={styles.link}>support@customizerapp.dev</a>
@@ -201,7 +200,7 @@ export default function Contact() {
           </div>
 
           <div style={styles.card}>
-            <h3 style={styles.cardTitle}>⏱️ Response Times</h3>
+            <h3 style={styles.cardTitle}>Response Times</h3>
             <p style={styles.text}><span style={styles.strong}>Free Plan:</span> 48-72 hours</p>
             <p style={styles.text}><span style={styles.strong}>Starter:</span> 24 hours</p>
             <p style={styles.text}><span style={styles.strong}>Pro:</span> 12 hours</p>
@@ -209,7 +208,7 @@ export default function Contact() {
           </div>
 
           <div style={styles.card}>
-            <h3 style={styles.cardTitle}>🕐 Office Hours</h3>
+            <h3 style={styles.cardTitle}>Office Hours</h3>
             <p style={styles.text}>
               Monday - Friday<br />
               9:00 AM - 6:00 PM (CET)

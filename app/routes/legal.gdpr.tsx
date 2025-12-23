@@ -1,20 +1,19 @@
 const styles = {
-  title: { fontSize: "2rem", fontWeight: 700, color: "#1f2937", marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" as const },
-  badge: { background: "linear-gradient(135deg, #10b981, #059669)", color: "white", padding: "6px 16px", borderRadius: "20px", fontSize: "0.75rem", fontWeight: 600 },
+  title: { fontSize: "1.875rem", fontWeight: 700, color: "#1f2937", marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" as const },
+  badge: { background: "#10b981", color: "white", padding: "4px 12px", borderRadius: "4px", fontSize: "0.75rem", fontWeight: 600 },
   subtitle: { fontSize: "0.875rem", color: "#6b7280", marginBottom: "2rem" },
-  divider: { height: "1px", background: "linear-gradient(90deg, #667eea, #764ba2)", margin: "1.5rem 0", opacity: 0.3 },
+  divider: { height: "1px", background: "#e5e7eb", margin: "1.5rem 0" },
   section: { marginBottom: "2rem" },
-  heading: { fontSize: "1.25rem", fontWeight: 600, color: "#1f2937", marginBottom: "0.75rem" },
+  heading: { fontSize: "1.125rem", fontWeight: 600, color: "#1f2937", marginBottom: "0.75rem" },
   text: { color: "#4b5563", lineHeight: 1.7, marginBottom: "1rem" },
   list: { paddingLeft: "1.5rem", color: "#4b5563", lineHeight: 1.8, margin: 0 },
   listItem: { marginBottom: "0.5rem" },
   strong: { fontWeight: 600, color: "#1f2937" },
   card: { 
-    background: "white", 
-    borderRadius: "12px", 
+    background: "#f9fafb", 
+    borderRadius: "8px", 
     padding: "1.5rem", 
     marginBottom: "1.5rem",
-    boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
     border: "1px solid #e5e7eb"
   },
   webhookItem: { 
@@ -22,19 +21,20 @@ const styles = {
     alignItems: "flex-start", 
     gap: "0.75rem", 
     padding: "1rem",
-    background: "#f9fafb",
-    borderRadius: "8px",
-    marginBottom: "0.75rem"
+    background: "white",
+    borderRadius: "6px",
+    marginBottom: "0.75rem",
+    border: "1px solid #e5e7eb"
   },
   activeBadge: { 
     background: "#dcfce7", 
     color: "#166534", 
-    padding: "4px 10px", 
-    borderRadius: "12px", 
+    padding: "2px 8px", 
+    borderRadius: "4px", 
     fontSize: "0.7rem", 
     fontWeight: 600 
   },
-  webhookName: { fontWeight: 600, color: "#1f2937", marginBottom: "0.25rem" },
+  webhookName: { fontWeight: 600, color: "#1f2937", marginBottom: "0.25rem", fontFamily: "monospace" },
   webhookDesc: { color: "#6b7280", fontSize: "0.875rem", lineHeight: 1.5 },
 };
 
@@ -57,8 +57,8 @@ export default function GDPRCompliance() {
   return (
     <div>
       <h1 style={styles.title}>
-        🌍 GDPR Compliance
-        <span style={styles.badge}>✓ Compliant</span>
+        GDPR Compliance
+        <span style={styles.badge}>Compliant</span>
       </h1>
       <p style={styles.subtitle}>
         Last updated: {new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
@@ -86,12 +86,12 @@ export default function GDPRCompliance() {
       </section>
 
       <div style={styles.card}>
-        <h2 style={styles.heading}>🔗 Shopify GDPR Webhooks</h2>
+        <h2 style={styles.heading}>Shopify GDPR Webhooks</h2>
         <p style={styles.text}>We implement all required Shopify GDPR webhooks:</p>
         
         {webhooks.map((wh, idx) => (
           <div key={idx} style={styles.webhookItem}>
-            <span style={styles.activeBadge}>✓ Active</span>
+            <span style={styles.activeBadge}>Active</span>
             <div>
               <div style={styles.webhookName}>{wh.name}</div>
               <div style={styles.webhookDesc}>{wh.desc}</div>
@@ -114,14 +114,14 @@ export default function GDPRCompliance() {
       </section>
 
       <section style={styles.section}>
-        <h2 style={styles.heading}>🔒 Data Security Measures</h2>
+        <h2 style={styles.heading}>Data Security Measures</h2>
         <ul style={styles.list}>
-          <li style={styles.listItem}>✅ TLS 1.3 encryption for all data in transit</li>
-          <li style={styles.listItem}>✅ AES-256 encryption for data at rest</li>
-          <li style={styles.listItem}>✅ Row-level database security with tenant isolation</li>
-          <li style={styles.listItem}>✅ Regular security audits and penetration testing</li>
-          <li style={styles.listItem}>✅ Access logging and monitoring</li>
-          <li style={styles.listItem}>✅ Employee access controls and training</li>
+          <li style={styles.listItem}>TLS 1.3 encryption for all data in transit</li>
+          <li style={styles.listItem}>AES-256 encryption for data at rest</li>
+          <li style={styles.listItem}>Row-level database security with tenant isolation</li>
+          <li style={styles.listItem}>Regular security audits and penetration testing</li>
+          <li style={styles.listItem}>Access logging and monitoring</li>
+          <li style={styles.listItem}>Employee access controls and training</li>
         </ul>
       </section>
 
@@ -134,7 +134,7 @@ export default function GDPRCompliance() {
       </section>
 
       <section style={styles.section}>
-        <h2 style={styles.heading}>🌐 International Data Transfers</h2>
+        <h2 style={styles.heading}>International Data Transfers</h2>
         <p style={styles.text}>
           Our servers are located in the EU (Germany). For data transfers outside the EU, we rely on:
         </p>
@@ -146,7 +146,7 @@ export default function GDPRCompliance() {
       </section>
 
       <section style={styles.section}>
-        <h2 style={styles.heading}>📧 Contact Our DPO</h2>
+        <h2 style={styles.heading}>Contact Our DPO</h2>
         <p style={styles.text}>For GDPR-related inquiries, contact our Data Protection Officer:</p>
         <ul style={styles.list}>
           <li style={styles.listItem}>Email: <a href="mailto:dpo@customizerapp.dev" style={{ color: "#667eea" }}>dpo@customizerapp.dev</a></li>

@@ -1,9 +1,9 @@
 const styles = {
-  title: { fontSize: "2rem", fontWeight: 700, color: "#1f2937", marginBottom: "0.5rem" },
+  title: { fontSize: "1.875rem", fontWeight: 700, color: "#1f2937", marginBottom: "0.5rem" },
   subtitle: { fontSize: "0.875rem", color: "#6b7280", marginBottom: "2rem" },
-  divider: { height: "1px", background: "linear-gradient(90deg, #667eea, #764ba2)", margin: "1.5rem 0", opacity: 0.3 },
+  divider: { height: "1px", background: "#e5e7eb", margin: "1.5rem 0" },
   section: { marginBottom: "2rem" },
-  heading: { fontSize: "1.25rem", fontWeight: 600, color: "#1f2937", marginBottom: "0.75rem" },
+  heading: { fontSize: "1.125rem", fontWeight: 600, color: "#1f2937", marginBottom: "0.75rem" },
   text: { color: "#4b5563", lineHeight: 1.7, marginBottom: "1rem" },
   list: { paddingLeft: "1.5rem", color: "#4b5563", lineHeight: 1.8 },
   listItem: { marginBottom: "0.5rem" },
@@ -13,7 +13,7 @@ const styles = {
 export default function TermsOfService() {
   return (
     <div>
-      <h1 style={styles.title}>📄 Terms of Service</h1>
+      <h1 style={styles.title}>Terms of Service</h1>
       <p style={styles.subtitle}>
         Last updated: {new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
       </p>
@@ -32,11 +32,11 @@ export default function TermsOfService() {
         <h2 style={styles.heading}>2. Description of Service</h2>
         <p style={styles.text}>Product 3D Customizer & Upload is a Shopify application that provides:</p>
         <ul style={styles.list}>
-          <li style={styles.listItem}>🎨 3D product visualization and customization</li>
-          <li style={styles.listItem}>📤 Design upload and placement tools</li>
-          <li style={styles.listItem}>🖨️ Print-ready file generation (DTF, sublimation, etc.)</li>
-          <li style={styles.listItem}>📦 Order management with customization data</li>
-          <li style={styles.listItem}>🏷️ White-label branding options</li>
+          <li style={styles.listItem}>3D product visualization and customization</li>
+          <li style={styles.listItem}>Design upload and placement tools</li>
+          <li style={styles.listItem}>Print-ready file generation (DTF, sublimation, etc.)</li>
+          <li style={styles.listItem}>Order management with customization data</li>
+          <li style={styles.listItem}>White-label branding options</li>
         </ul>
       </section>
 
@@ -67,9 +67,9 @@ export default function TermsOfService() {
         <h2 style={styles.heading}>5. User Content</h2>
         <p style={styles.text}>You are responsible for all content uploaded through the App. You represent that:</p>
         <ul style={styles.list}>
-          <li style={styles.listItem}>✅ You own or have rights to use all uploaded content</li>
-          <li style={styles.listItem}>✅ Content does not infringe on third-party rights</li>
-          <li style={styles.listItem}>✅ Content is not illegal, harmful, or offensive</li>
+          <li style={styles.listItem}>You own or have rights to use all uploaded content</li>
+          <li style={styles.listItem}>Content does not infringe on third-party rights</li>
+          <li style={styles.listItem}>Content is not illegal, harmful, or offensive</li>
         </ul>
         <p style={styles.text}>We reserve the right to remove content that violates these terms.</p>
       </section>
@@ -87,10 +87,10 @@ export default function TermsOfService() {
         <h2 style={styles.heading}>7. Limitation of Liability</h2>
         <p style={styles.text}>The App is provided "as is" without warranties of any kind. We are not liable for:</p>
         <ul style={styles.list}>
-          <li style={styles.listItem}>⚠️ Data loss or service interruptions</li>
-          <li style={styles.listItem}>⚠️ Inaccurate output or print quality issues</li>
-          <li style={styles.listItem}>⚠️ Third-party service failures</li>
-          <li style={styles.listItem}>⚠️ Indirect or consequential damages</li>
+          <li style={styles.listItem}>Data loss or service interruptions</li>
+          <li style={styles.listItem}>Inaccurate output or print quality issues</li>
+          <li style={styles.listItem}>Third-party service failures</li>
+          <li style={styles.listItem}>Indirect or consequential damages</li>
         </ul>
       </section>
 

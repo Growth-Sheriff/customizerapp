@@ -52,39 +52,38 @@ const tutorialSteps: TutorialStep[] = [
 ];
 
 const styles = {
-  title: { fontSize: "2rem", fontWeight: 700, color: "#1f2937", marginBottom: "0.5rem" },
+  title: { fontSize: "1.875rem", fontWeight: 700, color: "#1f2937", marginBottom: "0.5rem" },
   subtitle: { fontSize: "0.875rem", color: "#6b7280", marginBottom: "2rem" },
-  divider: { height: "1px", background: "linear-gradient(90deg, #667eea, #764ba2)", margin: "1.5rem 0", opacity: 0.3 },
+  divider: { height: "1px", background: "#e5e7eb", margin: "1.5rem 0" },
   section: { marginBottom: "2rem" },
-  heading: { fontSize: "1.25rem", fontWeight: 600, color: "#1f2937", marginBottom: "0.75rem" },
+  heading: { fontSize: "1.125rem", fontWeight: 600, color: "#1f2937", marginBottom: "0.75rem" },
   card: { 
-    background: "white", 
-    borderRadius: "12px", 
-    padding: "1.5rem",
-    boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+    background: "#f9fafb", 
+    borderRadius: "8px", 
+    padding: "1.25rem",
     border: "1px solid #e5e7eb",
     marginBottom: "1rem"
   },
   cardHeader: { display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.5rem", flexWrap: "wrap" as const },
   badge: { 
-    background: "linear-gradient(135deg, #10b981, #059669)", 
+    background: "#667eea", 
     color: "white", 
     padding: "4px 12px", 
-    borderRadius: "20px", 
+    borderRadius: "4px", 
     fontSize: "0.75rem", 
     fontWeight: 500 
   },
   durationBadge: { 
-    background: "#dbeafe", 
-    color: "#1e40af", 
+    background: "#e5e7eb", 
+    color: "#374151", 
     padding: "4px 10px", 
-    borderRadius: "12px", 
+    borderRadius: "4px", 
     fontSize: "0.7rem", 
     fontWeight: 600 
   },
   videoPlaceholder: { 
-    backgroundColor: "#1a1a1a", 
-    borderRadius: "12px", 
+    backgroundColor: "#1f2937", 
+    borderRadius: "8px", 
     aspectRatio: "16/9",
     display: "flex",
     alignItems: "center",
@@ -102,32 +101,34 @@ const styles = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    fontSize: "1.5rem"
+    fontSize: "1.5rem",
+    color: "white"
   },
   text: { color: "#4b5563", lineHeight: 1.7 },
   subdued: { color: "#9ca3af" },
   stepCard: { display: "flex", gap: "1rem", alignItems: "flex-start" },
   stepNumber: { 
-    width: "40px", 
-    height: "40px", 
+    width: "36px", 
+    height: "36px", 
     borderRadius: "50%", 
-    background: "linear-gradient(135deg, #667eea, #764ba2)",
+    background: "#667eea",
     color: "white",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     fontWeight: 700,
-    flexShrink: 0
+    flexShrink: 0,
+    fontSize: "0.9rem"
   },
   stepContent: { flex: 1 },
   stepTitle: { fontSize: "1rem", fontWeight: 600, color: "#1f2937", marginBottom: "0.25rem" },
   stepDesc: { color: "#6b7280", fontSize: "0.875rem", marginBottom: "0.5rem" },
   topicList: { display: "flex", flexWrap: "wrap" as const, gap: "0.5rem" },
   topicBadge: { 
-    background: "#f3f4f6", 
+    background: "#e5e7eb", 
     color: "#374151", 
     padding: "4px 10px", 
-    borderRadius: "20px", 
+    borderRadius: "4px", 
     fontSize: "0.75rem" 
   },
   tipList: { paddingLeft: "1.5rem", color: "#4b5563", lineHeight: 1.8, margin: 0 },
@@ -136,21 +137,22 @@ const styles = {
   ctaTitle: { fontWeight: 600, color: "#1f2937", marginBottom: "0.25rem" },
   ctaDesc: { color: "#6b7280", fontSize: "0.875rem" },
   btn: { 
-    background: "linear-gradient(135deg, #667eea, #764ba2)", 
+    background: "#667eea", 
     color: "white", 
-    padding: "12px 24px", 
+    padding: "10px 20px", 
     border: "none", 
-    borderRadius: "8px", 
+    borderRadius: "6px", 
     fontWeight: 600, 
     textDecoration: "none",
-    display: "inline-block"
+    display: "inline-block",
+    fontSize: "0.875rem"
   },
 };
 
 export default function Tutorial() {
   return (
     <div>
-      <h1 style={styles.title}>🎬 Video Tutorial</h1>
+      <h1 style={styles.title}>Video Tutorial</h1>
       <p style={styles.subtitle}>Step-by-step guide to mastering Product 3D Customizer & Upload</p>
 
       <div style={styles.divider} />
@@ -158,13 +160,13 @@ export default function Tutorial() {
       {/* Main Video */}
       <div style={styles.card}>
         <div style={styles.cardHeader}>
-          <span style={styles.badge}>✨ Full Course</span>
+          <span style={styles.badge}>Full Course</span>
           <span style={{ ...styles.subdued, fontSize: "0.875rem" }}>27 minutes total</span>
         </div>
         <h2 style={styles.heading}>Complete Setup Guide</h2>
 
         <div style={styles.videoPlaceholder}>
-          <div style={styles.playBtn}>▶️</div>
+          <div style={styles.playBtn}>▶</div>
           <span style={styles.subdued}>Video coming soon...</span>
         </div>
 
@@ -176,7 +178,7 @@ export default function Tutorial() {
 
       {/* Chapter List */}
       <section style={styles.section}>
-        <h2 style={styles.heading}>📖 Chapters</h2>
+        <h2 style={styles.heading}>Chapters</h2>
 
         {tutorialSteps.map((step) => (
           <div key={step.number} style={styles.card}>
@@ -185,7 +187,7 @@ export default function Tutorial() {
               <div style={styles.stepContent}>
                 <div style={styles.cardHeader}>
                   <span style={styles.stepTitle}>{step.title}</span>
-                  <span style={styles.durationBadge}>⏱️ {step.duration}</span>
+                  <span style={styles.durationBadge}>{step.duration}</span>
                 </div>
                 <p style={styles.stepDesc}>{step.description}</p>
                 <div style={styles.topicList}>
@@ -201,7 +203,7 @@ export default function Tutorial() {
 
       {/* Quick Tips */}
       <div style={styles.card}>
-        <h2 style={styles.heading}>💡 Quick Tips</h2>
+        <h2 style={styles.heading}>Quick Tips</h2>
         <ul style={styles.tipList}>
           <li>Start with a single product to test the workflow</li>
           <li>Use high-quality 3D model files for better previews</li>
@@ -218,7 +220,7 @@ export default function Tutorial() {
             <div style={styles.ctaTitle}>Need personalized help?</div>
             <div style={styles.ctaDesc}>Book a free 15-minute onboarding call with our team.</div>
           </div>
-          <a href="/legal/contact" style={styles.btn}>📞 Contact Support</a>
+          <a href="/legal/contact" style={styles.btn}>Contact Support</a>
         </div>
       </div>
     </div>

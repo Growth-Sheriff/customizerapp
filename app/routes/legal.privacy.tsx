@@ -1,9 +1,9 @@
 const styles = {
-  title: { fontSize: "2rem", fontWeight: 700, color: "#1f2937", marginBottom: "0.5rem" },
+  title: { fontSize: "1.875rem", fontWeight: 700, color: "#1f2937", marginBottom: "0.5rem" },
   subtitle: { fontSize: "0.875rem", color: "#6b7280", marginBottom: "2rem" },
-  divider: { height: "1px", background: "linear-gradient(90deg, #667eea, #764ba2)", margin: "1.5rem 0", opacity: 0.3 },
+  divider: { height: "1px", background: "#e5e7eb", margin: "1.5rem 0" },
   section: { marginBottom: "2rem" },
-  heading: { fontSize: "1.25rem", fontWeight: 600, color: "#1f2937", marginBottom: "0.75rem", display: "flex", alignItems: "center", gap: "0.5rem" },
+  heading: { fontSize: "1.125rem", fontWeight: 600, color: "#1f2937", marginBottom: "0.75rem" },
   text: { color: "#4b5563", lineHeight: 1.7, marginBottom: "1rem" },
   list: { paddingLeft: "1.5rem", color: "#4b5563", lineHeight: 1.8 },
   listItem: { marginBottom: "0.5rem" },
@@ -12,7 +12,7 @@ const styles = {
 export default function PrivacyPolicy() {
   return (
     <div>
-      <h1 style={styles.title}>🔒 Privacy Policy</h1>
+      <h1 style={styles.title}>Privacy Policy</h1>
       <p style={styles.subtitle}>
         Last updated: {new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
       </p>
@@ -57,10 +57,10 @@ export default function PrivacyPolicy() {
         <h2 style={styles.heading}>4. Data Storage and Security</h2>
         <p style={styles.text}>Your data is stored securely using industry-standard practices:</p>
         <ul style={styles.list}>
-          <li style={styles.listItem}>✅ All data is encrypted in transit (TLS 1.3)</li>
-          <li style={styles.listItem}>✅ Files are stored in Cloudflare R2 with encryption at rest</li>
-          <li style={styles.listItem}>✅ Database is PostgreSQL with row-level security</li>
-          <li style={styles.listItem}>✅ Regular security audits and updates</li>
+          <li style={styles.listItem}>All data is encrypted in transit (TLS 1.3)</li>
+          <li style={styles.listItem}>Files are stored in Cloudflare R2 with encryption at rest</li>
+          <li style={styles.listItem}>Database is PostgreSQL with row-level security</li>
+          <li style={styles.listItem}>Regular security audits and updates</li>
         </ul>
       </section>
 
@@ -78,9 +78,9 @@ export default function PrivacyPolicy() {
         <h2 style={styles.heading}>6. Data Retention</h2>
         <p style={styles.text}>We retain your data for as long as your account is active or as needed to provide services:</p>
         <ul style={styles.list}>
-          <li style={styles.listItem}>📁 Upload files: 90 days after order completion</li>
-          <li style={styles.listItem}>⚙️ Configuration data: Until app uninstallation</li>
-          <li style={styles.listItem}>📊 Analytics data: 12 months (anonymized)</li>
+          <li style={styles.listItem}>Upload files: 90 days after order completion</li>
+          <li style={styles.listItem}>Configuration data: Until app uninstallation</li>
+          <li style={styles.listItem}>Analytics data: 12 months (anonymized)</li>
         </ul>
       </section>
 
@@ -99,8 +99,8 @@ export default function PrivacyPolicy() {
         <h2 style={styles.heading}>8. Contact Us</h2>
         <p style={styles.text}>If you have questions about this Privacy Policy, please contact us:</p>
         <ul style={styles.list}>
-          <li style={styles.listItem}>📧 Email: <a href="mailto:privacy@customizerapp.dev" style={{ color: "#667eea" }}>privacy@customizerapp.dev</a></li>
-          <li style={styles.listItem}>🌐 Website: <a href="https://customizerapp.dev" style={{ color: "#667eea" }}>customizerapp.dev</a></li>
+          <li style={styles.listItem}>Email: <a href="mailto:privacy@customizerapp.dev" style={{ color: "#667eea" }}>privacy@customizerapp.dev</a></li>
+          <li style={styles.listItem}>Website: <a href="https://customizerapp.dev" style={{ color: "#667eea" }}>customizerapp.dev</a></li>
         </ul>
       </section>
     </div>
