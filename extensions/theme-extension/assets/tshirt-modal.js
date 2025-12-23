@@ -1279,6 +1279,77 @@ console.log('[ULTShirtModal] Script loading...');
     // TEXTURE BAKING - Core Strategy
     // ==========================================================================
     
+    // DEBUG MODE - Set to true to see UV grid overlay
+    DEBUG_UV_GRID: true,
+    
+    // Draw debug grid to visualize UV mapping
+    drawDebugGrid() {
+      if (!this.DEBUG_UV_GRID || !this.textureCtx) return;
+      
+      const ctx = this.textureCtx;
+      const size = this.baseTextureSize;
+      const gridSize = 10; // 10x10 grid
+      const cellSize = size / gridSize;
+      
+      // Draw grid lines
+      ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
+      ctx.lineWidth = 4;
+      
+      for (let i = 0; i <= gridSize; i++) {
+        // Vertical lines
+        ctx.beginPath();
+        ctx.moveTo(i * cellSize, 0);
+        ctx.lineTo(i * cellSize, size);
+        ctx.stroke();
+        
+        // Horizontal lines
+        ctx.beginPath();
+        ctx.moveTo(0, i * cellSize);
+        ctx.lineTo(size, i * cellSize);
+        ctx.stroke();
+      }
+      
+      // Draw cell labels (row-col format)
+      ctx.font = 'bold 80px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      
+      for (let row = 0; row < gridSize; row++) {
+        for (let col = 0; col < gridSize; col++) {
+          const x = col * cellSize + cellSize / 2;
+          const y = row * cellSize + cellSize / 2;
+          
+          // UV coordinates for this cell center
+          const u = (col + 0.5) / gridSize;
+          const v = (row + 0.5) / gridSize;
+          
+          // Draw background for readability
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+          ctx.fillRect(x - 60, y - 40, 120, 80);
+          
+          // Draw label: "R,C" format
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+          ctx.fillText(`${row},${col}`, x, y);
+        }
+      }
+      
+      // Draw UV coordinate reference in corners
+      ctx.font = 'bold 60px Arial';
+      ctx.fillStyle = 'blue';
+      
+      // Top-left: U=0, V=0
+      ctx.fillText('U0,V0', 100, 50);
+      // Top-right: U=1, V=0
+      ctx.fillText('U1,V0', size - 100, 50);
+      // Bottom-left: U=0, V=1
+      ctx.fillText('U0,V1', 100, size - 50);
+      // Bottom-right: U=1, V=1
+      ctx.fillText('U1,V1', size - 100, size - 50);
+      
+      console.log('[ULTShirtModal] Debug UV grid drawn - look for cell numbers on t-shirt');
+      console.log('[ULTShirtModal] Grid format: row,col where row=V*10, col=U*10');
+    },
+    
     // Load design image for texture baking
     loadDecalImage(url) {
       return new Promise((resolve, reject) => {
@@ -1302,8 +1373,8 @@ console.log('[ULTShirtModal] Script loading...');
     
     // Update the baked texture with all enabled decals
     updateBakedTexture() {
-      if (!this.textureCtx || !this.decalImage) {
-        console.log('[ULTShirtModal] No texture context or decal image');
+      if (!this.textureCtx) {
+        console.log('[ULTShirtModal] No texture context');
         return;
       }
       
@@ -1316,12 +1387,17 @@ console.log('[ULTShirtModal] Script loading...');
       ctx.fillStyle = this.step2.tshirtColor;
       ctx.fillRect(0, 0, size, size);
       
-      // Draw decals for each enabled location
-      Object.entries(this.step2.locations).forEach(([locationId, loc]) => {
-        if (loc.enabled) {
-          this.drawDecalToTexture(locationId, loc);
-        }
-      });
+      // Draw debug grid first (if enabled)
+      this.drawDebugGrid();
+      
+      // Draw decals for each enabled location (if decal image loaded)
+      if (this.decalImage) {
+        Object.entries(this.step2.locations).forEach(([locationId, loc]) => {
+          if (loc.enabled) {
+            this.drawDecalToTexture(locationId, loc);
+          }
+        });
+      }
       
       // Apply texture to 3D mesh
       this.applyBakedTextureToMesh();
