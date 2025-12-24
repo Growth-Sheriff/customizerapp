@@ -171,21 +171,15 @@ export function AppFrame({ shop, pendingUploads = 0, pendingQueue = 0 }: AppFram
         separator
         items={[
           {
-            url: "https://customizerapp.dev/legal/docs",
-            label: "Documentation",
-            icon: QuestionCircleIcon,
-            external: true,
-          },
-          {
-            url: "https://customizerapp.dev/legal/contact",
+            url: "/app/support",
             label: "Contact Us",
             icon: ChatIcon,
-            external: true,
+            selected: isSelected("/app/support"),
           },
         ]}
       />
 
-      {/* Footer */}
+      {/* Footer with Legal Links */}
       <div style={{ 
         padding: "16px 20px", 
         borderTop: "1px solid #e1e3e5",
@@ -197,11 +191,19 @@ export function AppFrame({ shop, pendingUploads = 0, pendingQueue = 0 }: AppFram
         background: "#f6f6f7",
       }}>
         <Text variant="bodySm" as="p" tone="subdued">
-          PRO Plan
+          PRO Plan • v1.0.0
         </Text>
-        <Text variant="bodySm" as="p" tone="subdued">
-          v1.0.0
-        </Text>
+        <div style={{ marginTop: "8px", display: "flex", flexWrap: "wrap", gap: "8px" }}>
+          <a href="/app/legal/privacy" style={{ fontSize: "11px", color: "#6d7175", textDecoration: "none" }}>Privacy</a>
+          <span style={{ color: "#c9cccf" }}>•</span>
+          <a href="/app/legal/terms" style={{ fontSize: "11px", color: "#6d7175", textDecoration: "none" }}>Terms</a>
+          <span style={{ color: "#c9cccf" }}>•</span>
+          <a href="/app/legal/gdpr" style={{ fontSize: "11px", color: "#6d7175", textDecoration: "none" }}>GDPR</a>
+          <span style={{ color: "#c9cccf" }}>•</span>
+          <a href="/app/legal/docs" style={{ fontSize: "11px", color: "#6d7175", textDecoration: "none" }}>Docs</a>
+          <span style={{ color: "#c9cccf" }}>•</span>
+          <a href="/app/legal/changelog" style={{ fontSize: "11px", color: "#6d7175", textDecoration: "none" }}>Changelog</a>
+        </div>
       </div>
     </Navigation>
   );
