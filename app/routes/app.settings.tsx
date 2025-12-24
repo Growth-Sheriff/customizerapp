@@ -9,9 +9,31 @@ import { useState, useCallback } from "react";
 import { authenticate } from "~/shopify.server";
 import prisma from "~/lib/prisma.server";
 
+// GraphQL query to get shop info
+const SHOP_INFO_QUERY = `
+  query {
+    shop {
+      name
+      email
+    }
+  }
+`;
+
 export async function loader({ request }: LoaderFunctionArgs) {
-  const { session } = await authenticate.admin(request);
+  const { session, admin } = await authenticate.admin(request);
   const shopDomain = session.shop;
+
+  // Get shop info from Shopify for defaults
+  let shopifyShopName = "";
+  let shopifyEmail = "";
+  try {
+    const response = await admin.graphql(SHOP_INFO_QUERY);
+    const data = await response.json();
+    shopifyShopName = data?.data?.shop?.name || "";
+    shopifyEmail = data?.data?.shop?.email || "";
+  } catch (e) {
+    console.warn("[Settings] Could not fetch shop info from Shopify");
+  }
 
   let shop = await prisma.shop.findUnique({
     where: { shopDomain },
@@ -49,8 +71,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
       isConfigured: shop.storageProvider === "shopify" || !!(storageConfig.accessKeyId && storageConfig.bucket),
     },
     settings: {
-      shopName: settings.shopName || "",
-      notificationEmail: settings.notificationEmail || "",
+      // Use saved value, or fallback to Shopify data
+      shopName: (settings.shopName as string) || shopifyShopName,
+      notificationEmail: (settings.notificationEmail as string) || shopifyEmail,
       autoApprove: settings.autoApprove || false,
       watermarkEnabled: false, // No watermark for any plan
       redisEnabled: settings.redisEnabled || false,
