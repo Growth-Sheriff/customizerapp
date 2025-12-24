@@ -54,8 +54,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
   // Get basic metrics
   const [
     totalUploads,
-    approvedUploads,
-    rejectedUploads,
+    completedUploads,
+    blockedUploads,
     warningUploads,
     uploadsByMode,
     uploadsByStatus,
@@ -66,13 +66,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
     prisma.upload.count({
       where: { shopId: shop.id, createdAt: { gte: startDate } },
     }),
-    // Approved uploads
+    // Completed uploads (uploaded status = successfully processed)
     prisma.upload.count({
-      where: { shopId: shop.id, createdAt: { gte: startDate }, status: "approved" },
+      where: { shopId: shop.id, createdAt: { gte: startDate }, status: "uploaded" },
     }),
-    // Rejected uploads
+    // Blocked uploads (rejected/failed)
     prisma.upload.count({
-      where: { shopId: shop.id, createdAt: { gte: startDate }, status: "rejected" },
+      where: { shopId: shop.id, createdAt: { gte: startDate }, status: "blocked" },
     }),
     // Uploads with warnings
     prisma.uploadItem.count({
@@ -128,29 +128,29 @@ export async function loader({ request }: LoaderFunctionArgs) {
     _count: true,
   });
 
-  // Calculate success rate
+  // Calculate success rate (uploaded = completed successfully)
   const successRate = totalUploads > 0
-    ? Math.round((approvedUploads / totalUploads) * 100)
+    ? Math.round((completedUploads / totalUploads) * 100)
     : 0;
 
   const warningRate = totalUploads > 0
     ? Math.round((warningUploads / totalUploads) * 100)
     : 0;
 
-  const rejectionRate = totalUploads > 0
-    ? Math.round((rejectedUploads / totalUploads) * 100)
+  const blockedRate = totalUploads > 0
+    ? Math.round((blockedUploads / totalUploads) * 100)
     : 0;
 
   return json({
     period,
     metrics: {
       totalUploads,
-      approvedUploads,
-      rejectedUploads,
+      completedUploads,
+      blockedUploads,
       warningUploads,
       successRate,
       warningRate,
-      rejectionRate,
+      blockedRate,
     },
     modeBreakdown: uploadsByMode.map((m: { mode: string; _count: number }) => ({
       mode: m.mode,
@@ -243,18 +243,18 @@ export default function AnalyticsPage() {
   }, []);
 
   const modeColors: Record<string, string> = {
-    "3d_designer": "#5C6AC4",
-    "classic": "#47C1BF",
-    "quick": "#9C6ADE",
+    "dtf": "#5C6AC4",
+    "3d_designer": "#47C1BF",
+    "classic": "#9C6ADE",
+    "quick": "#F49342",
   };
 
   const statusColors: Record<string, string> = {
-    "approved": "#008060",
-    "rejected": "#D72C0D",
+    "uploaded": "#008060",
+    "blocked": "#D72C0D",
     "needs_review": "#B98900",
-    "printing": "#00A0AC",
-    "printed": "#108043",
-    "shipped": "#00A0AC",
+    "draft": "#637381",
+    "processing": "#00A0AC",
   };
 
   const locationColors: Record<string, string> = {
@@ -268,10 +268,11 @@ export default function AnalyticsPage() {
     u.id.slice(0, 8) + "...",
     <Badge key={u.id}>{u.mode}</Badge>,
     <Badge key={`status-${u.id}`} tone={
-      u.status === "approved" ? "success" :
-      u.status === "rejected" ? "critical" : "info"
+      u.status === "uploaded" ? "success" :
+      u.status === "blocked" ? "critical" :
+      u.status === "needs_review" ? "warning" : "info"
     }>
-      {u.status}
+      {u.status.replace("_", " ")}
     </Badge>,
     u.locations.join(", "),
     new Date(u.createdAt).toLocaleDateString(),
@@ -319,7 +320,7 @@ export default function AnalyticsPage() {
             <MetricCard
               title="Success Rate"
               value={`${metrics.successRate}%`}
-              subtitle={`${metrics.approvedUploads} approved`}
+              subtitle={`${metrics.completedUploads} completed`}
               tone="success"
             />
           </Layout.Section>
