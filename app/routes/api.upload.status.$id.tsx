@@ -84,21 +84,22 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const host = process.env.HOST || "https://customizerapp.dev";
   const firstItem = upload.items[0];
   
-  // Generate signed URLs with tokens
+  // Generate signed URLs with tokens (15 minute expiry)
+  const expiresAt = Date.now() + 15 * 60 * 1000; // 15 minutes
   let downloadUrl = null;
   let thumbnailUrl = null;
   
   if (firstItem?.storageKey) {
-    const token = generateLocalFileToken(firstItem.storageKey);
+    const token = generateLocalFileToken(firstItem.storageKey, expiresAt);
     downloadUrl = `${host}/api/files/${encodeURIComponent(firstItem.storageKey)}?token=${encodeURIComponent(token)}`;
   }
   
   if (firstItem?.thumbnailKey) {
-    const token = generateLocalFileToken(firstItem.thumbnailKey);
+    const token = generateLocalFileToken(firstItem.thumbnailKey, expiresAt);
     thumbnailUrl = `${host}/api/files/${encodeURIComponent(firstItem.thumbnailKey)}?token=${encodeURIComponent(token)}`;
   } else if (firstItem?.storageKey) {
     // Fallback to original file if no thumbnail
-    const token = generateLocalFileToken(firstItem.storageKey);
+    const token = generateLocalFileToken(firstItem.storageKey, expiresAt);
     thumbnailUrl = `${host}/api/files/${encodeURIComponent(firstItem.storageKey)}?token=${encodeURIComponent(token)}`;
   }
 
