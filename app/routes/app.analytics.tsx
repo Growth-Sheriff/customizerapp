@@ -264,15 +264,24 @@ export default function AnalyticsPage() {
     "right_sleeve": "#F49342",
   };
 
+  // Friendly status labels
+  const statusLabels: Record<string, string> = {
+    uploaded: "Received",
+    blocked: "On Hold",
+    needs_review: "Pending",
+    draft: "Draft",
+    processing: "Processing",
+  };
+
   const recentRows = recentUploads.map((u: any) => [
     u.id.slice(0, 8) + "...",
     <Badge key={u.id}>{u.mode}</Badge>,
     <Badge key={`status-${u.id}`} tone={
       u.status === "uploaded" ? "success" :
-      u.status === "blocked" ? "critical" :
-      u.status === "needs_review" ? "warning" : "info"
+      u.status === "blocked" ? "attention" :
+      u.status === "needs_review" ? "attention" : "info"
     }>
-      {u.status.replace("_", " ")}
+      {statusLabels[u.status] || u.status.replace("_", " ")}
     </Badge>,
     u.locations.join(", "),
     new Date(u.createdAt).toLocaleDateString(),

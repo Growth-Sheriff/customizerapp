@@ -163,14 +163,31 @@ export async function action({ request }: ActionFunctionArgs) {
   return json({ error: "Invalid intent" }, { status: 400 });
 }
 
+// Friendly status labels
+const statusLabels: Record<string, string> = {
+  ok: "Ready",
+  warning: "Review",
+  error: "Needs Fix",
+  pending: "Processing",
+  draft: "Draft",
+  uploaded: "Received",
+  processing: "Processing",
+  needs_review: "Pending",
+  approved: "Approved",
+  rejected: "Rejected",
+  blocked: "On Hold",
+  printed: "Completed",
+};
+
 // Status badge helper
 function StatusBadge({ status }: { status: string }) {
   const toneMap: Record<string, "success" | "warning" | "critical" | "info" | "attention"> = {
-    ok: "success", warning: "warning", error: "critical", pending: "info",
-    draft: "info", uploaded: "info", processing: "attention",
-    needs_review: "attention", approved: "success", rejected: "critical", printed: "success",
+    ok: "success", warning: "attention", error: "warning", pending: "info",
+    draft: "info", uploaded: "success", processing: "info",
+    needs_review: "attention", approved: "success", rejected: "critical", 
+    blocked: "attention", printed: "success",
   };
-  return <Badge tone={toneMap[status] || "info"}>{status}</Badge>;
+  return <Badge tone={toneMap[status] || "info"}>{statusLabels[status] || status}</Badge>;
 }
 
 // Onboarding Checklist Component

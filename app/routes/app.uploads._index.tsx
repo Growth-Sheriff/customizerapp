@@ -92,21 +92,37 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 function StatusBadge({ status }: { status: string }) {
+  // Friendly status labels
+  const labelMap: Record<string, string> = {
+    ok: "Ready",
+    warning: "Review",
+    error: "Needs Fix",
+    pending: "Processing",
+    draft: "Draft",
+    uploaded: "Received",
+    processing: "Processing",
+    needs_review: "Pending",
+    approved: "Approved",
+    rejected: "Rejected",
+    blocked: "On Hold",
+    printed: "Completed",
+  };
+
   const toneMap: Record<string, "success" | "warning" | "critical" | "info" | "attention"> = {
     ok: "success",
-    warning: "warning",
-    error: "critical",
+    warning: "attention",
+    error: "warning",
     pending: "info",
     draft: "info",
-    uploaded: "info",
-    processing: "attention",
+    uploaded: "success",
+    processing: "info",
     needs_review: "attention",
     approved: "success",
     rejected: "critical",
-    blocked: "critical",
+    blocked: "attention",
     printed: "success",
   };
-  return <Badge tone={toneMap[status] || "info"}>{status}</Badge>;
+  return <Badge tone={toneMap[status] || "info"}>{labelMap[status] || status}</Badge>;
 }
 
 export default function UploadsPage() {
