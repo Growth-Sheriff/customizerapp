@@ -103,12 +103,15 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   const planName = planId.toUpperCase();
+  
+  // Use test mode only in development
+  const isTestMode = process.env.NODE_ENV !== "production";
 
   try {
     // Check if already subscribed
     const hasSubscription = await billing.check({
       plans: [planName],
-      isTest: true, // Set to false in production
+      isTest: isTestMode,
     });
 
     if (hasSubscription) {
@@ -122,7 +125,7 @@ export async function action({ request }: ActionFunctionArgs) {
     // Request subscription
     return await billing.request({
       plan: planName,
-      isTest: true, // Set to false in production
+      isTest: isTestMode,
       returnUrl: `https://customizerapp.dev/app?shop=${shopDomain}&billing=success`,
     });
   } catch (error: any) {

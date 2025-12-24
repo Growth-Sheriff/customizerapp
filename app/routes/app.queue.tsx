@@ -252,12 +252,29 @@ export async function action({ request }: ActionFunctionArgs) {
       },
     });
 
-    // TODO: Enqueue export worker job
-    // await exportQueue.add('export', { jobId: exportJob.id, shopId: shop.id });
+    // Enqueue export worker job
+    try {
+      const { Queue } = await import("bullmq");
+      const Redis = (await import("ioredis")).default;
+      const connection = new Redis(process.env.REDIS_URL || "redis://localhost:6379", {
+        maxRetriesPerRequest: null,
+      });
+      const queue = new Queue("export", { connection });
+      await queue.add("process-export", {
+        exportId: exportJob.id,
+        shopId: shop.id,
+        uploadIds,
+      });
+      await queue.close();
+      console.log(`[Queue] Export job ${exportJob.id} queued successfully`);
+    } catch (error) {
+      console.error("[Queue] Failed to enqueue export job:", error);
+      // Don't fail - export will be picked up by cron
+    }
 
     return json({
       success: true,
-      message: "Export job created. You will be notified when ready.",
+      message: "Export job created. Check Exports page for download.",
       exportJobId: exportJob.id,
     });
   }
@@ -395,7 +412,15 @@ export default function ProductionQueuePage() {
       title="Production Queue"
       backAction={{ content: "Dashboard", url: "/app" }}
       secondaryActions={[
-        { content: "Export Selected", disabled: selectedUploads.length === 0, onAction: () => {} },
+        { 
+          content: `Export Selected (${selectedUploads.length})`, 
+          disabled: selectedUploads.length === 0, 
+          onAction: () => {
+            const form = document.getElementById("export-form") as HTMLFormElement;
+            if (form) form.submit();
+          }
+        },
+        { content: "View Exports", url: "/app/exports" },
         { content: "Analytics", url: "/app/analytics" },
       ]}
     >
@@ -574,6 +599,12 @@ export default function ProductionQueuePage() {
             </Card>
           </Layout.Section>
         </Layout>
+
+        {/* Hidden Export Form */}
+        <Form method="post" id="export-form" style={{ display: 'none' }}>
+          <input type="hidden" name="_action" value="create_export" />
+          <input type="hidden" name="uploadIds" value={JSON.stringify(selectedUploads)} />
+        </Form>
 
         {/* Status Update Modal */}
         <Modal

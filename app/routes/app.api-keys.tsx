@@ -83,9 +83,9 @@ export async function action({ request }: ActionFunctionArgs) {
     return json({ error: "Shop not found" }, { status: 404 });
   }
 
-  // Check enterprise plan for API access
-  if (shop.plan !== "enterprise") {
-    return json({ error: "Public API requires Enterprise plan" }, { status: 403 });
+  // Check pro plan for API access
+  if (shop.plan !== "pro" && shop.plan !== "enterprise") {
+    return json({ error: "Public API requires Pro plan" }, { status: 403 });
   }
 
   const formData = await request.formData();
@@ -181,7 +181,7 @@ export default function ApiKeysPage() {
   const [rateLimit, setRateLimit] = useState("100");
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
 
-  const canUseApi = plan === "enterprise";
+  const canUseApi = plan === "pro" || plan === "enterprise";
 
   const handlePermissionChange = useCallback((permission: string, checked: boolean) => {
     setSelectedPermissions(prev =>
@@ -266,8 +266,8 @@ export default function ApiKeysPage() {
           {!canUseApi && (
             <Layout.Section>
               <Banner tone="warning">
-                <p>Public API requires <strong>Enterprise</strong> plan.</p>
-                <Button url="/app/settings">Upgrade Plan</Button>
+                <p>Public API requires <strong>Pro</strong> plan.</p>
+                <Button url="/app/billing">Upgrade Plan</Button>
               </Banner>
             </Layout.Section>
           )}

@@ -337,8 +337,8 @@ export default function TeamPage() {
           {!canManageTeam && (
             <Layout.Section>
               <Banner tone="warning">
-                <p>Team management requires <strong>Pro</strong> or <strong>Enterprise</strong> plan.</p>
-                <Button url="/app/settings">Upgrade Plan</Button>
+                <p>Team management requires <strong>Pro</strong> plan.</p>
+                <Button url="/app/billing">Upgrade Plan</Button>
               </Banner>
             </Layout.Section>
           )}

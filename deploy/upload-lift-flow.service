@@ -1,0 +1,18 @@
+[Unit]
+Description=Upload Lift Flow Trigger Worker
+After=network.target postgresql.service redis.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/var/www/upload-lift
+Environment=NODE_ENV=production
+ExecStart=/root/.local/share/pnpm/pnpm tsx workers/flow.worker.ts
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=upload-lift-flow
+
+[Install]
+WantedBy=multi-user.target

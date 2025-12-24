@@ -1,6 +1,7 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import crypto from "crypto";
+import prisma from "~/lib/prisma.server";
 
 // Verify Shopify webhook signature
 function verifyWebhookSignature(body: string, hmac: string, secret: string): boolean {
@@ -19,9 +20,9 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   const hmac = request.headers.get("X-Shopify-Hmac-Sha256");
-  const shop = request.headers.get("X-Shopify-Shop-Domain");
+  const shopDomain = request.headers.get("X-Shopify-Shop-Domain");
 
-  if (!hmac || !shop) {
+  if (!hmac || !shopDomain) {
     return json({ error: "Missing headers" }, { status: 400 });
   }
 
@@ -34,22 +35,83 @@ export async function action({ request }: ActionFunctionArgs) {
 
   try {
     const order = JSON.parse(body);
-    console.log(`[Webhook] Order created: ${order.id} for shop: ${shop}`);
+    console.log(`[Webhook] Order created: ${order.id} for shop: ${shopDomain}`);
+
+    // Get shop from database
+    const shop = await prisma.shop.findUnique({
+      where: { shopDomain },
+    });
+
+    if (!shop) {
+      console.log(`[Webhook] Shop not found: ${shopDomain}`);
+      return json({ success: true }); // Still return success to Shopify
+    }
 
     // Process line items looking for upload_lift properties
+    const processedUploads: string[] = [];
+
     for (const lineItem of order.line_items || []) {
       const uploadLiftId = lineItem.properties?.find(
         (p: { name: string }) => p.name === "_upload_lift_id"
       )?.value;
 
-      if (uploadLiftId) {
+      if (uploadLiftId && !processedUploads.includes(uploadLiftId)) {
         console.log(`[Webhook] Found upload ${uploadLiftId} in order ${order.id}`);
-        // TODO: Create order link in database
-        // TODO: Update upload status to "ordered"
+
+        // Verify upload exists and belongs to this shop
+        const upload = await prisma.upload.findFirst({
+          where: {
+            id: uploadLiftId,
+            shopId: shop.id,
+          },
+        });
+
+        if (upload) {
+          // Create order link
+          await prisma.orderLink.create({
+            data: {
+              shopId: shop.id,
+              orderId: String(order.id),
+              uploadId: uploadLiftId,
+              lineItemId: String(lineItem.id),
+            },
+          });
+
+          // Update upload with order info and status
+          await prisma.upload.update({
+            where: { id: uploadLiftId },
+            data: {
+              orderId: String(order.id),
+              status: upload.status === "blocked" ? "blocked" : "needs_review",
+            },
+          });
+
+          // Audit log
+          await prisma.auditLog.create({
+            data: {
+              shopId: shop.id,
+              action: "order_linked",
+              resourceType: "upload",
+              resourceId: uploadLiftId,
+              metadata: {
+                orderId: order.id,
+                orderName: order.name,
+                lineItemId: lineItem.id,
+                customerEmail: order.email,
+              },
+            },
+          });
+
+          processedUploads.push(uploadLiftId);
+          console.log(`[Webhook] Linked upload ${uploadLiftId} to order ${order.id}`);
+        } else {
+          console.warn(`[Webhook] Upload ${uploadLiftId} not found for shop ${shopDomain}`);
+        }
       }
     }
 
-    return json({ success: true });
+    console.log(`[Webhook] Processed ${processedUploads.length} uploads for order ${order.id}`);
+    return json({ success: true, linkedUploads: processedUploads.length });
   } catch (error) {
     console.error("[Webhook] Error processing order:", error);
     return json({ error: "Processing failed" }, { status: 500 });

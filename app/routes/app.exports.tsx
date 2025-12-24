@@ -67,7 +67,7 @@ export async function action({ request }: ActionFunctionArgs) {
   if (action === "retry") {
     const jobId = formData.get("jobId") as string;
 
-    await prisma.exportJob.update({
+    const exportJob = await prisma.exportJob.update({
       where: { id: jobId },
       data: {
         status: "pending",
@@ -76,8 +76,24 @@ export async function action({ request }: ActionFunctionArgs) {
       },
     });
 
-    // TODO: Re-enqueue export worker job
-    // await exportQueue.add('export', { jobId, shopId: shop.id });
+    // Re-enqueue export worker job
+    try {
+      const { Queue } = await import("bullmq");
+      const Redis = (await import("ioredis")).default;
+      const connection = new Redis(process.env.REDIS_URL || "redis://localhost:6379", {
+        maxRetriesPerRequest: null,
+      });
+      const queue = new Queue("export", { connection });
+      await queue.add("process-export", {
+        exportId: jobId,
+        shopId: shop.id,
+        uploadIds: exportJob.uploadIds,
+      });
+      await queue.close();
+      console.log(`[Queue] Export job ${jobId} re-queued successfully`);
+    } catch (error) {
+      console.error("[Queue] Failed to re-enqueue export job:", error);
+    }
 
     return json({ success: true, message: "Export job requeued" });
   }
