@@ -145,8 +145,9 @@
         filestatus: $('filestatus'),
         removeBtn: $('remove'),
         
-        // Size
-        sizeGrid: $('size-grid'),
+        // Size (dropdown version)
+        sizeSelect: $('size-select'),
+        sizeGrid: $('size-grid'), // Legacy fallback
         sizeHint: $('size-hint'),
         selectedSize: $('selected-size'),
         
@@ -224,13 +225,24 @@
           elements.tshirtBtn.style.display = 'flex';
         }
 
-        // Initialize selected variant from first available
-        const firstVariant = elements.sizeGrid.querySelector('input[type="radio"]:not(:disabled):checked');
-        if (firstVariant) {
-          state.form.selectedVariantId = firstVariant.value;
-          state.form.selectedVariantTitle = firstVariant.dataset.title;
-          state.form.selectedVariantPrice = parseInt(firstVariant.dataset.priceRaw, 10);
-          this.updatePriceDisplay(productId);
+        // Initialize selected variant from dropdown (preferred) or radio grid (legacy)
+        if (elements.sizeSelect) {
+          const selectedOption = elements.sizeSelect.options[elements.sizeSelect.selectedIndex];
+          if (selectedOption && !selectedOption.disabled) {
+            state.form.selectedVariantId = selectedOption.value;
+            state.form.selectedVariantTitle = selectedOption.dataset.title;
+            state.form.selectedVariantPrice = parseInt(selectedOption.dataset.priceRaw, 10);
+            this.updatePriceDisplay(productId);
+          }
+        } else if (elements.sizeGrid) {
+          // Legacy fallback for radio grid
+          const firstVariant = elements.sizeGrid.querySelector('input[type="radio"]:not(:disabled):checked');
+          if (firstVariant) {
+            state.form.selectedVariantId = firstVariant.value;
+            state.form.selectedVariantTitle = firstVariant.dataset.title;
+            state.form.selectedVariantPrice = parseInt(firstVariant.dataset.priceRaw, 10);
+            this.updatePriceDisplay(productId);
+          }
         }
 
         // Bind events
@@ -408,26 +420,50 @@
         this.clearUpload(productId);
       });
 
-      // Size selection
-      elements.sizeGrid.querySelectorAll('input[type="radio"]').forEach(radio => {
-        radio.addEventListener('change', () => {
-          instance.state.form.selectedVariantId = radio.value;
-          instance.state.form.selectedVariantTitle = radio.dataset.title;
-          instance.state.form.selectedVariantPrice = parseInt(radio.dataset.priceRaw, 10);
-          this.updatePriceDisplay(productId);
-          this.validateForm(productId);
-          
-          // FAZ 8: Track size selection
-          if (window.ULAnalytics) {
-            window.ULAnalytics.trackDTFSizeSelected({
-              size: radio.dataset.title,
-              variantId: radio.value,
-              price: instance.state.form.selectedVariantPrice / 100,
-              productId
-            });
+      // Size selection - Dropdown (v4.2.0) or legacy grid fallback
+      if (elements.sizeSelect) {
+        elements.sizeSelect.addEventListener('change', (e) => {
+          const option = e.target.options[e.target.selectedIndex];
+          if (option && option.value) {
+            instance.state.form.selectedVariantId = option.value;
+            instance.state.form.selectedVariantTitle = option.dataset.title || option.textContent;
+            instance.state.form.selectedVariantPrice = parseInt(option.dataset.priceRaw, 10) || 0;
+            this.updatePriceDisplay(productId);
+            this.validateForm(productId);
+            
+            // FAZ 8: Track size selection
+            if (window.ULAnalytics) {
+              window.ULAnalytics.trackDTFSizeSelected({
+                size: option.dataset.title || option.textContent,
+                variantId: option.value,
+                price: instance.state.form.selectedVariantPrice / 100,
+                productId
+              });
+            }
           }
         });
-      });
+      } else if (elements.sizeGrid) {
+        // Legacy radio grid fallback
+        elements.sizeGrid.querySelectorAll('input[type="radio"]').forEach(radio => {
+          radio.addEventListener('change', () => {
+            instance.state.form.selectedVariantId = radio.value;
+            instance.state.form.selectedVariantTitle = radio.dataset.title;
+            instance.state.form.selectedVariantPrice = parseInt(radio.dataset.priceRaw, 10);
+            this.updatePriceDisplay(productId);
+            this.validateForm(productId);
+            
+            // FAZ 8: Track size selection
+            if (window.ULAnalytics) {
+              window.ULAnalytics.trackDTFSizeSelected({
+                size: radio.dataset.title,
+                variantId: radio.value,
+                price: instance.state.form.selectedVariantPrice / 100,
+                productId
+              });
+            }
+          });
+        });
+      }
 
       // Quantity controls
       elements.qtyMinus.addEventListener('click', () => {

@@ -289,7 +289,62 @@
   color: var(--ul-error);
 }
 
-/* ===== SIZE VARIANTS ===== */
+/* ===== SIZE DROPDOWN ===== */
+.ul-size-dropdown-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.ul-size-dropdown {
+  width: 100%;
+  padding: 14px 48px 14px 16px;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ul-text);
+  background: var(--ul-bg);
+  border: 2px solid var(--ul-border);
+  border-radius: var(--ul-radius-sm);
+  cursor: pointer;
+  transition: var(--ul-transition);
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+}
+
+.ul-size-dropdown:hover {
+  border-color: var(--ul-primary);
+}
+
+.ul-size-dropdown:focus {
+  outline: none;
+  border-color: var(--ul-primary);
+  box-shadow: 0 0 0 3px var(--ul-primary-light);
+}
+
+.ul-size-dropdown option {
+  padding: 12px;
+  font-size: 14px;
+}
+
+.ul-size-dropdown option:disabled {
+  color: var(--ul-text-light);
+}
+
+.ul-dropdown-arrow {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--ul-text-muted);
+  pointer-events: none;
+  transition: var(--ul-transition);
+}
+
+.ul-size-dropdown:focus + .ul-dropdown-arrow {
+  color: var(--ul-primary);
+}
+
+/* Legacy grid styles (kept for backward compatibility) */
 .ul-size-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));

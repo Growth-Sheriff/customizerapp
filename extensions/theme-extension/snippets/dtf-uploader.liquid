@@ -1,17 +1,19 @@
 {% comment %}
-  DTF Uploader Snippet v4.1.0
+  DTF Uploader Snippet v4.2.0
   ============================
   FAZ 1: Core DTF Upload Widget
   FAZ 6: Mobile Experience
   
   Features:
   - Drag & Drop file upload
-  - Shopify Variants for size selection (NOT manual input)
+  - Shopify Variants as DROPDOWN (not grid)
   - Quantity with +/- buttons
   - Extra questions from merchant config
   - T-Shirt addon button (if tshirtEnabled)
   - Add to Cart with line item properties
   - Price display
+  - HIDES default Shopify Add to Cart, Checkout, Shop Pay buttons
+  - HIDES default Shopify variant selectors
   
   Prepared for:
   - FAZ 2: T-Shirt Modal integration (openTShirtModal event)
@@ -28,6 +30,70 @@
 %}
 
 {{ 'dtf-uploader.css' | asset_url | stylesheet_tag }}
+
+{% comment %} Hide default Shopify product form elements {% endcomment %}
+<style>
+  /* Hide default Shopify Add to Cart and Checkout buttons */
+  .product-form__submit,
+  .product-form__buttons,
+  .shopify-payment-button,
+  .shopify-payment-button__button,
+  .shopify-payment-button__more-options,
+  [data-shopify="payment-button"],
+  .product-form button[type="submit"],
+  .product__submit,
+  .product-add-to-cart,
+  .add-to-cart,
+  #AddToCart,
+  #add-to-cart,
+  .btn--add-to-cart,
+  .product-form__cart-submit,
+  .product-single__add-to-cart,
+  form[action="/cart/add"] > button[type="submit"],
+  form[action="/cart/add"] > input[type="submit"],
+  /* Dynamic Checkout buttons */
+  .dynamic-checkout,
+  .dynamic-checkout__content,
+  .dynamic-checkout__buttons,
+  /* Shop Pay */
+  .shopify-cleanslate,
+  shopify-accelerated-checkout,
+  shopify-accelerated-checkout-cart,
+  /* Apple Pay, Google Pay etc */
+  .additional-checkout-buttons,
+  /* Buy Now buttons */
+  .product-form__buy-now,
+  .buy-now-button,
+  /* Hide default variant selectors */
+  .product-form__input,
+  .product-form__option,
+  .variant-wrapper,
+  .variant-input-wrap,
+  .swatch,
+  .swatches,
+  .product-single__variants,
+  .product-variants,
+  .product__variants,
+  .selector-wrapper,
+  .single-option-selector,
+  [data-variant-option],
+  .product-form__controls,
+  .product-form__controls-group,
+  /* Quantity selectors (we have our own) */
+  .product-form__quantity,
+  .quantity-selector,
+  .quantity-wrapper,
+  .quantity__wrapper {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    height: 0 !important;
+    overflow: hidden !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+</style>
 
 <div 
   id="ul-dtf-{{ product.id }}"
@@ -102,7 +168,7 @@
       </div>
     </div>
 
-    <!-- STEP 2: Select Size (Shopify Variants) -->
+    <!-- STEP 2: Select Size (Dropdown) -->
     <div class="ul-section" id="ul-size-section-{{ product.id }}">
       <div class="ul-section-header">
         <span class="ul-step-badge" id="ul-step-2-{{ product.id }}">2</span>
@@ -110,28 +176,24 @@
         <span class="ul-section-subtitle" id="ul-size-hint-{{ product.id }}"></span>
       </div>
 
-      <div class="ul-size-grid" id="ul-size-grid-{{ product.id }}">
-        {% for variant in product.variants %}
-          <label class="ul-size-option">
-            <input 
-              type="radio" 
-              name="ul-variant-{{ product.id }}" 
+      <div class="ul-size-dropdown-wrapper">
+        <select class="ul-size-dropdown" id="ul-size-select-{{ product.id }}" name="ul-variant-{{ product.id }}">
+          {% for variant in product.variants %}
+            <option 
               value="{{ variant.id }}"
               data-price="{{ variant.price | money_without_trailing_zeros }}"
               data-price-raw="{{ variant.price }}"
               data-title="{{ variant.title | escape }}"
               {% if variant.available == false %}disabled{% endif %}
-              {% if forloop.first and variant.available %}checked{% endif %}
+              {% if forloop.first and variant.available %}selected{% endif %}
             >
-            <div class="ul-size-card">
-              <span class="ul-size-name">{{ variant.title }}</span>
-              <span class="ul-size-price">{{ variant.price | money_without_trailing_zeros }}</span>
-            </div>
-            {% unless variant.available %}
-              <span class="ul-size-badge">Sold Out</span>
-            {% endunless %}
-          </label>
-        {% endfor %}
+              {{ variant.title }} - {{ variant.price | money_without_trailing_zeros }}{% unless variant.available %} (Sold Out){% endunless %}
+            </option>
+          {% endfor %}
+        </select>
+        <svg class="ul-dropdown-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+          <path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
       </div>
     </div>
 
