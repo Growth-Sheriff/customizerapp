@@ -107,6 +107,9 @@ console.log('[ULTShirtModal] Script loading...');
     baseTextureSize: 2048, // 2K texture resolution
     decalImage: null, // Loaded design image
     
+    // Shop domain for API calls (set from event or Shopify global)
+    shopDomain: null,
+    
     // Product data
     product: {
       id: null,
@@ -119,7 +122,8 @@ console.log('[ULTShirtModal] Script loading...');
     config: {
       tshirtProductHandle: null,
       extraQuestions: [],
-      sizePricing: { 'XS': 0, 'S': 0, 'M': 0, 'L': 2, 'XL': 2, '2XL': 5, '3XL': 5 }
+      sizePricing: { 'XS': 0, 'S': 0, 'M': 0, 'L': 2, 'XL': 2, '2XL': 5, '3XL': 5 },
+      allowedPositions: ['front', 'back', 'left_sleeve', 'right_sleeve'] // Default all
     },
     
     // DOM elements cache
@@ -350,9 +354,14 @@ console.log('[ULTShirtModal] Script loading...');
     // MODAL OPEN / CLOSE
     // ==========================================================================
     open(detail = {}) {
-      const { uploadData, productId, config } = detail;
+      const { uploadData, productId, config, shopDomain } = detail;
       
       console.log('[ULTShirtModal] Opening with:', detail);
+      
+      // Store shopDomain for API calls
+      if (shopDomain) {
+        this.shopDomain = shopDomain;
+      }
       
       // Store inherited design if provided
       if (uploadData) {
@@ -807,42 +816,74 @@ console.log('[ULTShirtModal] Script loading...');
       // API base from customizerapp.dev
       const apiBase = 'https://customizerapp.dev';
       
-      // Get signed URL
+      // Get shopDomain from stored value, Shopify global, or DOM fallback
+      const shopDomain = this.shopDomain ||
+                         window.Shopify?.shop || 
+                         document.querySelector('[data-shop-domain]')?.dataset.shopDomain ||
+                         'unknown';
+      
+      console.log('[ULTShirtModal] performUpload - shopDomain:', shopDomain);
+      
+      // Step 1: Get signed URL from API (matching dtf-uploader format)
       const intentRes = await fetch(`${apiBase}/api/upload/intent`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          filename: file.name,
-          contentType: file.type,
-          size: file.size
+          shopDomain,
+          productId: this.product.id || null,
+          mode: '3d_designer',
+          fileName: file.name,
+          contentType: file.type || 'application/octet-stream',
+          fileSize: file.size
         })
       });
       
-      if (!intentRes.ok) throw new Error('Failed to get upload URL');
-      const { uploadUrl, uploadId, publicUrl } = await intentRes.json();
+      if (!intentRes.ok) {
+        const err = await intentRes.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to get upload URL');
+      }
       
-      // Upload to storage
+      const intentData = await intentRes.json();
+      const { uploadId, itemId, uploadUrl } = intentData;
+      
+      console.log('[ULTShirtModal] Intent response:', { uploadId, itemId });
+      
+      // Step 2: Upload file directly to storage
       const uploadRes = await fetch(uploadUrl, {
         method: 'PUT',
-        headers: { 'Content-Type': file.type },
+        headers: { 'Content-Type': file.type || 'application/octet-stream' },
         body: file
       });
       
       if (!uploadRes.ok) throw new Error('Upload failed');
       
-      // Mark complete
-      await fetch(`${apiBase}/api/upload/complete`, {
+      // Step 3: Mark complete (matching dtf-uploader format)
+      const completeRes = await fetch(`${apiBase}/api/upload/complete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ uploadId })
+        body: JSON.stringify({
+          shopDomain,
+          uploadId,
+          items: [{
+            itemId,
+            location: 'front'
+          }]
+        })
       });
       
-      // Create object URL for preview
+      if (!completeRes.ok) {
+        const err = await completeRes.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to complete upload');
+      }
+      
+      // Create object URL for preview (NO server fetch needed - avoids 401!)
       const thumbnailUrl = URL.createObjectURL(file);
+      
+      console.log('[ULTShirtModal] Upload complete:', { uploadId, thumbnailUrl });
       
       return {
         id: uploadId,
-        url: publicUrl,
+        url: thumbnailUrl, // Use blob URL for texture loading too
         thumbnailUrl
       };
     },
@@ -1017,8 +1058,129 @@ console.log('[ULTShirtModal] Script loading...');
     },
 
     async loadProductVariants() {
-      // Try to get variants from window or API
-      // For now, use default colors/sizes
+      // Get T-Shirt product info from config (set by merchant in admin panel)
+      const tshirtConfig = this.config.tshirtConfig;
+      
+      // Check if merchant configured a T-Shirt product
+      if (tshirtConfig?.tshirtProductHandle) {
+        const tshirtHandle = tshirtConfig.tshirtProductHandle;
+        
+        try {
+          // Fetch T-Shirt product by handle
+          const response = await fetch(`/products/${tshirtHandle}.js`);
+          
+          if (response.ok) {
+            const product = await response.json();
+            
+            // Store product info
+            this.product.id = product.id;
+            this.product.title = product.title;
+            this.product.handle = product.handle;
+            this.product.variants = product.variants || [];
+            
+            // Use colors and sizes from config if available, otherwise extract from variants
+            if (tshirtConfig.colorValues?.length > 0) {
+              this.product.colors = tshirtConfig.colorValues.map(name => ({
+                name,
+                hex: this.getColorHex(name)
+              }));
+            } else {
+              // Extract from variants
+              const colorSet = new Set();
+              product.variants.forEach(variant => {
+                const colorOpt = tshirtConfig.colorVariantOption || 'Color';
+                if (variant.option1 && !this.isSizeValue(variant.option1)) colorSet.add(variant.option1);
+                if (variant.option2 && !this.isSizeValue(variant.option2)) colorSet.add(variant.option2);
+              });
+              if (colorSet.size > 0) {
+                this.product.colors = Array.from(colorSet).map(name => ({
+                  name,
+                  hex: this.getColorHex(name)
+                }));
+              }
+            }
+            
+            if (tshirtConfig.sizeValues?.length > 0) {
+              this.product.sizes = tshirtConfig.sizeValues;
+            } else {
+              // Extract from variants
+              const sizeSet = new Set();
+              product.variants.forEach(variant => {
+                if (variant.option1 && this.isSizeValue(variant.option1)) sizeSet.add(variant.option1);
+                if (variant.option2 && this.isSizeValue(variant.option2)) sizeSet.add(variant.option2);
+              });
+              if (sizeSet.size > 0) {
+                this.product.sizes = Array.from(sizeSet);
+              }
+            }
+            
+            // Apply allowed positions from config
+            if (tshirtConfig.positions?.length > 0) {
+              this.config.allowedPositions = tshirtConfig.positions;
+              this.applyAllowedLocations();
+            }
+            
+            console.log('[ULTShirtModal] Loaded T-Shirt product:', product.title, 
+              '| Colors:', this.product.colors.length, 
+              '| Sizes:', this.product.sizes.length,
+              '| Variants:', product.variants.length,
+              '| Allowed Positions:', this.config.allowedPositions);
+            return;
+          }
+        } catch (error) {
+          console.warn('[ULTShirtModal] Could not fetch configured T-Shirt product:', error);
+        }
+      }
+      
+      // Fallback: Try common handles if no config
+      const fallbackHandles = ['basic-tshirt', 'tshirt', 't-shirt', 'custom-tshirt', 'blank-tshirt'];
+      
+      for (const handle of fallbackHandles) {
+        try {
+          const response = await fetch(`/products/${handle}.js`);
+          if (response.ok) {
+            const product = await response.json();
+            this.product.id = product.id;
+            this.product.title = product.title;
+            this.product.handle = product.handle;
+            this.product.variants = product.variants || [];
+            
+            // Extract colors and sizes from variants
+            const colorSet = new Set();
+            const sizeSet = new Set();
+            
+            product.variants.forEach(variant => {
+              if (variant.option1) {
+                if (this.isSizeValue(variant.option1)) sizeSet.add(variant.option1);
+                else colorSet.add(variant.option1);
+              }
+              if (variant.option2) {
+                if (this.isSizeValue(variant.option2)) sizeSet.add(variant.option2);
+                else colorSet.add(variant.option2);
+              }
+            });
+            
+            if (colorSet.size > 0) {
+              this.product.colors = Array.from(colorSet).map(name => ({
+                name,
+                hex: this.getColorHex(name)
+              }));
+            }
+            
+            if (sizeSet.size > 0) {
+              this.product.sizes = Array.from(sizeSet);
+            }
+            
+            console.log('[ULTShirtModal] Found T-Shirt product via fallback:', product.title);
+            return;
+          }
+        } catch (error) {
+          // Continue to next handle
+        }
+      }
+      
+      // Final fallback: Use default colors/sizes
+      console.warn('[ULTShirtModal] No T-Shirt product found! Using defaults. Please configure in admin panel.');
       this.product.colors = [
         { name: 'White', hex: '#ffffff' },
         { name: 'Black', hex: '#1a1a1a' },
@@ -1031,6 +1193,50 @@ console.log('[ULTShirtModal] Script loading...');
       ];
       
       this.product.sizes = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'];
+    },
+    
+    // Helper to check if a value is a size
+    isSizeValue(value) {
+      const sizes = ['xs', 's', 'm', 'l', 'xl', '2xl', '3xl', 'xxl', 'xxxl', 'small', 'medium', 'large', 'x-large', 'xx-large'];
+      return sizes.includes(value.toLowerCase().trim());
+    },
+    
+    // Helper to get hex color from color name
+    getColorHex(colorName) {
+      const colorMap = {
+        'white': '#ffffff',
+        'black': '#1a1a1a',
+        'navy': '#1e3a5f',
+        'red': '#dc2626',
+        'blue': '#3b82f6',
+        'green': '#22c55e',
+        'gray': '#6b7280',
+        'grey': '#6b7280',
+        'pink': '#ec4899',
+        'yellow': '#eab308',
+        'orange': '#f97316',
+        'purple': '#a855f7',
+        'brown': '#78350f',
+        'beige': '#d4c4a8',
+        'cream': '#fffdd0',
+        'maroon': '#800000',
+        'teal': '#14b8a6',
+        'olive': '#808000',
+        'coral': '#ff7f50',
+        'mint': '#98ff98',
+        'lavender': '#e6e6fa',
+        'burgundy': '#800020',
+        'charcoal': '#36454f',
+        'sand': '#c2b280',
+        'sky blue': '#87ceeb',
+        'forest green': '#228b22',
+        'royal blue': '#4169e1',
+        'heather gray': '#9a9a9a',
+        'heather grey': '#9a9a9a'
+      };
+      
+      const normalized = colorName.toLowerCase().trim();
+      return colorMap[normalized] || '#cccccc';
     },
 
     renderColors() {
@@ -1222,6 +1428,40 @@ console.log('[ULTShirtModal] Script loading...');
       }
     },
 
+    /**
+     * Apply allowed locations from admin config
+     * Hide locations that are not in the allowed list
+     */
+    applyAllowedLocations() {
+      const allowed = this.config.allowedPositions || ['front', 'back', 'left_sleeve', 'right_sleeve'];
+      const allLocations = ['front', 'back', 'left_sleeve', 'right_sleeve'];
+      
+      allLocations.forEach(loc => {
+        const item = document.querySelector(`.ul-location-item[data-location="${loc}"]`);
+        if (item) {
+          if (allowed.includes(loc)) {
+            item.style.display = '';
+          } else {
+            item.style.display = 'none';
+            // Disable this location in state
+            if (this.step2.locations[loc]) {
+              this.step2.locations[loc].enabled = false;
+            }
+          }
+        }
+      });
+      
+      // Make sure at least one allowed location is active
+      const firstAllowed = allowed[0] || 'front';
+      if (!allowed.includes(this.step2.activeLocation)) {
+        this.step2.activeLocation = firstAllowed;
+        this.step2.locations[firstAllowed].enabled = true;
+        this.selectLocation(firstAllowed);
+      }
+      
+      console.log('[ULTShirtModal] Applied allowed locations:', allowed);
+    },
+
     setLocationScale(value) {
       const loc = this.step2.locations[this.step2.activeLocation];
       if (!loc) return;
@@ -1285,7 +1525,7 @@ console.log('[ULTShirtModal] Script loading...');
     // ==========================================================================
     
     // DEBUG MODE - Set to true to see UV grid overlay
-    DEBUG_UV_GRID: true, // ENABLED for calibration
+    DEBUG_UV_GRID: false, // DISABLED for production
     
     // Draw debug grid to visualize UV mapping
     drawDebugGrid() {
@@ -2058,6 +2298,9 @@ console.log('[ULTShirtModal] Script loading...');
         return map[id] || id;
       });
       
+      // Generate location snapshots
+      this.generateLocationSnapshots(enabledLocs);
+      
       // Update review details
       if (this.el.reviewColor) this.el.reviewColor.textContent = this.step2.tshirtColorName;
       if (this.el.reviewSize) this.el.reviewSize.textContent = this.step2.tshirtSize;
@@ -2132,6 +2375,176 @@ console.log('[ULTShirtModal] Script loading...');
       this.el.reviewPriceBreakdown.innerHTML = html;
     },
 
+    // Generate snapshots for each enabled location
+    async generateLocationSnapshots(enabledLocs) {
+      const grid = document.getElementById('ul-review-preview-grid');
+      if (!grid) return;
+      
+      const locNames = {
+        front: 'Front',
+        back: 'Back',
+        left_sleeve: 'Left Sleeve',
+        right_sleeve: 'Right Sleeve'
+      };
+      
+      const cameraRotations = {
+        front: 0,
+        back: Math.PI,
+        left_sleeve: -Math.PI / 2,
+        right_sleeve: Math.PI / 2
+      };
+      
+      // Clear existing grid
+      grid.innerHTML = '';
+      
+      // If no 3D renderer, show placeholder
+      if (!this.three.renderer || !this.three.scene || !this.three.camera) {
+        enabledLocs.forEach(locId => {
+          const item = document.createElement('div');
+          item.className = 'ul-review-preview-item';
+          item.innerHTML = `
+            <div class="ul-review-preview-label">${locNames[locId]}</div>
+            <div class="ul-review-preview-box">👕</div>
+          `;
+          grid.appendChild(item);
+        });
+        return;
+      }
+      
+      // Generate snapshot for each location
+      for (const locId of enabledLocs) {
+        // Rotate camera to this location
+        const targetRotation = cameraRotations[locId] || 0;
+        
+        if (this.three.tshirtModel) {
+          this.three.tshirtModel.rotation.y = targetRotation;
+        } else if (this.three.tshirtMesh) {
+          this.three.tshirtMesh.rotation.y = targetRotation;
+        }
+        
+        // Render the scene
+        this.three.renderer.render(this.three.scene, this.three.camera);
+        
+        // Capture snapshot
+        const dataUrl = this.three.renderer.domElement.toDataURL('image/png');
+        
+        // Store snapshot for order note
+        this.step4.locationSnapshots = this.step4.locationSnapshots || {};
+        this.step4.locationSnapshots[locId] = dataUrl;
+        
+        // Create preview item with click handler
+        const item = document.createElement('div');
+        item.className = 'ul-review-preview-item';
+        
+        const label = document.createElement('div');
+        label.className = 'ul-review-preview-label';
+        label.textContent = locNames[locId];
+        
+        const box = document.createElement('div');
+        box.className = 'ul-review-preview-box';
+        box.title = 'Click to enlarge';
+        
+        const img = document.createElement('img');
+        img.src = dataUrl;
+        img.alt = `${locNames[locId]} preview`;
+        img.style.cssText = 'width: 100%; height: 100%; object-fit: contain; border-radius: 8px;';
+        
+        // Add click-to-zoom handler
+        box.addEventListener('click', () => {
+          this.showLightbox(dataUrl, locNames[locId]);
+        });
+        
+        box.appendChild(img);
+        item.appendChild(label);
+        item.appendChild(box);
+        grid.appendChild(item);
+        
+        // Small delay between snapshots
+        await new Promise(r => setTimeout(r, 100));
+      }
+      
+      // Reset rotation to front
+      if (this.three.tshirtModel) {
+        this.three.tshirtModel.rotation.y = 0;
+      } else if (this.three.tshirtMesh) {
+        this.three.tshirtMesh.rotation.y = 0;
+      }
+    },
+    
+    // Show lightbox with zoomed image
+    showLightbox(imageUrl, label) {
+      // Remove existing lightbox if any
+      this.closeLightbox();
+      
+      // Create lightbox overlay
+      const overlay = document.createElement('div');
+      overlay.className = 'ul-lightbox-overlay';
+      overlay.id = 'ul-lightbox-overlay';
+      
+      const content = document.createElement('div');
+      content.className = 'ul-lightbox-content';
+      
+      const closeBtn = document.createElement('button');
+      closeBtn.className = 'ul-lightbox-close';
+      closeBtn.innerHTML = '×';
+      closeBtn.title = 'Close (ESC)';
+      closeBtn.onclick = () => this.closeLightbox();
+      
+      const img = document.createElement('img');
+      img.className = 'ul-lightbox-image';
+      img.src = imageUrl;
+      img.alt = label;
+      
+      const labelEl = document.createElement('div');
+      labelEl.className = 'ul-lightbox-label';
+      labelEl.textContent = label;
+      
+      const hint = document.createElement('div');
+      hint.className = 'ul-lightbox-hint';
+      hint.textContent = 'Press ESC or click outside to close';
+      
+      content.appendChild(closeBtn);
+      content.appendChild(img);
+      content.appendChild(labelEl);
+      content.appendChild(hint);
+      overlay.appendChild(content);
+      
+      // Close on overlay click (not content)
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+          this.closeLightbox();
+        }
+      });
+      
+      // Close on ESC key
+      this._lightboxKeyHandler = (e) => {
+        if (e.key === 'Escape') {
+          this.closeLightbox();
+        }
+      };
+      document.addEventListener('keydown', this._lightboxKeyHandler);
+      
+      document.body.appendChild(overlay);
+      
+      // Trigger animation
+      requestAnimationFrame(() => {
+        overlay.classList.add('active');
+      });
+    },
+    
+    // Close lightbox
+    closeLightbox() {
+      const overlay = document.getElementById('ul-lightbox-overlay');
+      if (overlay) {
+        overlay.classList.remove('active');
+        setTimeout(() => overlay.remove(), 300);
+      }
+      if (this._lightboxKeyHandler) {
+        document.removeEventListener('keydown', this._lightboxKeyHandler);
+        this._lightboxKeyHandler = null;
+      }
+    },
+
     updateActionButtons() {
       const enabled = this.step4.confirmationChecked;
       
@@ -2150,8 +2563,62 @@ console.log('[ULTShirtModal] Script loading...');
       // Get design data
       const designData = this.step1.useInheritedDesign ? this.inheritedDesign : this.step1.newUpload;
       
-      // Find matching variant (simplified - in production, match by color + size)
-      const variantId = this.product.variants[0]?.id || 'VARIANT_ID';
+      // Find matching variant from T-SHIRT product (NOT the page product!)
+      const selectedSize = this.step2.tshirtSize;
+      const selectedColor = this.step2.tshirtColorName;
+      let variantId = null;
+      let selectedVariant = null;
+      
+      // IMPORTANT: We must use variants from the T-Shirt product we loaded
+      // NOT from the current page product (which is DTF Gang Sheets)
+      if (this.product.variants && this.product.variants.length > 0) {
+        // Try to find exact match (size + color)
+        selectedVariant = this.product.variants.find(v => {
+          const title = (v.title || '').toLowerCase();
+          const opt1 = (v.option1 || '').toLowerCase();
+          const opt2 = (v.option2 || '').toLowerCase();
+          
+          const sizeMatch = opt1 === selectedSize.toLowerCase() || 
+                           opt2 === selectedSize.toLowerCase() ||
+                           title.includes(selectedSize.toLowerCase());
+          
+          const colorMatch = opt1 === selectedColor.toLowerCase() || 
+                            opt2 === selectedColor.toLowerCase() ||
+                            title.includes(selectedColor.toLowerCase());
+          
+          return sizeMatch && colorMatch;
+        });
+        
+        // If no exact match, try size only
+        if (!selectedVariant) {
+          selectedVariant = this.product.variants.find(v => {
+            const title = (v.title || '').toLowerCase();
+            const opt1 = (v.option1 || '').toLowerCase();
+            const opt2 = (v.option2 || '').toLowerCase();
+            
+            return opt1 === selectedSize.toLowerCase() || 
+                   opt2 === selectedSize.toLowerCase() ||
+                   title.includes(selectedSize.toLowerCase());
+          });
+        }
+        
+        // Final fallback: first available variant
+        if (!selectedVariant) {
+          selectedVariant = this.product.variants.find(v => v.available !== false) || this.product.variants[0];
+        }
+        
+        variantId = selectedVariant?.id;
+        console.log('[ULTShirtModal] Found T-Shirt variant:', selectedVariant?.title, 'ID:', variantId);
+      }
+      
+      // If T-Shirt product wasn't loaded, show error
+      if (!variantId) {
+        console.error('[ULTShirtModal] No T-Shirt variant found. Product variants:', this.product.variants);
+        this.showToast('Error: T-Shirt product not configured. Please contact support.', 'error');
+        return false;
+      }
+      
+      console.log('[ULTShirtModal] Adding T-Shirt to cart - Variant:', variantId, 'Size:', selectedSize, 'Color:', selectedColor);
       
       // Prepare line item properties
       const properties = {
@@ -2177,6 +2644,9 @@ console.log('[ULTShirtModal] Script loading...');
         properties['_ul_special_instructions'] = this.step3.specialInstructions;
       }
       
+      // Generate detailed order note for production
+      const orderNote = this.generateOrderNote();
+      
       // Add to cart via Shopify AJAX API
       const cartData = {
         items: [{
@@ -2187,6 +2657,7 @@ console.log('[ULTShirtModal] Script loading...');
       };
       
       try {
+        // First add item to cart
         const response = await fetch('/cart/add.js', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -2207,6 +2678,9 @@ console.log('[ULTShirtModal] Script loading...');
           
           throw new Error(errorData.description || 'Failed to add to cart');
         }
+        
+        // Update cart note with order details
+        await this.updateCartNote(orderNote);
         
         // Dispatch cart update event
         document.dispatchEvent(new CustomEvent('ul:cartUpdated'));
@@ -2251,6 +2725,110 @@ console.log('[ULTShirtModal] Script loading...');
         }
         
         return false;
+      }
+    },
+    
+    // Generate detailed order note for production team
+    generateOrderNote() {
+      const designData = this.step1.useInheritedDesign ? this.inheritedDesign : this.step1.newUpload;
+      const enabledLocs = this.getEnabledLocations();
+      const now = new Date().toISOString();
+      
+      let note = `═══════════════════════════════════════\n`;
+      note += `🎨 T-SHIRT CUSTOMIZER ORDER\n`;
+      note += `═══════════════════════════════════════\n\n`;
+      
+      // Basic Info
+      note += `📋 ORDER DETAILS:\n`;
+      note += `─────────────────────────────────────\n`;
+      note += `• Size: ${this.step2.tshirtSize}\n`;
+      note += `• Color: ${this.step2.tshirtColorName} (${this.step2.tshirtColor})\n`;
+      note += `• Quantity: ${this.step3.quantity}\n`;
+      note += `• Timestamp: ${now}\n\n`;
+      
+      // Design Info
+      note += `🖼️ DESIGN FILE:\n`;
+      note += `─────────────────────────────────────\n`;
+      note += `• Name: ${designData.name || 'Custom Design'}\n`;
+      note += `• Upload ID: ${designData.uploadId || 'N/A'}\n`;
+      if (designData.originalUrl) {
+        note += `• File URL: ${designData.originalUrl}\n`;
+      }
+      note += `\n`;
+      
+      // Print Locations
+      note += `📍 PRINT LOCATIONS (${enabledLocs.length}):\n`;
+      note += `─────────────────────────────────────\n`;
+      
+      const locNames = {
+        front: 'FRONT',
+        back: 'BACK',
+        left_sleeve: 'LEFT SLEEVE',
+        right_sleeve: 'RIGHT SLEEVE'
+      };
+      
+      const cameraRotations = {
+        front: '0°',
+        back: '180°',
+        left_sleeve: '-90°',
+        right_sleeve: '+90°'
+      };
+      
+      enabledLocs.forEach((locId, index) => {
+        const loc = this.step2.locations[locId];
+        note += `\n  [${index + 1}] ${locNames[locId]}\n`;
+        note += `      • Scale: ${(loc.scale * 100).toFixed(0)}%\n`;
+        note += `      • Position X: ${loc.positionX.toFixed(3)}\n`;
+        note += `      • Position Y: ${loc.positionY.toFixed(3)}\n`;
+        note += `      • UV Center: u=${this.UV_REGIONS[locId].center.u}, v=${this.UV_REGIONS[locId].center.v}\n`;
+        note += `      • Camera Rotation: ${cameraRotations[locId]}\n`;
+      });
+      
+      note += `\n`;
+      
+      // Special Instructions
+      if (this.step3.specialInstructions) {
+        note += `📝 SPECIAL INSTRUCTIONS:\n`;
+        note += `─────────────────────────────────────\n`;
+        note += `${this.step3.specialInstructions}\n\n`;
+      }
+      
+      // Technical Info
+      note += `⚙️ TECHNICAL INFO:\n`;
+      note += `─────────────────────────────────────\n`;
+      note += `• Canvas Size: 2048x2048px\n`;
+      note += `• Default Scale: ${this.UV_REGIONS.front.defaultSize || 0.55}\n`;
+      note += `• Texture Strategy: Baked UV Mapping\n`;
+      note += `═══════════════════════════════════════\n`;
+      
+      return note;
+    },
+    
+    // Update cart note with order details
+    async updateCartNote(note) {
+      try {
+        // First get existing cart to preserve any existing notes
+        const cartResponse = await fetch('/cart.js');
+        const cart = await cartResponse.json();
+        
+        // Append to existing note if any
+        let fullNote = cart.note || '';
+        if (fullNote) {
+          fullNote += '\n\n';
+        }
+        fullNote += note;
+        
+        // Update cart note
+        await fetch('/cart/update.js', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ note: fullNote })
+        });
+        
+        console.log('[ULTShirtModal] Order note added to cart');
+      } catch (error) {
+        console.warn('[ULTShirtModal] Failed to update cart note:', error);
+        // Non-blocking - continue even if note update fails
       }
     },
 

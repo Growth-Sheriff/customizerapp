@@ -1194,6 +1194,7 @@
       const event = new CustomEvent('ul:openTShirtModal', {
         detail: {
           productId,
+          shopDomain: instance.shopDomain, // Pass shopDomain for API calls
           uploadData: {
             uploadId: state.upload.uploadId,
             thumbnailUrl: state.upload.result.thumbnailUrl,
