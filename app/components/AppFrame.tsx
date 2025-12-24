@@ -182,37 +182,28 @@ export function AppFrame({ shop, pendingUploads = 0, pendingQueue = 0 }: AppFram
     </Navigation>
   );
 
-  // Footer markup
+  // Footer markup - displayed at bottom of main content area
   const footerMarkup = (
     <div style={{ 
-      padding: "12px 20px", 
+      padding: "16px 24px", 
       borderTop: "1px solid #e1e3e5",
       background: "#f6f6f7",
+      textAlign: "center",
     }}>
       <Text variant="bodySm" as="p" tone="subdued">
         PRO Plan • v1.0.0
       </Text>
-      <div style={{ marginTop: "6px", display: "flex", flexWrap: "wrap", gap: "6px" }}>
-        <Link to="/app/legal/privacy" style={{ fontSize: "11px", color: "#6d7175", textDecoration: "none" }}>Privacy</Link>
+      <div style={{ marginTop: "8px", display: "flex", justifyContent: "center", flexWrap: "wrap", gap: "8px" }}>
+        <Link to="/app/legal/privacy" style={{ fontSize: "12px", color: "#6d7175", textDecoration: "none" }}>Privacy</Link>
         <span style={{ color: "#c9cccf" }}>•</span>
-        <Link to="/app/legal/terms" style={{ fontSize: "11px", color: "#6d7175", textDecoration: "none" }}>Terms</Link>
+        <Link to="/app/legal/terms" style={{ fontSize: "12px", color: "#6d7175", textDecoration: "none" }}>Terms</Link>
         <span style={{ color: "#c9cccf" }}>•</span>
-        <Link to="/app/legal/gdpr" style={{ fontSize: "11px", color: "#6d7175", textDecoration: "none" }}>GDPR</Link>
+        <Link to="/app/legal/gdpr" style={{ fontSize: "12px", color: "#6d7175", textDecoration: "none" }}>GDPR</Link>
         <span style={{ color: "#c9cccf" }}>•</span>
-        <Link to="/app/legal/docs" style={{ fontSize: "11px", color: "#6d7175", textDecoration: "none" }}>Docs</Link>
+        <Link to="/app/legal/docs" style={{ fontSize: "12px", color: "#6d7175", textDecoration: "none" }}>Docs</Link>
         <span style={{ color: "#c9cccf" }}>•</span>
-        <Link to="/app/legal/changelog" style={{ fontSize: "11px", color: "#6d7175", textDecoration: "none" }}>Changelog</Link>
+        <Link to="/app/legal/changelog" style={{ fontSize: "12px", color: "#6d7175", textDecoration: "none" }}>Changelog</Link>
       </div>
-    </div>
-  );
-
-  // Combined navigation with footer
-  const sidebarMarkup = (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <div style={{ flex: 1, overflow: "auto" }}>
-        {navigationMarkup}
-      </div>
-      {footerMarkup}
     </div>
   );
 
@@ -226,12 +217,17 @@ export function AppFrame({ shop, pendingUploads = 0, pendingQueue = 0 }: AppFram
 
   return (
     <Frame
-      navigation={sidebarMarkup}
+      navigation={navigationMarkup}
       topBar={topBarMarkup}
       showMobileNavigation={mobileNavigationActive}
       onNavigationDismiss={toggleMobileNavigationActive}
     >
-      <Outlet />
+      <div style={{ display: "flex", flexDirection: "column", minHeight: "100%" }}>
+        <div style={{ flex: 1 }}>
+          <Outlet />
+        </div>
+        {footerMarkup}
+      </div>
     </Frame>
   );
 }
