@@ -1,6 +1,7 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { handleCorsOptions, corsJson } from "~/lib/cors.server";
 import { rateLimitGuard, getIdentifier } from "~/lib/rateLimit.server";
+import { generateLocalFileToken } from "~/lib/storage.server";
 import prisma from "~/lib/prisma.server";
 
 // GET /api/upload/status/:id?shopDomain=xxx
@@ -79,11 +80,27 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     clientStatus = 'ready';
   }
 
-  // Build download URLs for local storage
+  // Build download URLs for local storage with signed tokens (WI-004)
   const host = process.env.HOST || "https://customizerapp.dev";
   const firstItem = upload.items[0];
-  const downloadUrl = firstItem?.storageKey ? `${host}/api/files/${encodeURIComponent(firstItem.storageKey)}` : null;
-  const thumbnailUrl = firstItem?.thumbnailKey ? `${host}/api/files/${encodeURIComponent(firstItem.thumbnailKey)}` : null;
+  
+  // Generate signed URLs with tokens
+  let downloadUrl = null;
+  let thumbnailUrl = null;
+  
+  if (firstItem?.storageKey) {
+    const token = generateLocalFileToken(firstItem.storageKey);
+    downloadUrl = `${host}/api/files/${encodeURIComponent(firstItem.storageKey)}?token=${encodeURIComponent(token)}`;
+  }
+  
+  if (firstItem?.thumbnailKey) {
+    const token = generateLocalFileToken(firstItem.thumbnailKey);
+    thumbnailUrl = `${host}/api/files/${encodeURIComponent(firstItem.thumbnailKey)}?token=${encodeURIComponent(token)}`;
+  } else if (firstItem?.storageKey) {
+    // Fallback to original file if no thumbnail
+    const token = generateLocalFileToken(firstItem.storageKey);
+    thumbnailUrl = `${host}/api/files/${encodeURIComponent(firstItem.storageKey)}?token=${encodeURIComponent(token)}`;
+  }
 
   return corsJson({
     uploadId: upload.id,

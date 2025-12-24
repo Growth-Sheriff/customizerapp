@@ -808,43 +808,95 @@ console.log('[ULTShirtModal] Script loading...');
       // API base from customizerapp.dev
       const apiBase = 'https://customizerapp.dev';
       
+      // Get shop domain from Shopify global
+      const shopDomain = window.Shopify?.shop || window.uploadLiftShop || '';
+      
+      if (!shopDomain) {
+        throw new Error('Shop domain not found');
+      }
+      
       // Get signed URL
       const intentRes = await fetch(`${apiBase}/api/upload/intent`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          filename: file.name,
+          shopDomain: shopDomain,
+          fileName: file.name,
           contentType: file.type,
-          size: file.size
+          fileSize: file.size,
+          mode: '3d_designer'
         })
       });
       
-      if (!intentRes.ok) throw new Error('Failed to get upload URL');
-      const { uploadUrl, uploadId, publicUrl } = await intentRes.json();
+      if (!intentRes.ok) {
+        const errData = await intentRes.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to get upload URL');
+      }
+      
+      const intentData = await intentRes.json();
+      const { uploadUrl, uploadId, itemId, key, isLocal } = intentData;
       
       // Upload to storage
-      const uploadRes = await fetch(uploadUrl, {
-        method: 'PUT',
-        headers: { 'Content-Type': file.type },
-        body: file
-      });
+      if (isLocal) {
+        // Local storage - use POST with FormData
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('key', key);
+        
+        const uploadRes = await fetch(uploadUrl, {
+          method: 'POST',
+          body: formData
+        });
+        
+        if (!uploadRes.ok) throw new Error('Upload failed');
+      } else {
+        // R2/S3 - use PUT
+        const uploadRes = await fetch(uploadUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': file.type },
+          body: file
+        });
+        
+        if (!uploadRes.ok) throw new Error('Upload failed');
+      }
       
-      if (!uploadRes.ok) throw new Error('Upload failed');
-      
-      // Mark complete
-      await fetch(`${apiBase}/api/upload/complete`, {
+      // Mark complete and get signed thumbnail URL
+      const completeRes = await fetch(`${apiBase}/api/upload/complete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ uploadId })
+        body: JSON.stringify({ 
+          shopDomain: shopDomain,
+          uploadId: uploadId,
+          items: [{ itemId: itemId, location: 'front' }]
+        })
       });
       
-      // Create object URL for preview
-      const thumbnailUrl = URL.createObjectURL(file);
+      if (!completeRes.ok) {
+        console.warn('[ULTShirtModal] Complete request failed, using blob URL');
+      }
+      
+      // Get signed URL for thumbnail (for texture baking)
+      let signedThumbnailUrl = null;
+      try {
+        const statusRes = await fetch(`${apiBase}/api/upload/status/${uploadId}?shop=${encodeURIComponent(shopDomain)}`);
+        if (statusRes.ok) {
+          const statusData = await statusRes.json();
+          // Use signed thumbnail URL from status response
+          signedThumbnailUrl = statusData.items?.[0]?.thumbnailUrl || statusData.items?.[0]?.signedUrl;
+        }
+      } catch (e) {
+        console.warn('[ULTShirtModal] Could not get signed URL:', e);
+      }
+      
+      // Fallback to blob URL for immediate preview
+      const blobUrl = URL.createObjectURL(file);
       
       return {
         id: uploadId,
-        url: publicUrl,
-        thumbnailUrl
+        itemId: itemId,
+        url: signedThumbnailUrl || blobUrl,
+        thumbnailUrl: signedThumbnailUrl || blobUrl,
+        blobUrl: blobUrl // Keep blob URL for immediate preview
       };
     },
 
