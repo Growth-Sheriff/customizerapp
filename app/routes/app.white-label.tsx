@@ -62,9 +62,9 @@ export async function action({ request }: ActionFunctionArgs) {
     return json({ error: "Shop not found" }, { status: 404 });
   }
 
-  // Check enterprise plan
-  if (shop.plan !== "enterprise") {
-    return json({ error: "White-label requires Enterprise plan" }, { status: 403 });
+  // Check pro plan (white-label included in Pro)
+  if (shop.plan !== "pro" && shop.plan !== "enterprise") {
+    return json({ error: "White-label requires Pro plan" }, { status: 403 });
   }
 
   const formData = await request.formData();
@@ -127,7 +127,7 @@ export default function WhiteLabelPage() {
   const [hideBranding, setHideBranding] = useState(config.hideBranding);
   const [customDomain, setCustomDomain] = useState(config.customDomain || "");
 
-  const canUseWhiteLabel = plan === "enterprise";
+  const canUseWhiteLabel = plan === "pro" || plan === "enterprise";
 
   return (
     <Page
@@ -155,8 +155,8 @@ export default function WhiteLabelPage() {
           {!canUseWhiteLabel && (
             <Layout.Section>
               <Banner tone="warning">
-                <p>White-label customization requires <strong>Enterprise</strong> plan.</p>
-                <Button url="/app/settings">Upgrade Plan</Button>
+                <p>White-label customization requires <strong>Pro</strong> plan.</p>
+                <Button url="/app/billing">Upgrade Plan</Button>
               </Banner>
             </Layout.Section>
           )}
