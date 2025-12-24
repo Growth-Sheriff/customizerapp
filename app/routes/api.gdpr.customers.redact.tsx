@@ -1,40 +1,55 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
+import { authenticate } from "~/shopify.server";
 import prisma from "~/lib/prisma.server";
 
 // GDPR: Customer redact
 // POST /api/gdpr/customers/redact
 export async function action({ request }: ActionFunctionArgs) {
-  if (request.method !== "POST") {
-    return json({ error: "Method not allowed" }, { status: 405 });
-  }
+  // Verify Shopify webhook HMAC signature
+  const { shop, topic, payload } = await authenticate.webhook(request);
+  
+  console.log(`[GDPR] ${topic} for shop: ${shop}`);
 
   try {
-    const body = await request.json();
-    const { shop_domain, customer } = body;
+    const { customer } = payload as { customer?: { id: number } };
 
-    console.log(`[GDPR] Customer redact request for shop: ${shop_domain}, customer: ${customer?.id}`);
+    if (!customer?.id) {
+      console.log("[GDPR] No customer ID in request");
+      return json({ ok: true });
+    }
 
-    if (shop_domain && customer?.id) {
-      const shop = await prisma.shop.findUnique({
-        where: { shopDomain: shop_domain },
+    const shopRecord = await prisma.shop.findUnique({
+      where: { shopDomain: shop },
+    });
+
+    if (shopRecord) {
+      // Anonymize customer data in uploads
+      const result = await prisma.upload.updateMany({
+        where: {
+          shopId: shopRecord.id,
+          customerId: String(customer.id),
+        },
+        data: {
+          customerId: "REDACTED",
+          customerEmail: null,
+        },
       });
 
-      if (shop) {
-        // Anonymize customer data in uploads
-        await prisma.upload.updateMany({
-          where: {
-            shopId: shop.id,
-            customerId: String(customer.id),
-          },
-          data: {
-            customerId: "REDACTED",
-            customerEmail: null,
-          },
-        });
-
-        console.log(`[GDPR] Redacted customer ${customer.id} data for shop ${shop_domain}`);
-      }
+      console.log(`[GDPR] Redacted ${result.count} uploads for customer ${customer.id} in shop ${shop}`);
+      
+      // Create audit log
+      await prisma.auditLog.create({
+        data: {
+          shopId: shopRecord.id,
+          action: "gdpr_customer_redact",
+          entityType: "customer",
+          entityId: String(customer.id),
+          changes: { redactedUploads: result.count },
+        },
+      });
+    } else {
+      console.log(`[GDPR] Shop ${shop} not found, nothing to redact`);
     }
 
     return json({ ok: true });

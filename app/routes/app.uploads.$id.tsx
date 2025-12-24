@@ -91,6 +91,16 @@ export async function action({ request, params }: ActionFunctionArgs) {
   }
 
   const uploadId = params.id;
+  
+  // WI-002: Verify upload belongs to this shop (tenant isolation)
+  const upload = await prisma.upload.findFirst({
+    where: { id: uploadId, shopId: shop.id },
+  });
+  
+  if (!upload) {
+    return json({ error: "Upload not found" }, { status: 404 });
+  }
+  
   const formData = await request.formData();
   const action = formData.get("_action");
 
@@ -102,6 +112,18 @@ export async function action({ request, params }: ActionFunctionArgs) {
         approvedAt: new Date(),
       },
     });
+    
+    // Audit log
+    await prisma.auditLog.create({
+      data: {
+        shopId: shop.id,
+        action: "upload_approved",
+        entityType: "upload",
+        entityId: uploadId!,
+        changes: { previousStatus: upload.status },
+      },
+    });
+    
     return json({ success: true, action: "approved" });
   }
 
@@ -113,11 +135,23 @@ export async function action({ request, params }: ActionFunctionArgs) {
         status: "rejected",
         rejectedAt: new Date(),
         preflightSummary: {
-          ...(await prisma.upload.findUnique({ where: { id: uploadId }, select: { preflightSummary: true } }))?.preflightSummary as any,
+          ...upload.preflightSummary as any,
           rejectionReason: reason,
         },
       },
     });
+    
+    // Audit log
+    await prisma.auditLog.create({
+      data: {
+        shopId: shop.id,
+        action: "upload_rejected",
+        entityType: "upload",
+        entityId: uploadId!,
+        changes: { reason, previousStatus: upload.status },
+      },
+    });
+    
     return json({ success: true, action: "rejected" });
   }
 
@@ -126,6 +160,18 @@ export async function action({ request, params }: ActionFunctionArgs) {
       where: { id: uploadId },
       data: { status: "approved", approvedAt: new Date() },
     });
+    
+    // Audit log
+    await prisma.auditLog.create({
+      data: {
+        shopId: shop.id,
+        action: "upload_approved_with_warnings",
+        entityType: "upload",
+        entityId: uploadId!,
+        changes: { previousStatus: upload.status },
+      },
+    });
+    
     return json({ success: true, action: "approved_with_warnings" });
   }
 

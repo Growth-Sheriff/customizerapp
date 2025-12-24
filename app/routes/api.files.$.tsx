@@ -1,9 +1,13 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
-import { readLocalFile } from "~/lib/storage.server";
+import { readLocalFile, validateLocalFileToken } from "~/lib/storage.server";
 import mime from "mime-types";
 
-// GET /api/files/:key
-// Serves files from local storage with CORS support
+/**
+ * GET /api/files/:key?token=xxx
+ * 
+ * WI-004: Serves files from local storage with signed URL token validation
+ * Token is HMAC-SHA256 signed and time-limited
+ */
 export async function loader({ params, request }: LoaderFunctionArgs) {
   // Handle CORS preflight
   if (request.method === "OPTIONS") {
@@ -23,8 +27,21 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
     return new Response("File not found", { status: 404 });
   }
 
+  // WI-004: Validate signed URL token
+  const url = new URL(request.url);
+  const token = url.searchParams.get("token");
+  const decodedKey = decodeURIComponent(key);
+  
+  if (!token || !validateLocalFileToken(decodedKey, token)) {
+    return new Response("Unauthorized - invalid or expired token", { 
+      status: 401,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+      },
+    });
+  }
+
   try {
-    const decodedKey = decodeURIComponent(key);
     const buffer = await readLocalFile(decodedKey);
     
     // Determine content type from file extension

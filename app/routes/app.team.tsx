@@ -11,6 +11,7 @@ import { authenticate } from "~/shopify.server";
 import { requirePermission, PERMISSIONS, ROLES, type Role } from "~/lib/rbac.server";
 import prisma from "~/lib/prisma.server";
 import { nanoid } from "nanoid";
+import { sendTeamInvite } from "~/lib/email.server";
 
 const ROLE_OPTIONS = [
   { label: "Viewer (Read-only)", value: "viewer" },
@@ -21,6 +22,7 @@ const ROLE_OPTIONS = [
 export async function loader({ request }: LoaderFunctionArgs) {
   const { session } = await authenticate.admin(request);
   const shopDomain = session.shop;
+  const userEmail = session.onlineAccessInfo?.associated_user?.email;
 
   let shop = await prisma.shop.findUnique({
     where: { shopDomain },
@@ -49,8 +51,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
     });
   }
 
-  // Get current user role (for now assume owner if first user)
-  const currentUserRole = "owner" as Role; // TODO: Get from session
+  // WI-005: Get current user role from team members or default to owner
+  let currentUserRole: Role = "owner";
+  if (userEmail && shop.teamMembers.length > 0) {
+    const teamMember = shop.teamMembers.find(m => m.email === userEmail);
+    if (teamMember) {
+      currentUserRole = teamMember.role as Role;
+    } else {
+      // User not in team members but has shop access = owner (original account holder)
+      currentUserRole = "owner";
+    }
+  }
 
   return json({
     shopId: shop.id,
@@ -122,7 +133,11 @@ export async function action({ request }: ActionFunctionArgs) {
       },
     });
 
-    // TODO: Send invite email
+    // WI-006: Send invite email
+    const emailResult = await sendTeamInvite(email, inviteToken, shop.shopDomain, role);
+    if (!emailResult.success) {
+      console.warn(`[Team] Failed to send invite email to ${email}:`, emailResult.error);
+    }
 
     await prisma.auditLog.create({
       data: {
@@ -221,7 +236,11 @@ export async function action({ request }: ActionFunctionArgs) {
       data: { inviteToken, invitedAt: new Date() },
     });
 
-    // TODO: Resend invite email
+    // WI-006: Resend invite email
+    const emailResult = await sendTeamInvite(member.email, inviteToken, shop.shopDomain, member.role);
+    if (!emailResult.success) {
+      console.warn(`[Team] Failed to resend invite email to ${member.email}:`, emailResult.error);
+    }
 
     return json({ success: true, message: "Invitation resent" });
   }

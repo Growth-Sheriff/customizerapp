@@ -199,7 +199,8 @@ model OrderLink {
   shop   Shop   @relation(fields: [shopId], references: [id], onDelete: Cascade)
   upload Upload @relation(fields: [uploadId], references: [id], onDelete: Cascade)
 
-  @@unique([shopId, orderId, uploadId])
+  // WI-007: Named unique constraint for idempotent upsert
+  @@unique([orderId, uploadId], name: "orderId_uploadId")
   @@map("orders_link")
 }
 

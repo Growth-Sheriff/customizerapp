@@ -98,9 +98,19 @@ export async function action({ request }: ActionFunctionArgs) {
         });
 
         if (upload) {
-          // Create order link
-          await prisma.orderLink.create({
-            data: {
+          // WI-007: Idempotent upsert - webhook can be delivered multiple times
+          await prisma.orderLink.upsert({
+            where: {
+              // Unique constraint on orderId + uploadId
+              orderId_uploadId: {
+                orderId: String(order.id),
+                uploadId: upload.id,
+              },
+            },
+            update: {
+              lineItemId: String(lineItem.id),
+            },
+            create: {
               shopId: shop.id,
               orderId: String(order.id),
               uploadId: upload.id,

@@ -1,8 +1,49 @@
-import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { writeFile, mkdir, readFile, unlink } from "fs/promises";
 import { join, dirname } from "path";
 import { existsSync } from "fs";
+import crypto from "crypto";
+
+/**
+ * WI-004: Local file signed URL token generation and validation
+ * Uses HMAC-SHA256 with SECRET_KEY to create time-limited access tokens
+ */
+const LOCAL_FILE_SECRET = process.env.SECRET_KEY || "fallback-secret-key";
+
+export function generateLocalFileToken(key: string, expiresAt: number): string {
+  const payload = `${key}:${expiresAt}`;
+  const signature = crypto
+    .createHmac("sha256", LOCAL_FILE_SECRET)
+    .update(payload)
+    .digest("hex");
+  return `${expiresAt}.${signature}`;
+}
+
+export function validateLocalFileToken(key: string, token: string): boolean {
+  if (!token) return false;
+  
+  const [expiresAtStr, signature] = token.split(".");
+  if (!expiresAtStr || !signature) return false;
+  
+  const expiresAt = parseInt(expiresAtStr, 10);
+  if (isNaN(expiresAt)) return false;
+  
+  // Check if token is expired
+  if (Date.now() > expiresAt) return false;
+  
+  // Validate signature
+  const expectedPayload = `${key}:${expiresAt}`;
+  const expectedSignature = crypto
+    .createHmac("sha256", LOCAL_FILE_SECRET)
+    .update(expectedPayload)
+    .digest("hex");
+  
+  return crypto.timingSafeEqual(
+    Buffer.from(signature, "hex"),
+    Buffer.from(expectedSignature, "hex")
+  );
+}
 
 /**
  * Storage Provider Priority:
@@ -231,9 +272,11 @@ export async function getDownloadSignedUrl(
     return key;
   }
 
-  // Local storage - return local file URL
+  // WI-004: Local storage - return signed local file URL
   if (config.provider === "local") {
-    return `${host}/api/files/${encodeURIComponent(key)}`;
+    const expiresAt = Date.now() + expiresIn * 1000;
+    const token = generateLocalFileToken(key, expiresAt);
+    return `${host}/api/files/${encodeURIComponent(key)}?token=${token}`;
   }
 
   const client = createStorageClient(config);
@@ -283,6 +326,35 @@ export async function deleteLocalFile(key: string): Promise<void> {
   } catch (e) {
     // File may not exist, ignore
   }
+}
+
+// Delete file from any storage provider
+export async function deleteFile(config: StorageConfig, key: string): Promise<void> {
+  // Shopify Files - we cannot delete from CDN, skip
+  if (config.provider === "shopify") {
+    console.warn(`[Storage] Cannot delete Shopify CDN file: ${key}`);
+    return;
+  }
+
+  // Local storage
+  if (config.provider === "local") {
+    await deleteLocalFile(key);
+    return;
+  }
+
+  // R2/S3
+  const client = createStorageClient(config);
+  if (!client) {
+    throw new Error("Storage client not available for delete");
+  }
+
+  const command = new DeleteObjectCommand({
+    Bucket: config.bucket,
+    Key: key,
+  });
+
+  await client.send(command);
+  console.log(`[Storage] Deleted file: ${key}`);
 }
 
 // Build storage key path (tenant-scoped)

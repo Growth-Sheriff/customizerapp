@@ -1,10 +1,12 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { getStorageConfig, createStorageClient, getDownloadSignedUrl } from "~/lib/storage.server";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
+import { authenticate } from "~/shopify.server";
 
 /**
  * GET /api/storage/preview/:key
  * 
+ * WI-004: Protected endpoint - requires admin authentication
  * Serves files from storage (R2/S3/Local) with proper caching headers.
  * For thumbnails and preview images in the admin panel.
  * 
@@ -12,6 +14,14 @@ import { GetObjectCommand } from "@aws-sdk/client-s3";
  */
 export async function loader({ params, request }: LoaderFunctionArgs) {
   try {
+    // WI-004: Require admin authentication for storage preview
+    try {
+      await authenticate.admin(request);
+    } catch (authError) {
+      console.error("[Storage Preview] Auth failed:", authError);
+      return new Response("Unauthorized", { status: 401 });
+    }
+
     // Get the full key from params - Remix handles the splat
     const url = new URL(request.url);
     const pathAfterPreview = url.pathname.replace("/api/storage/preview/", "");

@@ -94,6 +94,30 @@ export async function action({ request }: ActionFunctionArgs) {
   const { session, billing } = await authenticate.admin(request);
   const shopDomain = session.shop;
 
+  // WI-003: Get shop and verify owner role for billing changes
+  const shop = await prisma.shop.findUnique({
+    where: { shopDomain },
+    include: {
+      teamMembers: {
+        where: { email: session.onlineAccessInfo?.associated_user?.email },
+      },
+    },
+  });
+
+  if (!shop) {
+    return json({ error: "Shop not found" }, { status: 404 });
+  }
+
+  // Check if user is owner (owner can be: first user, no team members, or role=owner)
+  const teamMember = shop.teamMembers[0];
+  const isOwner = !teamMember || teamMember.role === "owner";
+  
+  if (!isOwner && shop.teamMembers.length > 0) {
+    return json({ 
+      error: "Only the shop owner can change billing plans" 
+    }, { status: 403 });
+  }
+
   const formData = await request.formData();
   const planId = formData.get("planId") as string;
 
@@ -119,6 +143,18 @@ export async function action({ request }: ActionFunctionArgs) {
         where: { shopDomain },
         data: { plan: planId, billingStatus: "active" },
       });
+      
+      // Audit log
+      await prisma.auditLog.create({
+        data: {
+          shopId: shop.id,
+          action: "billing_plan_confirmed",
+          entityType: "billing",
+          entityId: planId,
+          changes: { plan: planId },
+        },
+      });
+      
       return json({ success: true, message: `Already on ${planDetails.name} plan` });
     }
 

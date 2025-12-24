@@ -365,3 +365,76 @@ export async function sendTicketStatusUpdate(
 
 // Export types for use elsewhere
 export type { Resend };
+
+/**
+ * Send team invitation email
+ */
+export async function sendTeamInvite(
+  email: string,
+  inviteToken: string,
+  shopName: string,
+  role: string,
+  inviterName?: string
+): Promise<{ success: boolean; error?: string }> {
+  const acceptUrl = `https://customizerapp.dev/auth/accept-invite?token=${inviteToken}`;
+  
+  const roleDescriptions: Record<string, string> = {
+    admin: "Full access to all features",
+    operator: "Manage uploads and production queue",
+    viewer: "View-only access to uploads and analytics",
+  };
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; }
+    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+    .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 8px 8px 0 0; }
+    .content { background: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px; }
+    .btn { display: inline-block; background: #667eea; color: white !important; padding: 14px 28px; border-radius: 8px; text-decoration: none; font-weight: 600; margin: 20px 0; }
+    .role-box { background: #fff; padding: 15px; border-radius: 6px; border-left: 4px solid #667eea; margin: 20px 0; }
+    .footer { text-align: center; padding: 20px; color: #6b7280; font-size: 0.875rem; }
+    a { color: #667eea; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1 style="margin: 0; font-size: 24px;">👋 You're Invited!</h1>
+    </div>
+    <div class="content">
+      <p>Hi there,</p>
+      <p>${inviterName ? `<strong>${inviterName}</strong> has` : 'You have been'} invited you to join <strong>${shopName}</strong> on Upload Lift as a team member.</p>
+      
+      <div class="role-box">
+        <strong>Your Role:</strong> ${role.charAt(0).toUpperCase() + role.slice(1)}<br>
+        <span style="color: #6b7280; font-size: 0.875rem;">${roleDescriptions[role] || 'Team member access'}</span>
+      </div>
+      
+      <p style="text-align: center;">
+        <a href="${acceptUrl}" class="btn">Accept Invitation</a>
+      </p>
+      
+      <p style="font-size: 0.875rem; color: #6b7280;">
+        This invitation link will expire in 7 days. If you didn't expect this invitation, you can safely ignore this email.
+      </p>
+      
+      <p>Best regards,<br><strong>Upload Lift Team</strong></p>
+    </div>
+    <div class="footer">
+      <p><a href="https://customizerapp.dev">customizerapp.dev</a></p>
+    </div>
+  </div>
+</body>
+</html>
+  `;
+
+  return sendEmail({
+    to: email,
+    subject: `You're invited to join ${shopName} on Upload Lift`,
+    html,
+  });
+}
