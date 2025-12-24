@@ -4,7 +4,7 @@
  */
 
 import { useCallback, useState } from "react";
-import { useLocation, Outlet } from "@remix-run/react";
+import { useLocation, Outlet, Link } from "@remix-run/react";
 import {
   Frame,
   Navigation,
@@ -194,15 +194,15 @@ export function AppFrame({ shop, pendingUploads = 0, pendingQueue = 0 }: AppFram
           PRO Plan • v1.0.0
         </Text>
         <div style={{ marginTop: "8px", display: "flex", flexWrap: "wrap", gap: "8px" }}>
-          <a href="/app/legal/privacy" style={{ fontSize: "11px", color: "#6d7175", textDecoration: "none" }}>Privacy</a>
+          <Link to="/app/legal/privacy" style={{ fontSize: "11px", color: "#6d7175", textDecoration: "none" }}>Privacy</Link>
           <span style={{ color: "#c9cccf" }}>•</span>
-          <a href="/app/legal/terms" style={{ fontSize: "11px", color: "#6d7175", textDecoration: "none" }}>Terms</a>
+          <Link to="/app/legal/terms" style={{ fontSize: "11px", color: "#6d7175", textDecoration: "none" }}>Terms</Link>
           <span style={{ color: "#c9cccf" }}>•</span>
-          <a href="/app/legal/gdpr" style={{ fontSize: "11px", color: "#6d7175", textDecoration: "none" }}>GDPR</a>
+          <Link to="/app/legal/gdpr" style={{ fontSize: "11px", color: "#6d7175", textDecoration: "none" }}>GDPR</Link>
           <span style={{ color: "#c9cccf" }}>•</span>
-          <a href="/app/legal/docs" style={{ fontSize: "11px", color: "#6d7175", textDecoration: "none" }}>Docs</a>
+          <Link to="/app/legal/docs" style={{ fontSize: "11px", color: "#6d7175", textDecoration: "none" }}>Docs</Link>
           <span style={{ color: "#c9cccf" }}>•</span>
-          <a href="/app/legal/changelog" style={{ fontSize: "11px", color: "#6d7175", textDecoration: "none" }}>Changelog</a>
+          <Link to="/app/legal/changelog" style={{ fontSize: "11px", color: "#6d7175", textDecoration: "none" }}>Changelog</Link>
         </div>
       </div>
     </Navigation>

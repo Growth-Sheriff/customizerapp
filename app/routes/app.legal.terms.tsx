@@ -1,4 +1,12 @@
+import type { LoaderFunctionArgs } from "@remix-run/node";
+import { json } from "@remix-run/node";
 import { Page, Layout, Card, Text, BlockStack, Link, List } from "@shopify/polaris";
+import { authenticate } from "~/shopify.server";
+
+export async function loader({ request }: LoaderFunctionArgs) {
+  await authenticate.admin(request);
+  return json({});
+}
 
 export default function TermsOfServicePage() {
   const lastUpdated = new Date().toLocaleDateString("en-US", { 
