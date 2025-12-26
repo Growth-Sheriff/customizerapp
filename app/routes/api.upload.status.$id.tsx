@@ -84,8 +84,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const host = process.env.HOST || "https://customizerapp.dev";
   const firstItem = upload.items[0];
   
-  // Generate signed URLs with tokens (15 minute expiry)
-  const expiresAt = Date.now() + 15 * 60 * 1000; // 15 minutes
+  // FAZ 2 - API-002: Extended token expiry to 1 hour for T-Shirt modal long sessions
+  const expiresAt = Date.now() + 60 * 60 * 1000; // 1 hour (was 15 minutes)
   let downloadUrl = null;
   let thumbnailUrl = null;
   

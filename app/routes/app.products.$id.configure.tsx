@@ -15,6 +15,45 @@ import { DeleteIcon, PlusIcon, AlertCircleIcon, CheckCircleIcon, SearchIcon } fr
 import { useState, useCallback } from "react";
 import { authenticate } from "~/shopify.server";
 import prisma from "~/lib/prisma.server";
+import { z } from "zod";
+
+// FAZ 1 - ADM-003: Zod schema for ExtraQuestion validation
+const ExtraQuestionSchema = z.object({
+  id: z.string().min(1).max(100),
+  type: z.enum(["text", "select", "checkbox", "textarea"]),
+  label: z.string().min(1).max(500).transform(sanitizeHtml),
+  options: z.array(z.string().max(500).transform(sanitizeHtml)).optional(),
+  required: z.boolean().optional(),
+  placeholder: z.string().max(500).transform(sanitizeHtml).optional(),
+});
+
+const ExtraQuestionsArraySchema = z.array(ExtraQuestionSchema).max(20);
+
+// FAZ 1 - ADM-003: TshirtConfig validation schema
+const TshirtConfigSchema = z.object({
+  tshirtProductId: z.string().nullable(),
+  tshirtProductHandle: z.string().nullable(),
+  tshirtProductTitle: z.string().max(500).nullable().transform((val) => val ? sanitizeHtml(val) : null),
+  colorVariantOption: z.string().max(100),
+  sizeVariantOption: z.string().max(100),
+  colorValues: z.array(z.string().max(100)),
+  sizeValues: z.array(z.string().max(100)),
+  priceAddon: z.number().min(0).max(10000),
+  positions: z.array(z.string().max(50)),
+}).nullable();
+
+// FAZ 1 - ADM-003: HTML sanitization function (XSS prevention)
+function sanitizeHtml(input: string): string {
+  return input
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;')
+    .replace(/\//g, '&#x2F;')
+    .replace(/`/g, '&#x60;')
+    .replace(/=/g, '&#x3D;');
+}
 
 // Extra Question Types
 type QuestionType = "text" | "select" | "checkbox" | "textarea";
@@ -75,9 +114,15 @@ const PRODUCT_QUERY = `
 `;
 
 // Fetch all products for T-Shirt dropdown
+// FAZ 1 - ADM-001: Updated to use pagination for 500+ products
+// FAZ 3 - ADM-002: Added variantsCount for variant count display
 const ALL_PRODUCTS_QUERY = `
-  query getAllProducts {
-    products(first: 100, sortKey: TITLE) {
+  query getAllProducts($cursor: String) {
+    products(first: 100, after: $cursor, sortKey: TITLE) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
       edges {
         node {
           id
@@ -87,11 +132,61 @@ const ALL_PRODUCTS_QUERY = `
             name
             values
           }
+          variantsCount {
+            count
+          }
         }
       }
     }
   }
 `;
+
+// FAZ 1 - ADM-001: Helper function to fetch all products with pagination (max 500)
+async function fetchAllProductsWithPagination(admin: any): Promise<any[]> {
+  const products: any[] = [];
+  let hasNextPage = true;
+  let cursor: string | null = null;
+  const MAX_PRODUCTS = 500;
+
+  while (hasNextPage && products.length < MAX_PRODUCTS) {
+    const response: any = await admin.graphql(ALL_PRODUCTS_QUERY, {
+      variables: { cursor },
+    });
+    const data: any = await response.json();
+    
+    const edges: any[] = data.data?.products?.edges || [];
+    const pageInfo: { hasNextPage?: boolean; endCursor?: string } = data.data?.products?.pageInfo || {};
+    
+    for (const edge of edges) {
+      if (products.length >= MAX_PRODUCTS) break;
+      
+      const p = edge.node;
+      const colorOpt = p.options?.find((o: any) => 
+        o.name.toLowerCase().includes("color") || o.name.toLowerCase().includes("renk")
+      );
+      const sizeOpt = p.options?.find((o: any) => 
+        o.name.toLowerCase().includes("size") || o.name.toLowerCase().includes("beden")
+      );
+      
+      products.push({
+        id: p.id,
+        title: p.title,
+        handle: p.handle,
+        hasColorVariant: !!colorOpt,
+        hasSizeVariant: !!sizeOpt,
+        colorValues: colorOpt?.values || [],
+        sizeValues: sizeOpt?.values || [],
+        // FAZ 3 - ADM-002: Add variant count
+        variantCount: p.variantsCount?.count || 0,
+      });
+    }
+    
+    hasNextPage = pageInfo.hasNextPage === true;
+    cursor = pageInfo.endCursor || null;
+  }
+  
+  return products;
+}
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const { session, admin } = await authenticate.admin(request);
@@ -127,28 +222,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     throw new Response("Product not found", { status: 404 });
   }
 
-  // Fetch all products for T-Shirt dropdown
-  const allProductsResponse = await admin.graphql(ALL_PRODUCTS_QUERY);
-  const allProductsData = await allProductsResponse.json();
-  
-  const allProducts = allProductsData.data?.products?.edges?.map((edge: any) => {
-    const p = edge.node;
-    const colorOpt = p.options?.find((o: any) => 
-      o.name.toLowerCase().includes("color") || o.name.toLowerCase().includes("renk")
-    );
-    const sizeOpt = p.options?.find((o: any) => 
-      o.name.toLowerCase().includes("size") || o.name.toLowerCase().includes("beden")
-    );
-    return {
-      id: p.id,
-      title: p.title,
-      handle: p.handle,
-      hasColorVariant: !!colorOpt,
-      hasSizeVariant: !!sizeOpt,
-      colorValues: colorOpt?.values || [],
-      sizeValues: sizeOpt?.values || [],
-    };
-  }) || [];
+  // Fetch all products for T-Shirt dropdown using pagination (FAZ 1 - ADM-001)
+  const allProducts = await fetchAllProductsWithPagination(admin);
 
   // Get existing config - using raw query to access all fields
   const config = await prisma.productConfig.findUnique({
@@ -235,14 +310,32 @@ export async function action({ request, params }: ActionFunctionArgs) {
     let extraQuestions: ExtraQuestion[] = [];
     let tshirtConfig: TshirtConfig | null = null;
 
+    // FAZ 1 - ADM-003: Validate and sanitize input with Zod
     try {
       if (extraQuestionsJson) {
-        extraQuestions = JSON.parse(extraQuestionsJson);
+        const parsed = JSON.parse(extraQuestionsJson);
+        const validationResult = ExtraQuestionsArraySchema.safeParse(parsed);
+        if (!validationResult.success) {
+          console.error("[ADM-003] ExtraQuestions validation failed:", validationResult.error.errors);
+          return json({ 
+            error: "Invalid extra questions format: " + validationResult.error.errors[0]?.message 
+          }, { status: 400 });
+        }
+        extraQuestions = validationResult.data;
       }
       if (tshirtConfigJson) {
-        tshirtConfig = JSON.parse(tshirtConfigJson);
+        const parsed = JSON.parse(tshirtConfigJson);
+        const validationResult = TshirtConfigSchema.safeParse(parsed);
+        if (!validationResult.success) {
+          console.error("[ADM-003] TshirtConfig validation failed:", validationResult.error.errors);
+          return json({ 
+            error: "Invalid T-Shirt config format: " + validationResult.error.errors[0]?.message 
+          }, { status: 400 });
+        }
+        tshirtConfig = validationResult.data;
       }
     } catch (e) {
+      console.error("[ADM-003] JSON parse error:", e);
       return json({ error: "Invalid JSON data" }, { status: 400 });
     }
 
@@ -636,11 +729,28 @@ export default function ProductConfigurePage() {
                           )}
                           
                           {tshirtConfig.colorValues?.length > 0 && tshirtConfig.sizeValues?.length > 0 && (
-                            <Banner tone="success">
-                              <p>
-                                ✅ Product is properly configured! Colors: {tshirtConfig.colorValues.join(', ')} | Sizes: {tshirtConfig.sizeValues.join(', ')}
-                              </p>
-                            </Banner>
+                            <>
+                              {/* FAZ 3 - ADM-002: Show variant count vs option combinations */}
+                              {(() => {
+                                const selectedProduct = allProducts.find((p: any) => p.id === tshirtConfig.tshirtProductId);
+                                const expectedVariants = (tshirtConfig.colorValues?.length || 0) * (tshirtConfig.sizeValues?.length || 0);
+                                const actualVariants = selectedProduct?.variantCount || 0;
+                                const hasAllVariants = actualVariants >= expectedVariants;
+                                
+                                return (
+                                  <Banner tone={hasAllVariants ? "success" : "warning"}>
+                                    <p>
+                                      {hasAllVariants ? '✅' : '⚠️'} Product configured! Colors: {tshirtConfig.colorValues.join(', ')} | Sizes: {tshirtConfig.sizeValues.join(', ')}
+                                      <br />
+                                      <Text as="span" tone="subdued">
+                                        Actual variants: {actualVariants} / Expected: {expectedVariants} 
+                                        {!hasAllVariants && ' - Not all color/size combinations have variants!'}
+                                      </Text>
+                                    </p>
+                                  </Banner>
+                                );
+                              })()}
+                            </>
                           )}
                         </BlockStack>
                       </>

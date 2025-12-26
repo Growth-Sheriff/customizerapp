@@ -7,11 +7,42 @@ import prisma from "~/lib/prisma.server";
 import { Queue } from "bullmq";
 import Redis from "ioredis";
 
-// Redis connection for queue
-const getRedisConnection = () => {
-  return new Redis(process.env.REDIS_URL || "redis://localhost:6379", {
-    maxRetriesPerRequest: null,
-  });
+// ============================================================================
+// FAZ 0 - API-001: Singleton Redis Connection
+// Prevents connection leak by reusing a single connection across all requests
+// ============================================================================
+let redisConnection: Redis | null = null;
+
+const getRedisConnection = (): Redis => {
+  if (!redisConnection) {
+    redisConnection = new Redis(process.env.REDIS_URL || "redis://localhost:6379", {
+      maxRetriesPerRequest: null,
+      enableReadyCheck: true,
+      retryStrategy: (times: number) => Math.min(times * 50, 2000),
+      reconnectOnError: (err: Error) => {
+        const targetError = 'READONLY';
+        if (err.message.includes(targetError)) {
+          // Only reconnect on READONLY errors (failover scenario)
+          return true;
+        }
+        return false;
+      },
+    });
+
+    redisConnection.on('error', (err: Error) => {
+      console.error('[Redis] Connection error:', err.message);
+    });
+
+    redisConnection.on('connect', () => {
+      console.log('[Redis] Connected successfully');
+    });
+
+    redisConnection.on('close', () => {
+      console.warn('[Redis] Connection closed');
+      redisConnection = null; // Allow reconnection on next request
+    });
+  }
+  return redisConnection;
 };
 
 // POST /api/upload/complete
@@ -90,6 +121,7 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     // Enqueue preflight job for each item
+    // FAZ 0 - API-001: Use singleton connection (don't create new connection per request)
     const connection = getRedisConnection();
     const preflightQueue = new Queue("preflight", { connection });
 
@@ -102,7 +134,8 @@ export async function action({ request }: ActionFunctionArgs) {
       });
     }
 
-    await connection.quit();
+    // FAZ 0 - API-001: DON'T close singleton connection - it's reused across requests
+    // await connection.quit(); // REMOVED - causes connection churn
 
     // Trigger Flow event
     await triggerUploadReceived(shop.id, shop.shopDomain, {

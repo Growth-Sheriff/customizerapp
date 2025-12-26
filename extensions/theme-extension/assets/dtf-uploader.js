@@ -39,6 +39,9 @@
   const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
   const POLL_INTERVAL = 1000; // 1 second
   const MAX_POLLS = 60; // 60 seconds max wait
+  
+  // FAZ 3 - EDGE-001: Tab-specific session ID for multi-tab isolation
+  const TAB_SESSION_ID = `ul_tab_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
   // ===== GLOBAL NAMESPACE =====
   const ULDTFUploader = {
@@ -242,6 +245,32 @@
             state.form.selectedVariantTitle = firstVariant.dataset.title;
             state.form.selectedVariantPrice = parseInt(firstVariant.dataset.priceRaw, 10);
             this.updatePriceDisplay(productId);
+          }
+        } else {
+          // FAZ 2 - DTF-002: Single variant product - no size selector visible
+          console.log('[UL] No size selector found - checking for single variant product');
+          
+          // Try to find hidden variant input in cart form
+          const form = document.querySelector(`form[action*="/cart/add"]`);
+          const hiddenVariant = form?.querySelector('input[name="id"]');
+          
+          if (hiddenVariant && hiddenVariant.value) {
+            state.form.selectedVariantId = hiddenVariant.value;
+            state.form.selectedVariantTitle = 'Default';
+            console.log('[UL] Single variant product detected, variant ID:', hiddenVariant.value);
+          } else {
+            // Last resort: try data attribute on product form
+            const productForm = document.querySelector('[data-product-form]');
+            const variantId = productForm?.dataset.variantId || 
+                              document.querySelector('[data-variant-id]')?.dataset.variantId;
+            
+            if (variantId) {
+              state.form.selectedVariantId = variantId;
+              state.form.selectedVariantTitle = 'Default';
+              console.log('[UL] Variant from data attribute:', variantId);
+            } else {
+              console.warn('[UL] Could not determine variant ID - add to cart may fail');
+            }
           }
         }
 
@@ -548,6 +577,9 @@
 
       this.hideError(productId);
 
+      // FAZ 1 - DTF-001: Store file reference for preview
+      instance.lastFile = file;
+
       // Update state
       state.upload.status = 'uploading';
       state.upload.progress = 0;
@@ -688,27 +720,54 @@
 
     /**
      * Upload file to storage with progress tracking
+     * FAZ 1 - DTF-003: Explicit storage type check with switch/case
      * Supports: R2/S3 (signed URL PUT), Shopify (two-phase), Local (POST)
      */
     async uploadToStorage(productId, file, intentData) {
       const instance = this.instances[productId];
       const { elements, apiBase, shopDomain } = instance;
 
-      // Shopify Files API - two-phase upload
-      if (intentData.isShopify) {
-        return this.uploadToShopify(productId, file, intentData);
-      }
+      // FAZ 1 - DTF-003: Explicit storage type check
+      const storageType = intentData.storageProvider || 
+                         (intentData.isShopify ? 'shopify' : 
+                          intentData.isLocal ? 'local' : 
+                          intentData.uploadUrl ? 'signed_url' : 'unknown');
 
-      // Local upload - POST with FormData
-      if (intentData.isLocal) {
-        return this.uploadToLocal(productId, file, intentData);
-      }
+      console.log('[UL] uploadToStorage - storageType:', storageType);
 
-      // R2/S3 - Direct PUT to signed URL
-      const uploadUrl = intentData.uploadUrl || intentData.signedUrl;
-      if (!uploadUrl) {
-        throw new Error('No upload URL provided');
+      switch (storageType) {
+        case 'shopify':
+          return this.uploadToShopify(productId, file, intentData);
+          
+        case 'local':
+          return this.uploadToLocal(productId, file, intentData);
+          
+        case 'r2':
+        case 's3':
+        case 'signed_url':
+          // R2/S3 - Direct PUT to signed URL
+          const uploadUrl = intentData.uploadUrl || intentData.signedUrl;
+          if (!uploadUrl) {
+            throw new Error('No upload URL provided for signed URL upload');
+          }
+          return this.uploadToSignedUrl(productId, file, intentData, uploadUrl);
+          
+        default:
+          // Fallback: try local if uploadUrl exists, otherwise error
+          if (intentData.uploadUrl) {
+            console.warn('[UL] Unknown storage type, falling back to local upload');
+            return this.uploadToLocal(productId, file, intentData);
+          }
+          throw new Error(`Unknown storage type: ${storageType}`);
       }
+    },
+
+    /**
+     * FAZ 1 - DTF-003: Extracted signed URL upload method
+     */
+    async uploadToSignedUrl(productId, file, intentData, uploadUrl) {
+      const instance = this.instances[productId];
+      const { elements } = instance;
 
       return new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
@@ -855,6 +914,7 @@
 
     /**
      * Poll upload status until processing complete
+     * FAZ 1 - DTF-005: Proper Promise wrapper for setTimeout error handling
      */
     async pollUploadStatus(productId, uploadId) {
       const instance = this.instances[productId];
@@ -862,11 +922,13 @@
 
       instance.pollCount = 0;
 
-      const poll = async () => {
-        try {
-          const response = await fetch(
-            `${apiBase}/api/upload/status/${uploadId}?shopDomain=${encodeURIComponent(shopDomain)}`
-          );
+      // FAZ 1 - DTF-005: Wrap in Promise to properly handle setTimeout errors
+      return new Promise((resolveAll, rejectAll) => {
+        const doPoll = async () => {
+          try {
+            const response = await fetch(
+              `${apiBase}/api/upload/status/${uploadId}?shopDomain=${encodeURIComponent(shopDomain)}`
+            );
           
           if (!response.ok) {
             throw new Error('Failed to check status');
@@ -924,6 +986,20 @@
                 originalUrl: state.upload.result.originalUrl
               });
             }
+            
+            // FAZ 3 - EDGE-001: Store upload in sessionStorage with tab session ID
+            try {
+              sessionStorage.setItem(`ul_upload_${productId}`, JSON.stringify({
+                tabSessionId: TAB_SESSION_ID,
+                uploadId: uploadId,
+                thumbnailUrl: state.upload.result.thumbnailUrl,
+                originalUrl: state.upload.result.originalUrl,
+                fileName: state.upload.file.name,
+                timestamp: Date.now()
+              }));
+            } catch (e) {
+              console.warn('[UL] Failed to save upload to sessionStorage:', e);
+            }
 
             // FAZ 8: Track upload completed
             if (window.ULAnalytics) {
@@ -945,31 +1021,50 @@
             elements.progress.classList.remove('active');
             elements.step1.classList.add('completed');
             
+            // FAZ 3 - DTF-006: Release file reference after successful upload to prevent memory leak
+            setTimeout(() => {
+              if (instance.lastFile) {
+                console.log('[UL] Releasing file reference for memory cleanup');
+                instance.lastFile = null;
+              }
+            }, 5000); // 5 second delay to allow preview to complete
+            
             // Enable buttons
             this.validateForm(productId);
+            
+            // FAZ 1 - DTF-005: Resolve promise on success
+            resolveAll(data);
             return;
 
           } else if (data.status === 'failed' || data.status === 'error') {
-            throw new Error(data.error || 'Processing failed');
+            // FAZ 1 - DTF-005: Reject promise on error
+            rejectAll(new Error(data.error || 'Processing failed'));
+            return;
 
           } else {
             // Still processing - continue polling
             instance.pollCount++;
             if (instance.pollCount >= MAX_POLLS) {
-              throw new Error('Processing timeout. Please try again.');
+              // FAZ 1 - DTF-005: Reject promise on timeout
+              rejectAll(new Error('Processing timeout. Please try again.'));
+              return;
             }
             
             const progress = 80 + (instance.pollCount / MAX_POLLS * 15);
             elements.progressFill.style.width = `${Math.min(progress, 95)}%`;
             
-            setTimeout(poll, POLL_INTERVAL);
+            // FAZ 1 - DTF-005: Continue polling with doPoll (not poll)
+            setTimeout(doPoll, POLL_INTERVAL);
           }
         } catch (error) {
-          throw error;
+          // FAZ 1 - DTF-005: Reject promise on any error
+          rejectAll(error);
         }
       };
 
-      await poll();
+      // Start polling
+      doPoll();
+      }); // End Promise wrapper
     },
 
     /**
@@ -1176,10 +1271,34 @@
       }
 
       // Check required extra questions
+      // FAZ 2 - DTF-004: Type-specific validation
       for (const q of config.extraQuestions) {
         if (q.required) {
           const answer = form.extraAnswers[q.label];
-          if (!answer || answer === '' || answer === 'No') {
+          let isEmpty = false;
+          
+          switch (q.type) {
+            case 'checkbox':
+              // Checkbox: only 'Yes' is valid for required
+              isEmpty = answer !== 'Yes';
+              break;
+            case 'number':
+              // Number: 0 is valid, undefined/null/empty is not
+              isEmpty = answer === undefined || answer === null || answer === '';
+              break;
+            case 'select':
+              // Select: check for empty or placeholder values
+              isEmpty = !answer || answer === '' || answer === 'Select...' || answer === '-- Select --';
+              break;
+            case 'text':
+            case 'textarea':
+            default:
+              // Text types: check for empty or whitespace-only
+              isEmpty = !answer || answer.toString().trim() === '';
+              break;
+          }
+          
+          if (isEmpty) {
             isValid = false;
             errors.push(`Fill in "${q.label}"`);
           }
@@ -1226,6 +1345,17 @@
         window.ULEvents.emit('modalOpen', { source: 'dtf-uploader', productId });
       }
 
+      // FAZ 5 FIX: Create blobUrl from lastFile if available (prevents CORS/signed URL expiry issues)
+      let blobUrl = null;
+      if (instance.lastFile && instance.lastFile instanceof Blob) {
+        try {
+          blobUrl = URL.createObjectURL(instance.lastFile);
+          console.log('[UL] Created blobUrl for T-Shirt modal:', blobUrl.substring(0, 50) + '...');
+        } catch (e) {
+          console.warn('[UL] Failed to create blobUrl:', e);
+        }
+      }
+      
       // Dispatch event for tshirt-modal.js (FAZ 2)
       const event = new CustomEvent('ul:openTShirtModal', {
         detail: {
@@ -1235,6 +1365,7 @@
             uploadId: state.upload.uploadId,
             thumbnailUrl: state.upload.result.thumbnailUrl,
             originalUrl: state.upload.result.originalUrl,
+            blobUrl: blobUrl, // FAZ 5 FIX: Pass blobUrl for CORS-free texture loading
             dimensions: {
               width: state.upload.result.width,
               height: state.upload.result.height,

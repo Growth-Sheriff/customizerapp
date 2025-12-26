@@ -203,11 +203,39 @@ console.log('[ULTShirtModal] Script loading...');
 
     // Create off-screen canvas for texture baking
     createTextureCanvas() {
+      // FAZ 3 - EDGE-004: Dynamic texture size based on file size
+      const optimalSize = this.getOptimalTextureSize();
+      this.baseTextureSize = optimalSize;
+      
       this.textureCanvas = document.createElement('canvas');
       this.textureCanvas.width = this.baseTextureSize;
       this.textureCanvas.height = this.baseTextureSize;
       this.textureCtx = this.textureCanvas.getContext('2d');
       console.log('[ULTShirtModal] Texture canvas:', this.baseTextureSize + 'x' + this.baseTextureSize);
+    },
+    
+    // FAZ 3 - EDGE-004: Calculate optimal texture size based on design file size
+    getOptimalTextureSize() {
+      // Get file size from current design
+      const fileSize = this.step1.newUpload?.fileSize || 
+                       this.inheritedDesign?.dimensions?.fileSize || 
+                       this.inheritedDesign?.fileSize ||
+                       0;
+      
+      const sizeMB = fileSize / (1024 * 1024);
+      
+      // For very large files, reduce texture resolution to prevent memory issues
+      if (sizeMB > 30) {
+        console.log('[ULTShirtModal] Large file detected (', sizeMB.toFixed(1), 'MB), using 1K texture');
+        return 1024;
+      }
+      if (sizeMB > 15) {
+        console.log('[ULTShirtModal] Medium-large file detected (', sizeMB.toFixed(1), 'MB), using 1.5K texture');
+        return 1536;
+      }
+      
+      // Default: 2K texture for good quality
+      return 2048;
     },
 
     cacheElements() {
@@ -363,15 +391,47 @@ console.log('[ULTShirtModal] Script loading...');
         this.shopDomain = shopDomain;
       }
       
+      // FAZ 3 - EDGE-001: Check for tab session mismatch (multi-tab conflict)
+      if (productId && uploadData) {
+        try {
+          const storedUpload = sessionStorage.getItem(`ul_upload_${productId}`);
+          if (storedUpload) {
+            const parsed = JSON.parse(storedUpload);
+            // Check if upload is from a different tab
+            if (parsed.uploadId !== (uploadData.id || uploadData.uploadId)) {
+              console.warn('[ULTShirtModal] Upload from different tab detected');
+              // Still proceed but warn user
+              this.showToast('Using the most recent design from this tab.', 'info');
+            }
+          }
+        } catch (e) {
+          console.warn('[ULTShirtModal] Tab session check failed:', e);
+        }
+      }
+      
       // Store inherited design if provided
       if (uploadData) {
         this.inheritedDesign = {
           uploadId: uploadData.id || uploadData.uploadId,
           thumbnailUrl: uploadData.thumbnailUrl || uploadData.url,
           originalUrl: uploadData.url || uploadData.originalUrl,
+          blobUrl: uploadData.blobUrl || null, // FAZ 5 FIX: Store blobUrl from DTF uploader
           name: uploadData.name || 'Design',
           dimensions: uploadData.dimensions || { width: 0, height: 0, dpi: 0 }
         };
+        
+        // FAZ 5 FIX: If no blobUrl provided but thumbnailUrl exists, try to fetch and create blobUrl
+        if (!this.inheritedDesign.blobUrl && this.inheritedDesign.thumbnailUrl) {
+          this.fetchAndCacheThumbnail(this.inheritedDesign.thumbnailUrl)
+            .then(blobUrl => {
+              if (blobUrl) {
+                this.inheritedDesign.blobUrl = blobUrl;
+                console.log('[ULTShirtModal] Cached inherited design as blobUrl');
+              }
+            })
+            .catch(e => console.warn('[ULTShirtModal] Could not cache thumbnail:', e));
+        }
+        
         this.showInheritedDesign();
       } else {
         this.hideInheritedDesign();
@@ -420,8 +480,13 @@ console.log('[ULTShirtModal] Script loading...');
       this.isOpen = true;
       document.body.style.overflow = 'hidden';
       
-      // Go to step 1
-      this.goToStep(1);
+      // FAZ 3 - EDGE-002: Check for saved progress before going to step 1
+      const restored = this.checkAndRestoreProgress(productId);
+      
+      // Go to step 1 if not restored
+      if (!restored) {
+        this.goToStep(1);
+      }
       
       // Load product variants (for step 2)
       this.loadProductVariants();
@@ -451,12 +516,84 @@ console.log('[ULTShirtModal] Script loading...');
         window.ULEvents.emit('modalClose', { source: 'tshirt-modal' });
       }
       
+      // FAZ 0 - TSM-006: Cleanup blob URLs to prevent memory leaks
+      this.cleanupBlobUrls();
+      
       // Cleanup 3D
       this.cleanup3D();
     },
 
+    /**
+     * FAZ 5 FIX: Fetch thumbnail URL and create a blob URL for CORS-free texture loading
+     * This is needed when blobUrl is not passed from DTF uploader
+     */
+    async fetchAndCacheThumbnail(url) {
+      if (!url || url.startsWith('blob:')) {
+        return url; // Already a blob URL or no URL
+      }
+      
+      try {
+        const response = await fetch(url, { 
+          mode: 'cors',
+          credentials: 'omit',
+          cache: 'force-cache'
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Fetch failed: ${response.status}`);
+        }
+        
+        const blob = await response.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        console.log('[ULTShirtModal] Created cached blobUrl from:', url.substring(0, 50) + '...');
+        return blobUrl;
+      } catch (e) {
+        console.warn('[ULTShirtModal] fetchAndCacheThumbnail failed:', e.message);
+        return null;
+      }
+    },
+
+    /**
+     * FAZ 0 - TSM-006: Cleanup blob URLs to prevent memory leaks
+     * Called when modal is closed
+     */
+    cleanupBlobUrls() {
+      // Revoke inherited design blob URL
+      if (this.inheritedDesign.blobUrl) {
+        try {
+          URL.revokeObjectURL(this.inheritedDesign.blobUrl);
+          console.log('[ULTShirtModal] Revoked inherited design blobUrl');
+        } catch (e) {
+          console.warn('[ULTShirtModal] Could not revoke inherited blobUrl:', e);
+        }
+        this.inheritedDesign.blobUrl = null;
+      }
+      
+      // Revoke new upload blob URL
+      if (this.step1.newUpload.blobUrl) {
+        try {
+          URL.revokeObjectURL(this.step1.newUpload.blobUrl);
+          console.log('[ULTShirtModal] Revoked new upload blobUrl');
+        } catch (e) {
+          console.warn('[ULTShirtModal] Could not revoke new upload blobUrl:', e);
+        }
+        this.step1.newUpload.blobUrl = null;
+      }
+      
+      // Also check thumbnailUrl if it's a blob URL
+      if (this.step1.newUpload.thumbnailUrl?.startsWith('blob:')) {
+        try {
+          URL.revokeObjectURL(this.step1.newUpload.thumbnailUrl);
+        } catch (e) { /* ignore */ }
+        this.step1.newUpload.thumbnailUrl = null;
+      }
+    },
+
     resetState() {
       this.currentStep = 1;
+      
+      // FAZ 3 - EDGE-003: Reset texture update counter for race condition prevention
+      this.textureUpdateId = 0;
       
       this.step1 = {
         useInheritedDesign: false,
@@ -551,6 +688,88 @@ console.log('[ULTShirtModal] Script loading...');
         this.initStep3();
       } else if (step === 4) {
         this.initStep4();
+      }
+      
+      // FAZ 3 - EDGE-002: Save progress to sessionStorage
+      this.saveProgress();
+    },
+    
+    // FAZ 3 - EDGE-002: Save current progress to sessionStorage
+    saveProgress() {
+      try {
+        const progress = {
+          currentStep: this.currentStep,
+          productId: this.product.id,
+          inheritedDesign: this.inheritedDesign,
+          step1: {
+            useInheritedDesign: this.step1.useInheritedDesign,
+            newUpload: this.step1.newUpload
+          },
+          step2: {
+            activeLocation: this.step2.activeLocation,
+            tshirtColor: this.step2.tshirtColor,
+            tshirtColorName: this.step2.tshirtColorName,
+            tshirtSize: this.step2.tshirtSize,
+            locations: this.step2.locations
+          },
+          step3: {
+            quantity: this.step3.quantity,
+            extraAnswers: this.step3.extraAnswers
+          },
+          timestamp: Date.now()
+        };
+        sessionStorage.setItem('ul_tshirt_progress', JSON.stringify(progress));
+      } catch (e) {
+        console.warn('[ULTShirtModal] Failed to save progress:', e);
+      }
+    },
+    
+    // FAZ 3 - EDGE-002: Check for saved progress and optionally restore
+    checkAndRestoreProgress(productId) {
+      try {
+        const saved = sessionStorage.getItem('ul_tshirt_progress');
+        if (!saved) return false;
+        
+        const progress = JSON.parse(saved);
+        
+        // Only restore if same product and within 30 minutes
+        const isValid = progress.productId === productId &&
+                        Date.now() - progress.timestamp < 30 * 60 * 1000;
+        
+        if (!isValid) {
+          sessionStorage.removeItem('ul_tshirt_progress');
+          return false;
+        }
+        
+        // Ask user if they want to restore
+        const restore = confirm('You have a previous design in progress. Would you like to continue where you left off?');
+        
+        if (restore) {
+          // Restore state
+          if (progress.inheritedDesign) {
+            this.inheritedDesign = progress.inheritedDesign;
+          }
+          if (progress.step1) {
+            Object.assign(this.step1, progress.step1);
+          }
+          if (progress.step2) {
+            Object.assign(this.step2, progress.step2);
+          }
+          if (progress.step3) {
+            Object.assign(this.step3, progress.step3);
+          }
+          
+          // Go to saved step
+          this.goToStep(progress.currentStep);
+          this.showToast('Progress restored!', 'success');
+          return true;
+        } else {
+          sessionStorage.removeItem('ul_tshirt_progress');
+          return false;
+        }
+      } catch (e) {
+        console.warn('[ULTShirtModal] Failed to restore progress:', e);
+        return false;
       }
     },
 
@@ -816,11 +1035,13 @@ console.log('[ULTShirtModal] Script loading...');
       // API base from customizerapp.dev
       const apiBase = 'https://customizerapp.dev';
       
-      // Get shopDomain from stored value, Shopify global, or DOM fallback
-      const shopDomain = this.shopDomain ||
-                         window.Shopify?.shop || 
-                         document.querySelector('[data-shop-domain]')?.dataset.shopDomain ||
-                         'unknown';
+      // FAZ 0 - TSM-003: Robust shopDomain detection with validation
+      const shopDomain = this.getShopDomain();
+      
+      if (!shopDomain) {
+        console.error('[ULTShirtModal] CRITICAL: shopDomain could not be determined');
+        throw new Error('Shop configuration error. Please refresh the page and try again.');
+      }
       
       console.log('[ULTShirtModal] performUpload - shopDomain:', shopDomain);
       
@@ -986,14 +1207,34 @@ console.log('[ULTShirtModal] Script loading...');
       container.id = 'ul-3d-fallback';
       container.className = 'ul-3d-fallback';
       
+      // FAZ 2 - TSM-009: View-specific SVG paths for multi-view support
+      this.fallbackSvgPaths = {
+        front: `<path d="M100 20 L60 20 L40 60 L20 60 L20 100 L50 100 L50 220 L150 220 L150 100 L180 100 L180 60 L160 60 L140 20 L100 20 Z" 
+                      fill="${this.step2.tshirtColor}" stroke="#ccc" stroke-width="2"/>`,
+        back: `<path d="M100 20 L60 20 L40 60 L20 60 L20 100 L50 100 L50 220 L150 220 L150 100 L180 100 L180 60 L160 60 L140 20 L100 20 Z" 
+                     fill="${this.step2.tshirtColor}" stroke="#999" stroke-width="2" stroke-dasharray="5,3"/>
+               <text x="100" y="130" text-anchor="middle" fill="#999" font-size="14">BACK</text>`,
+        left_sleeve: `<rect x="40" y="60" width="70" height="100" rx="8" fill="${this.step2.tshirtColor}" stroke="#ccc" stroke-width="2"/>
+                      <text x="75" y="115" text-anchor="middle" fill="#999" font-size="10">LEFT</text>`,
+        right_sleeve: `<rect x="90" y="60" width="70" height="100" rx="8" fill="${this.step2.tshirtColor}" stroke="#ccc" stroke-width="2"/>
+                       <text x="125" y="115" text-anchor="middle" fill="#999" font-size="10">RIGHT</text>`
+      };
+      
+      // FAZ 2 - TSM-009: Design overlay positions per view
+      this.fallbackOverlayPositions = {
+        front: { top: '28%', left: '50%', width: '55%', maxWidth: '110px' },
+        back: { top: '28%', left: '50%', width: '55%', maxWidth: '110px' },
+        left_sleeve: { top: '45%', left: '50%', width: '35%', maxWidth: '50px' },
+        right_sleeve: { top: '45%', left: '50%', width: '35%', maxWidth: '50px' }
+      };
+      
       container.innerHTML = `
         <div class="ul-3d-fallback-notice">
           <span>📱 2D Preview Mode</span>
         </div>
         <div class="ul-fallback-image-container">
-          <svg class="ul-fallback-tshirt" viewBox="0 0 200 240" fill="currentColor">
-            <path d="M100 20 L60 20 L40 60 L20 60 L20 100 L50 100 L50 220 L150 220 L150 100 L180 100 L180 60 L160 60 L140 20 L100 20 Z" 
-                  fill="${this.step2.tshirtColor}" stroke="#ccc" stroke-width="2"/>
+          <svg class="ul-fallback-tshirt" id="ul-fallback-svg" viewBox="0 0 200 240" fill="currentColor">
+            ${this.fallbackSvgPaths.front}
           </svg>
           <div class="ul-fallback-design-overlay" id="ul-fallback-design"></div>
         </div>
@@ -1024,31 +1265,45 @@ console.log('[ULTShirtModal] Script loading...');
     
     updateFallback2D() {
       const designEl = document.getElementById('ul-fallback-design');
-      const tshirtSvg = document.querySelector('.ul-fallback-tshirt path');
+      const fallbackSvg = document.getElementById('ul-fallback-svg');
       
       if (!designEl) return;
       
-      // Update t-shirt color
-      if (tshirtSvg) {
-        tshirtSvg.setAttribute('fill', this.step2.tshirtColor);
+      const activeView = this.step2.activeLocation || 'front';
+      
+      // FAZ 2 - TSM-009: Update SVG for current view
+      if (fallbackSvg && this.fallbackSvgPaths) {
+        // Update SVG paths with current color
+        const coloredPath = (this.fallbackSvgPaths[activeView] || this.fallbackSvgPaths.front)
+          .replace(/fill="[^"]*"/g, `fill="${this.step2.tshirtColor}"`);
+        fallbackSvg.innerHTML = coloredPath;
       }
       
-      // Get current design URL
+      // Get current design URL - FAZ 1 fix: prefer blobUrl
       const designUrl = this.step1.useInheritedDesign 
-        ? this.inheritedDesign.thumbnailUrl 
-        : (this.step1.newUpload?.thumbnailUrl || '');
+        ? (this.inheritedDesign.blobUrl || this.inheritedDesign.thumbnailUrl)
+        : (this.step1.newUpload?.blobUrl || this.step1.newUpload?.thumbnailUrl || '');
       
       if (designUrl) {
         designEl.style.backgroundImage = `url(${designUrl})`;
         designEl.style.display = 'block';
         
-        // Apply scale
-        const loc = this.step2.locations[this.step2.activeLocation];
+        // FAZ 2 - TSM-009: Apply view-specific positioning
+        const positions = this.fallbackOverlayPositions?.[activeView] || this.fallbackOverlayPositions?.front;
+        if (positions) {
+          designEl.style.top = positions.top;
+          designEl.style.left = positions.left;
+          designEl.style.width = positions.width;
+          designEl.style.maxWidth = positions.maxWidth;
+        }
+        
+        // Apply scale and position from location settings
+        const loc = this.step2.locations[activeView];
         if (loc && loc.enabled) {
           const scale = (loc.scale || 100) / 100;
           const x = (loc.positionX || 0) / 2;
           const y = (loc.positionY || 0) / 2;
-          designEl.style.transform = `translate(calc(-50% + ${x}px), calc(-60% + ${y}px)) scale(${scale})`;
+          designEl.style.transform = `translate(calc(-50% + ${x}px), calc(-50% + ${y}px)) scale(${scale})`;
         } else {
           designEl.style.display = 'none';
         }
@@ -1078,40 +1333,50 @@ console.log('[ULTShirtModal] Script loading...');
             this.product.handle = product.handle;
             this.product.variants = product.variants || [];
             
-            // Use colors and sizes from config if available, otherwise extract from variants
-            if (tshirtConfig.colorValues?.length > 0) {
+            // FAZ 1 - TSM-007: Extract colors from AVAILABLE variants only
+            // This ensures customers can only select colors that have stock
+            const availableColors = new Set();
+            const availableSizes = new Set();
+            
+            product.variants.forEach(variant => {
+              // Only include available variants
+              if (variant.available !== false) {
+                [variant.option1, variant.option2, variant.option3].forEach(opt => {
+                  if (opt) {
+                    if (this.isSizeValue(opt)) {
+                      availableSizes.add(opt);
+                    } else {
+                      availableColors.add(opt);
+                    }
+                  }
+                });
+              }
+            });
+            
+            // Use colors from available variants, with fallback to config
+            if (availableColors.size > 0) {
+              this.product.colors = Array.from(availableColors).map(name => ({
+                name,
+                hex: this.getColorHex(name)
+              }));
+              console.log('[ULTShirtModal] Colors from available variants:', availableColors.size);
+            } else if (tshirtConfig.colorValues?.length > 0) {
+              // Fallback to config colors (but warn - these may be out of stock)
+              console.warn('[ULTShirtModal] Using config colors - no available variants with colors found');
               this.product.colors = tshirtConfig.colorValues.map(name => ({
                 name,
                 hex: this.getColorHex(name)
               }));
-            } else {
-              // Extract from variants
-              const colorSet = new Set();
-              product.variants.forEach(variant => {
-                const colorOpt = tshirtConfig.colorVariantOption || 'Color';
-                if (variant.option1 && !this.isSizeValue(variant.option1)) colorSet.add(variant.option1);
-                if (variant.option2 && !this.isSizeValue(variant.option2)) colorSet.add(variant.option2);
-              });
-              if (colorSet.size > 0) {
-                this.product.colors = Array.from(colorSet).map(name => ({
-                  name,
-                  hex: this.getColorHex(name)
-                }));
-              }
             }
             
-            if (tshirtConfig.sizeValues?.length > 0) {
+            // Use sizes from available variants, with fallback to config
+            if (availableSizes.size > 0) {
+              this.product.sizes = Array.from(availableSizes);
+              console.log('[ULTShirtModal] Sizes from available variants:', availableSizes.size);
+            } else if (tshirtConfig.sizeValues?.length > 0) {
+              // Fallback to config sizes
+              console.warn('[ULTShirtModal] Using config sizes - no available variants with sizes found');
               this.product.sizes = tshirtConfig.sizeValues;
-            } else {
-              // Extract from variants
-              const sizeSet = new Set();
-              product.variants.forEach(variant => {
-                if (variant.option1 && this.isSizeValue(variant.option1)) sizeSet.add(variant.option1);
-                if (variant.option2 && this.isSizeValue(variant.option2)) sizeSet.add(variant.option2);
-              });
-              if (sizeSet.size > 0) {
-                this.product.sizes = Array.from(sizeSet);
-              }
             }
             
             // Apply allowed positions from config
@@ -1179,20 +1444,104 @@ console.log('[ULTShirtModal] Script loading...');
         }
       }
       
-      // Final fallback: Use default colors/sizes
-      console.warn('[ULTShirtModal] No T-Shirt product found! Using defaults. Please configure in admin panel.');
-      this.product.colors = [
-        { name: 'White', hex: '#ffffff' },
-        { name: 'Black', hex: '#1a1a1a' },
-        { name: 'Navy', hex: '#1e3a5f' },
-        { name: 'Red', hex: '#dc2626' },
-        { name: 'Blue', hex: '#3b82f6' },
-        { name: 'Green', hex: '#22c55e' },
-        { name: 'Gray', hex: '#6b7280' },
-        { name: 'Pink', hex: '#ec4899' }
-      ];
+      // FAZ 0 - TSM-001: T-Shirt product not configured - show error screen
+      // Don't use defaults that will fail at checkout!
+      console.error('[ULTShirtModal] CRITICAL: No T-Shirt product found! Cannot proceed without product configuration.');
       
-      this.product.sizes = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'];
+      // Set empty variants to trigger error in addToCart
+      this.product.variants = [];
+      
+      // Show configuration error screen immediately
+      this.showConfigurationError();
+    },
+    
+    /**
+     * FAZ 0 - TSM-001: Show configuration error screen
+     * Called when T-Shirt product is not configured in admin panel
+     */
+    showConfigurationError() {
+      console.log('[ULTShirtModal] Showing configuration error screen');
+      
+      // Add error state class to modal
+      const overlay = document.querySelector('.ul-tshirt-modal');
+      if (overlay) {
+        overlay.classList.add('error-state');
+      }
+      
+      // Replace modal content with error message
+      const content = document.querySelector('.ul-modal-content');
+      if (content) {
+        content.innerHTML = `
+          <div class="ul-config-error">
+            <button type="button" class="ul-modal-close" onclick="window.ULTShirtModal.close()">×</button>
+            <div class="ul-error-icon">⚠️</div>
+            <h2>Configuration Required</h2>
+            <p>The T-Shirt customizer hasn't been set up yet for this store.</p>
+            <p class="ul-error-detail">Please contact the store owner to configure the T-Shirt product in the admin panel.</p>
+            <button type="button" onclick="window.ULTShirtModal.close()" class="ul-btn ul-btn-primary">
+              Close
+            </button>
+          </div>
+          <style>
+            .ul-config-error {
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              padding: 60px 40px;
+              text-align: center;
+              min-height: 400px;
+            }
+            .ul-config-error .ul-error-icon {
+              font-size: 64px;
+              margin-bottom: 20px;
+            }
+            .ul-config-error h2 {
+              font-size: 24px;
+              margin: 0 0 16px 0;
+              color: #333;
+            }
+            .ul-config-error p {
+              font-size: 16px;
+              color: #666;
+              margin: 0 0 12px 0;
+              max-width: 400px;
+            }
+            .ul-config-error .ul-error-detail {
+              font-size: 14px;
+              color: #999;
+            }
+            .ul-config-error .ul-btn {
+              margin-top: 24px;
+              padding: 12px 32px;
+              font-size: 16px;
+            }
+            .ul-config-error .ul-modal-close {
+              position: absolute;
+              top: 16px;
+              right: 16px;
+              background: none;
+              border: none;
+              font-size: 28px;
+              cursor: pointer;
+              color: #666;
+            }
+          </style>
+        `;
+      }
+      
+      // Analytics: Track configuration error
+      if (window.ULAnalytics) {
+        window.ULAnalytics.trackError({
+          code: 'TSHIRT_NOT_CONFIGURED',
+          step: 'loadProductVariants',
+          productId: this.product.id || 'unknown',
+          shopDomain: this.shopDomain || 'unknown'
+        });
+      }
+      
+      // Prevent further step navigation
+      this.step1.configurationError = true;
     },
     
     // Helper to check if a value is a size
@@ -1239,10 +1588,178 @@ console.log('[ULTShirtModal] Script loading...');
       return colorMap[normalized] || '#cccccc';
     },
 
+    /**
+     * FAZ 0 - TSM-003: Robust shopDomain detection
+     * Tries multiple sources with validation to ensure we have a valid shop domain
+     */
+    getShopDomain() {
+      // Priority-ordered sources for shop domain
+      const sources = [
+        // 1. Stored value from modal init
+        this.shopDomain,
+        // 2. Shopify global object (most reliable in storefront)
+        window.Shopify?.shop,
+        // 3. DOM data attribute
+        document.querySelector('[data-shop-domain]')?.dataset?.shopDomain,
+        // 4. Meta tag
+        document.querySelector('meta[name="shopify-shop"]')?.content,
+        // 5. UL widget config
+        window.ulConfig?.shopDomain,
+        // 6. Extract from hostname if on myshopify.com
+        window.location.hostname.includes('.myshopify.com') ? window.location.hostname : null
+      ];
+      
+      // First pass: Find a valid myshopify.com domain
+      for (const source of sources) {
+        if (source && 
+            typeof source === 'string' && 
+            source !== 'unknown' && 
+            source.includes('.myshopify.com')) {
+          console.log('[ULTShirtModal] getShopDomain: Found myshopify domain:', source);
+          return source;
+        }
+      }
+      
+      // Second pass: Accept any non-empty, valid-looking domain
+      for (const source of sources) {
+        if (source && 
+            typeof source === 'string' && 
+            source !== 'unknown' && 
+            source.length > 3 &&
+            source.includes('.')) {
+          console.log('[ULTShirtModal] getShopDomain: Found custom domain:', source);
+          return source;
+        }
+      }
+      
+      console.error('[ULTShirtModal] getShopDomain: No valid shop domain found');
+      return null;
+    },
+
+    /**
+     * FAZ 0 - TSM-004: Robust variant matching with normalization
+     * Prevents issues like 'M' matching 'Small' (contains 'm')
+     */
+    findMatchingVariant(color, size) {
+      const variants = this.product.variants || [];
+      
+      // Size normalization map - handles abbreviations and variations
+      const sizeNormalize = {
+        'xs': ['xs', 'x-small', 'extra-small', 'extra small', 'xsmall'],
+        's': ['s', 'sm', 'small'],
+        'm': ['m', 'md', 'medium', 'med'],
+        'l': ['l', 'lg', 'large'],
+        'xl': ['xl', 'x-large', 'extra-large', 'extra large', 'xlarge'],
+        '2xl': ['2xl', 'xxl', 'xx-large', '2x', '2xlarge'],
+        '3xl': ['3xl', 'xxxl', 'xxx-large', '3x', '3xlarge'],
+        '4xl': ['4xl', 'xxxxl', '4x', '4xlarge'],
+        // Numeric sizes (for international sizing)
+        '36': ['36'], '38': ['38'], '40': ['40'], '42': ['42'], '44': ['44'], '46': ['46'], '48': ['48'],
+        '6': ['6'], '8': ['8'], '10': ['10'], '12': ['12'], '14': ['14'], '16': ['16']
+      };
+      
+      // Color normalization map - handles multi-language variations
+      const colorNormalize = {
+        'white': ['white', 'beyaz', 'weiß', 'weiss', 'blanco', 'bianco', 'blanc'],
+        'black': ['black', 'siyah', 'schwarz', 'negro', 'nero', 'noir'],
+        'red': ['red', 'kırmızı', 'kirmizi', 'rot', 'rojo', 'rosso', 'rouge'],
+        'blue': ['blue', 'mavi', 'blau', 'azul', 'blu', 'bleu'],
+        'navy': ['navy', 'lacivert', 'marine', 'navy blue', 'dark blue'],
+        'green': ['green', 'yeşil', 'yesil', 'grün', 'grun', 'verde', 'vert'],
+        'gray': ['gray', 'grey', 'gri', 'grau', 'gris', 'grigio'],
+        'pink': ['pink', 'pembe', 'rosa', 'rose'],
+        'yellow': ['yellow', 'sarı', 'sari', 'gelb', 'amarillo', 'giallo', 'jaune'],
+        'orange': ['orange', 'turuncu', 'naranja', 'arancione'],
+        'purple': ['purple', 'mor', 'lila', 'violett', 'morado', 'viola', 'violet'],
+        'brown': ['brown', 'kahverengi', 'braun', 'marrón', 'marron', 'marrone', 'brun'],
+        'beige': ['beige', 'bej', 'creme'],
+        'cream': ['cream', 'krem', 'creme'],
+        'burgundy': ['burgundy', 'bordo', 'bordeaux', 'wine'],
+        'teal': ['teal', 'petrol', 'türkis', 'turkis'],
+        'coral': ['coral', 'mercan', 'koralle'],
+        'mint': ['mint', 'nane', 'menthe'],
+        'lavender': ['lavender', 'lavanta'],
+        'charcoal': ['charcoal', 'antrasit', 'anthrazit']
+      };
+      
+      // Normalize a value using the map
+      const normalizeValue = (value, map) => {
+        if (!value) return '';
+        const lower = value.toLowerCase().trim();
+        for (const [key, aliases] of Object.entries(map)) {
+          if (aliases.includes(lower) || aliases.some(a => lower === a)) {
+            return key;
+          }
+        }
+        return lower;
+      };
+      
+      const targetSize = normalizeValue(size, sizeNormalize);
+      const targetColor = normalizeValue(color, colorNormalize);
+      
+      console.log('[ULTShirtModal] findMatchingVariant - Looking for:', { targetColor, targetSize });
+      
+      // EXACT match first (size + color, available)
+      let match = variants.find(v => {
+        if (v.available === false) return false;
+        
+        const opt1 = (v.option1 || '').toLowerCase().trim();
+        const opt2 = (v.option2 || '').toLowerCase().trim();
+        const opt3 = (v.option3 || '').toLowerCase().trim();
+        
+        const opt1SizeNorm = normalizeValue(opt1, sizeNormalize);
+        const opt2SizeNorm = normalizeValue(opt2, sizeNormalize);
+        const opt3SizeNorm = normalizeValue(opt3, sizeNormalize);
+        
+        const opt1ColorNorm = normalizeValue(opt1, colorNormalize);
+        const opt2ColorNorm = normalizeValue(opt2, colorNormalize);
+        const opt3ColorNorm = normalizeValue(opt3, colorNormalize);
+        
+        const sizeMatch = opt1SizeNorm === targetSize || opt2SizeNorm === targetSize || opt3SizeNorm === targetSize;
+        const colorMatch = opt1ColorNorm === targetColor || opt2ColorNorm === targetColor || opt3ColorNorm === targetColor;
+        
+        return sizeMatch && colorMatch;
+      });
+      
+      if (match) {
+        console.log('[ULTShirtModal] findMatchingVariant - Found exact match:', match.title);
+        return match;
+      }
+      
+      // SIZE only fallback (available)
+      match = variants.find(v => {
+        if (v.available === false) return false;
+        
+        const opt1SizeNorm = normalizeValue(v.option1, sizeNormalize);
+        const opt2SizeNorm = normalizeValue(v.option2, sizeNormalize);
+        const opt3SizeNorm = normalizeValue(v.option3, sizeNormalize);
+        
+        return opt1SizeNorm === targetSize || opt2SizeNorm === targetSize || opt3SizeNorm === targetSize;
+      });
+      
+      if (match) {
+        console.log('[ULTShirtModal] findMatchingVariant - Found size-only match:', match.title);
+        return match;
+      }
+      
+      // FIRST AVAILABLE variant fallback
+      match = variants.find(v => v.available !== false);
+      
+      if (match) {
+        console.log('[ULTShirtModal] findMatchingVariant - Using first available variant:', match.title);
+        return match;
+      }
+      
+      // ABSOLUTE fallback: first variant regardless of availability
+      console.warn('[ULTShirtModal] findMatchingVariant - No available variants, using first:', variants[0]?.title);
+      return variants[0] || null;
+    },
+
     renderColors() {
       if (!this.el.colorGrid) return;
       
       this.el.colorGrid.innerHTML = '';
+      
       
       this.product.colors.forEach((color, idx) => {
         const swatch = document.createElement('button');
@@ -1401,6 +1918,42 @@ console.log('[ULTShirtModal] Script loading...');
       
       // Move camera to this location
       this.setQuickView(locationId.replace('_sleeve', '').replace('left', 'left').replace('right', 'right'));
+    },
+
+    /**
+     * FAZ 0 - TSM-002: selectLocation function
+     * Convenience wrapper that enables the location AND sets it as active
+     * Used by applyAllowedLocations when switching from a disallowed location
+     */
+    selectLocation(locationId) {
+      // Enable location if not already enabled
+      if (this.step2.locations[locationId] && !this.step2.locations[locationId].enabled) {
+        this.step2.locations[locationId].enabled = true;
+      }
+      
+      // Set as active location
+      this.setActiveLocation(locationId);
+      
+      // Update checkbox UI
+      const checkbox = document.querySelector(`.ul-location-checkbox[data-location="${locationId}"]`);
+      if (checkbox) {
+        checkbox.checked = true;
+      }
+      
+      // Update location item selected state
+      const item = document.querySelector(`.ul-location-item[data-location="${locationId}"]`);
+      if (item) {
+        item.classList.add('selected');
+      }
+      
+      // Update 3D/2D preview
+      if (this.supports3D()) {
+        this.update3DDecal(locationId, true);
+      } else {
+        this.updateFallback2D();
+      }
+      
+      console.log('[ULTShirtModal] selectLocation:', locationId);
     },
 
     updateLocationSettingsUI() {
@@ -1599,7 +2152,12 @@ console.log('[ULTShirtModal] Script loading...');
     loadDecalImage(url) {
       return new Promise((resolve, reject) => {
         const img = new Image();
-        img.crossOrigin = 'anonymous';
+        
+        // FAZ 5 FIX: Only set crossOrigin for non-blob URLs
+        // Blob URLs are local and don't need CORS, setting crossOrigin can cause issues
+        if (!url.startsWith('blob:')) {
+          img.crossOrigin = 'anonymous';
+        }
         
         img.onload = () => {
           console.log('[ULTShirtModal] Decal image loaded:', img.width, 'x', img.height);
@@ -1617,7 +2175,11 @@ console.log('[ULTShirtModal] Script loading...');
     },
     
     // Update the baked texture with all enabled decals
+    // FAZ 3 - EDGE-003: Added race condition prevention
     updateBakedTexture() {
+      // Increment update ID to track this update request
+      const updateId = ++this.textureUpdateId;
+      
       if (!this.textureCtx) {
         console.log('[ULTShirtModal] No texture context');
         return;
@@ -1626,7 +2188,7 @@ console.log('[ULTShirtModal] Script loading...');
       const ctx = this.textureCtx;
       const size = this.baseTextureSize;
       
-      console.log('[ULTShirtModal] Updating baked texture...');
+      console.log('[ULTShirtModal] Updating baked texture... (updateId:', updateId, ')');
       
       // Clear and fill with T-shirt color
       ctx.fillStyle = this.step2.tshirtColor;
@@ -1642,6 +2204,12 @@ console.log('[ULTShirtModal] Script loading...');
             this.drawDecalToTexture(locationId, loc);
           }
         });
+      }
+      
+      // FAZ 3 - EDGE-003: Check if a newer update was requested before applying
+      if (updateId !== this.textureUpdateId) {
+        console.log('[ULTShirtModal] Texture update cancelled - newer update pending (updateId:', updateId, 'current:', this.textureUpdateId, ')');
+        return;
       }
       
       // Apply texture to 3D mesh
@@ -1987,11 +2555,20 @@ console.log('[ULTShirtModal] Script loading...');
     },
 
     async applyDesignTexture() {
-      const designUrl = this.step1.useInheritedDesign 
-        ? this.inheritedDesign.thumbnailUrl 
-        : this.step1.newUpload.thumbnailUrl;
+      // FAZ 0 - TSM-006: Prefer blobUrl (local cache) over remote URL
+      // This prevents CORS issues and handles expired signed URLs
+      let designUrl;
       
-      console.log('[ULTShirtModal] Applying design texture (Texture Baking):', designUrl);
+      if (this.step1.useInheritedDesign) {
+        // Prefer blobUrl if available (cached version), fallback to original URL
+        designUrl = this.inheritedDesign.blobUrl || this.inheritedDesign.thumbnailUrl;
+      } else {
+        // For new uploads, we already use blob URL from performUpload
+        designUrl = this.step1.newUpload.blobUrl || this.step1.newUpload.thumbnailUrl;
+      }
+      
+      console.log('[ULTShirtModal] Applying design texture (Texture Baking):', 
+        designUrl ? designUrl.substring(0, 50) + '...' : 'none');
       
       if (!designUrl) {
         console.log('[ULTShirtModal] No design URL available');
@@ -2267,10 +2844,107 @@ console.log('[ULTShirtModal] Script loading...');
         this.el.detailsMeta.textContent = `Locations: ${locNames.join(', ')} • Subtotal: $${this.step2.calculatedPrice.toFixed(2)}`;
       }
       
+      // FAZ 1 - TSM-005: Render extra questions
+      this.renderTShirtQuestions();
+      
       // Update quantity display
       if (this.el.qtyValue) {
         this.el.qtyValue.textContent = this.step3.quantity.toString();
       }
+    },
+
+    /**
+     * FAZ 1 - TSM-005: Render T-Shirt extra questions in Step 3
+     */
+    renderTShirtQuestions() {
+      const container = this.el.extraQuestions || document.querySelector('.ul-step[data-step="3"] .ul-extra-questions');
+      if (!container) {
+        console.log('[ULTShirtModal] No extra questions container found');
+        return;
+      }
+      
+      // Get T-Shirt specific questions from config
+      const questions = this.config.tshirtExtraQuestions || 
+                       this.config.extraQuestions || 
+                       [];
+      
+      if (questions.length === 0) {
+        container.style.display = 'none';
+        return;
+      }
+      
+      console.log('[ULTShirtModal] Rendering', questions.length, 'extra questions');
+      
+      container.style.display = 'block';
+      container.innerHTML = `
+        <div class="ul-questions-header">Additional Information</div>
+        <div class="ul-questions-list"></div>
+      `;
+      
+      const list = container.querySelector('.ul-questions-list');
+      
+      questions.forEach((q, index) => {
+        const fieldId = `ul-tq-${q.id || index}`;
+        const fieldDiv = document.createElement('div');
+        fieldDiv.className = 'ul-question-field';
+        
+        // Preserve existing answer if user goes back/forward
+        const existingAnswer = this.step3.extraAnswers[q.label] || '';
+        
+        let inputHtml = '';
+        switch (q.type) {
+          case 'text':
+            inputHtml = `<input type="text" id="${fieldId}" value="${this.escapeHtml(existingAnswer)}" placeholder="${this.escapeHtml(q.placeholder || '')}">`;
+            break;
+          case 'textarea':
+            inputHtml = `<textarea id="${fieldId}" placeholder="${this.escapeHtml(q.placeholder || '')}">${this.escapeHtml(existingAnswer)}</textarea>`;
+            break;
+          case 'select':
+            inputHtml = `<select id="${fieldId}">
+              <option value="">Select...</option>
+              ${(q.options || []).map(opt => `<option value="${this.escapeHtml(opt)}" ${existingAnswer === opt ? 'selected' : ''}>${this.escapeHtml(opt)}</option>`).join('')}
+            </select>`;
+            break;
+          case 'checkbox':
+            inputHtml = `<label class="ul-checkbox-label"><input type="checkbox" id="${fieldId}" ${existingAnswer === 'Yes' ? 'checked' : ''}> Yes</label>`;
+            break;
+          case 'number':
+            inputHtml = `<input type="number" id="${fieldId}" value="${this.escapeHtml(existingAnswer)}" placeholder="${this.escapeHtml(q.placeholder || '')}">`;
+            break;
+          default:
+            inputHtml = `<input type="text" id="${fieldId}" value="${this.escapeHtml(existingAnswer)}">`;
+        }
+        
+        fieldDiv.innerHTML = `
+          <label for="${fieldId}">${this.escapeHtml(q.label)}${q.required ? ' <span class="ul-required">*</span>' : ''}</label>
+          ${inputHtml}
+        `;
+        
+        // Bind change event
+        const input = fieldDiv.querySelector('input, textarea, select');
+        if (input) {
+          const eventType = input.tagName === 'SELECT' ? 'change' : 'input';
+          input.addEventListener(eventType, (e) => {
+            if (e.target.type === 'checkbox') {
+              this.step3.extraAnswers[q.label] = e.target.checked ? 'Yes' : 'No';
+            } else {
+              this.step3.extraAnswers[q.label] = e.target.value;
+            }
+          });
+        }
+        
+        list.appendChild(fieldDiv);
+      });
+    },
+
+    /**
+     * FAZ 1 - TSM-005: HTML escape helper for XSS prevention
+     */
+    escapeHtml(text) {
+      if (!text) return '';
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
     },
 
     adjustQuantity(delta) {
@@ -2422,8 +3096,16 @@ console.log('[ULTShirtModal] Script loading...');
           this.three.tshirtMesh.rotation.y = targetRotation;
         }
         
-        // Render the scene
-        this.three.renderer.render(this.three.scene, this.three.camera);
+        // FAZ 2 - TSM-010: Wait for GPU to process rotation with double RAF
+        await new Promise(resolve => {
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              // Double RAF ensures render pass completed
+              this.three.renderer.render(this.three.scene, this.three.camera);
+              resolve();
+            });
+          });
+        });
         
         // Capture snapshot
         const dataUrl = this.three.renderer.domElement.toDataURL('image/png');
@@ -2563,7 +3245,7 @@ console.log('[ULTShirtModal] Script loading...');
       // Get design data
       const designData = this.step1.useInheritedDesign ? this.inheritedDesign : this.step1.newUpload;
       
-      // Find matching variant from T-SHIRT product (NOT the page product!)
+      // FAZ 0 - TSM-004: Use robust variant matching instead of weak includes() logic
       const selectedSize = this.step2.tshirtSize;
       const selectedColor = this.step2.tshirtColorName;
       let variantId = null;
@@ -2572,41 +3254,8 @@ console.log('[ULTShirtModal] Script loading...');
       // IMPORTANT: We must use variants from the T-Shirt product we loaded
       // NOT from the current page product (which is DTF Gang Sheets)
       if (this.product.variants && this.product.variants.length > 0) {
-        // Try to find exact match (size + color)
-        selectedVariant = this.product.variants.find(v => {
-          const title = (v.title || '').toLowerCase();
-          const opt1 = (v.option1 || '').toLowerCase();
-          const opt2 = (v.option2 || '').toLowerCase();
-          
-          const sizeMatch = opt1 === selectedSize.toLowerCase() || 
-                           opt2 === selectedSize.toLowerCase() ||
-                           title.includes(selectedSize.toLowerCase());
-          
-          const colorMatch = opt1 === selectedColor.toLowerCase() || 
-                            opt2 === selectedColor.toLowerCase() ||
-                            title.includes(selectedColor.toLowerCase());
-          
-          return sizeMatch && colorMatch;
-        });
-        
-        // If no exact match, try size only
-        if (!selectedVariant) {
-          selectedVariant = this.product.variants.find(v => {
-            const title = (v.title || '').toLowerCase();
-            const opt1 = (v.option1 || '').toLowerCase();
-            const opt2 = (v.option2 || '').toLowerCase();
-            
-            return opt1 === selectedSize.toLowerCase() || 
-                   opt2 === selectedSize.toLowerCase() ||
-                   title.includes(selectedSize.toLowerCase());
-          });
-        }
-        
-        // Final fallback: first available variant
-        if (!selectedVariant) {
-          selectedVariant = this.product.variants.find(v => v.available !== false) || this.product.variants[0];
-        }
-        
+        // Use robust matching with normalization
+        selectedVariant = this.findMatchingVariant(selectedColor, selectedSize);
         variantId = selectedVariant?.id;
         console.log('[ULTShirtModal] Found T-Shirt variant:', selectedVariant?.title, 'ID:', variantId);
       }
@@ -2805,7 +3454,10 @@ console.log('[ULTShirtModal] Script loading...');
     },
     
     // Update cart note with order details
+    // FAZ 2 - TSM-008: Added truncation logic for Shopify's 5000 char limit
     async updateCartNote(note) {
+      const MAX_NOTE_LENGTH = 4800; // 200 char safety margin
+      
       try {
         // First get existing cart to preserve any existing notes
         const cartResponse = await fetch('/cart.js');
@@ -2817,6 +3469,35 @@ console.log('[ULTShirtModal] Script loading...');
           fullNote += '\n\n';
         }
         fullNote += note;
+        
+        // FAZ 2 - TSM-008: Truncate if too long
+        if (fullNote.length > MAX_NOTE_LENGTH) {
+          console.warn('[ULTShirtModal] Cart note exceeds limit:', fullNote.length, 'chars');
+          
+          // Split by separator and keep most recent notes
+          const separator = '═══════════════════════════════════════';
+          const notes = fullNote.split(separator);
+          let truncated = '';
+          
+          // Add notes from end (newest first)
+          for (let i = notes.length - 1; i >= 0; i--) {
+            const testNote = notes[i].trim() + (truncated ? '\n' + separator + '\n' + truncated : '');
+            if (testNote.length <= MAX_NOTE_LENGTH) {
+              truncated = testNote;
+            } else if (truncated) {
+              // We have some notes, stop adding more
+              break;
+            }
+          }
+          
+          // Fallback: if still too long, just truncate
+          if (!truncated || truncated.length > MAX_NOTE_LENGTH) {
+            truncated = note.substring(0, MAX_NOTE_LENGTH - 50) + '\n[Note truncated due to length limit]';
+          }
+          
+          fullNote = truncated;
+          console.log('[ULTShirtModal] Cart note truncated to:', fullNote.length, 'chars');
+        }
         
         // Update cart note
         await fetch('/cart/update.js', {
