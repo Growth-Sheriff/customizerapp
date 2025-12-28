@@ -217,15 +217,13 @@
                       <span class="ul-current-price">{{ product.price | money }}</span>
                     </div>
                     
-                    <!-- Custom Upload Button (if enabled) -->
-                    {% if block.settings.show_upload_button %}
+                    <!-- Custom Upload Button -->
                     <div class="ul-upload-area">
                       <button class="ul-upload-btn" data-product-id="{{ product.id }}">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                        <span>{{ block.settings.upload_button_text | default: 'Upload Design' }}</span>
+                        <span>{{ block.settings.upload_button_text | default: 'My Device' }}</span>
                       </button>
                     </div>
-                    {% endif %}
                     
                     <!-- Add to Cart -->
                     <div class="ul-product-actions">
