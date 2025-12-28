@@ -1,0 +1,750 @@
+/**
+ * Upload Lift - Product Bar JavaScript
+ * Version: 1.0.0
+ * 
+ * Handles:
+ * - Upload modal functionality
+ * - File upload with preview
+ * - Sheet size selection
+ * - Quantity controls
+ * - Add to Cart integration
+ * - 3D T-Shirt viewer initialization
+ * - Floating cart button
+ */
+
+(function() {
+  'use strict';
+
+  // ========================================
+  // Configuration
+  // ========================================
+  const CONFIG = {
+    apiBase: 'https://customizerapp.dev',
+    maxFileSize: 50 * 1024 * 1024, // 50MB
+    allowedTypes: ['image/png', 'image/jpeg', 'image/webp', 'application/pdf', 'image/svg+xml']
+  };
+
+  // Sheet sizes with prices
+  const SHEET_SIZES = [
+    { id: '22x6', name: '22" x 6"', price: 7.50 },
+    { id: '22x12', name: '22" x 12"', price: 12.00 },
+    { id: '22x24', name: '22" x 24"', price: 22.00 },
+    { id: '22x60', name: '22" x 60"', price: 50.00 }
+  ];
+
+  // ========================================
+  // State
+  // ========================================
+  const state = {
+    uploadedFile: null,
+    uploadedFileUrl: null,
+    selectedSize: '22x12',
+    quantity: 1,
+    currentProduct: null,
+    modalOpen: false
+  };
+
+  // ========================================
+  // DOM Ready
+  // ========================================
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+
+  function init() {
+    console.log('[UL Product Bar] Initializing...');
+    
+    initUploadTriggers();
+    initUploadModal();
+    initAddToCartButtons();
+    initFloatingCart();
+    initMiniTshirtViewers();
+    
+    console.log('[UL Product Bar] Initialized successfully');
+  }
+
+  // ========================================
+  // Upload Triggers
+  // ========================================
+  function initUploadTriggers() {
+    const triggers = document.querySelectorAll('.ul-upload-trigger-btn');
+    
+    triggers.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const card = btn.closest('.ul-product-bar-item');
+        if (card) {
+          openUploadModal(card);
+        }
+      });
+    });
+  }
+
+  // ========================================
+  // Upload Modal
+  // ========================================
+  function initUploadModal() {
+    const overlays = document.querySelectorAll('.ul-upload-modal-overlay');
+    
+    overlays.forEach(overlay => {
+      const modal = overlay.querySelector('.ul-upload-modal');
+      const closeBtn = overlay.querySelector('.ul-upload-modal-close');
+      const uploadZone = overlay.querySelector('.ul-modal-upload-zone');
+      const fileInput = overlay.querySelector('.ul-modal-file-input');
+      const preview = overlay.querySelector('.ul-modal-upload-preview');
+      const removeBtn = overlay.querySelector('.ul-modal-remove-upload');
+      const sizeButtons = overlay.querySelectorAll('.ul-modal-size-btn');
+      const qtyInput = overlay.querySelector('.ul-modal-qty-input');
+      const qtyMinus = overlay.querySelector('.ul-modal-qty-minus');
+      const qtyPlus = overlay.querySelector('.ul-modal-qty-plus');
+      const addToCartBtn = overlay.querySelector('.ul-modal-add-cart');
+      const checkoutBtn = overlay.querySelector('.ul-modal-checkout');
+
+      // Close modal
+      function closeModal() {
+        state.modalOpen = false;
+        overlay.classList.remove('active');
+        document.body.style.overflow = '';
+        resetModalState(overlay);
+      }
+
+      // Close handlers
+      if (closeBtn) {
+        closeBtn.addEventListener('click', closeModal);
+      }
+      
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) closeModal();
+      });
+
+      // File upload
+      if (uploadZone && fileInput) {
+        uploadZone.addEventListener('click', () => fileInput.click());
+        
+        uploadZone.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          uploadZone.classList.add('dragover');
+        });
+        
+        uploadZone.addEventListener('dragleave', () => {
+          uploadZone.classList.remove('dragover');
+        });
+        
+        uploadZone.addEventListener('drop', (e) => {
+          e.preventDefault();
+          uploadZone.classList.remove('dragover');
+          const files = e.dataTransfer.files;
+          if (files.length > 0) handleFile(files[0], overlay);
+        });
+
+        fileInput.addEventListener('change', (e) => {
+          if (e.target.files.length > 0) handleFile(e.target.files[0], overlay);
+        });
+      }
+
+      // Remove upload
+      if (removeBtn) {
+        removeBtn.addEventListener('click', () => {
+          if (state.uploadedFileUrl) {
+            URL.revokeObjectURL(state.uploadedFileUrl);
+          }
+          state.uploadedFile = null;
+          state.uploadedFileUrl = null;
+          
+          if (uploadZone) uploadZone.style.display = '';
+          if (preview) preview.style.display = 'none';
+          if (fileInput) fileInput.value = '';
+          
+          updateTotal(overlay);
+        });
+      }
+
+      // Size selection
+      sizeButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+          sizeButtons.forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          state.selectedSize = btn.dataset.size;
+          updateTotal(overlay);
+        });
+      });
+
+      // Quantity controls
+      if (qtyMinus) {
+        qtyMinus.addEventListener('click', () => {
+          if (state.quantity > 1) {
+            state.quantity--;
+            if (qtyInput) qtyInput.value = state.quantity;
+            updateTotal(overlay);
+          }
+        });
+      }
+
+      if (qtyPlus) {
+        qtyPlus.addEventListener('click', () => {
+          if (state.quantity < 100) {
+            state.quantity++;
+            if (qtyInput) qtyInput.value = state.quantity;
+            updateTotal(overlay);
+          }
+        });
+      }
+
+      if (qtyInput) {
+        qtyInput.addEventListener('change', (e) => {
+          let val = parseInt(e.target.value) || 1;
+          val = Math.max(1, Math.min(100, val));
+          state.quantity = val;
+          qtyInput.value = val;
+          updateTotal(overlay);
+        });
+      }
+
+      // Add to cart
+      if (addToCartBtn) {
+        addToCartBtn.addEventListener('click', async () => {
+          if (!state.uploadedFile || !state.currentProduct) return;
+          
+          addToCartBtn.disabled = true;
+          addToCartBtn.innerHTML = '<svg class="ul-spinner" width="18" height="18" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" fill="none" stroke-dasharray="60" stroke-linecap="round"><animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite"/></circle></svg> Adding...';
+          
+          try {
+            // Upload file first
+            const uploadResult = await uploadFile(state.uploadedFile);
+            
+            // Build cart properties
+            const size = SHEET_SIZES.find(s => s.id === state.selectedSize);
+            const properties = {
+              '_ul_upload_id': uploadResult.id,
+              '_ul_upload_url': uploadResult.url,
+              'Sheet Size': size?.name || state.selectedSize,
+              'Upload Type': 'Custom Design'
+            };
+
+            // Add to cart
+            await addToCartApi(state.currentProduct.variantId, state.quantity, properties);
+            
+            // Success
+            addToCartBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg> Added!';
+            addToCartBtn.classList.add('success');
+            
+            // Update cart count
+            updateCartCount();
+            
+            setTimeout(closeModal, 1500);
+          } catch (error) {
+            console.error('[UL Product Bar] Error:', error);
+            addToCartBtn.disabled = false;
+            addToCartBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg> Try Again';
+            alert('Failed to add to cart. Please try again.');
+          }
+        });
+      }
+
+      // Checkout
+      if (checkoutBtn) {
+        checkoutBtn.addEventListener('click', async () => {
+          if (!state.uploadedFile || !state.currentProduct) return;
+          
+          checkoutBtn.disabled = true;
+          checkoutBtn.innerHTML = '<svg class="ul-spinner" width="18" height="18" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" fill="none" stroke-dasharray="60" stroke-linecap="round"><animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite"/></circle></svg> Processing...';
+          
+          try {
+            // Upload file first
+            const uploadResult = await uploadFile(state.uploadedFile);
+            
+            // Build cart properties
+            const size = SHEET_SIZES.find(s => s.id === state.selectedSize);
+            const properties = {
+              '_ul_upload_id': uploadResult.id,
+              '_ul_upload_url': uploadResult.url,
+              'Sheet Size': size?.name || state.selectedSize,
+              'Upload Type': 'Custom Design'
+            };
+
+            // Add to cart
+            await addToCartApi(state.currentProduct.variantId, state.quantity, properties);
+            
+            // Redirect to checkout
+            window.location.href = '/checkout';
+          } catch (error) {
+            console.error('[UL Product Bar] Error:', error);
+            checkoutBtn.disabled = false;
+            checkoutBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> Try Again';
+            alert('Failed to proceed to checkout. Please try again.');
+          }
+        });
+      }
+    });
+
+    // Global escape key handler
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && state.modalOpen) {
+        const activeOverlay = document.querySelector('.ul-upload-modal-overlay.active');
+        if (activeOverlay) {
+          activeOverlay.classList.remove('active');
+          document.body.style.overflow = '';
+          state.modalOpen = false;
+        }
+      }
+    });
+  }
+
+  function openUploadModal(card) {
+    // Find the modal in the same section
+    const section = card.closest('.ul-product-bar');
+    const overlay = section?.querySelector('.ul-upload-modal-overlay');
+    
+    if (!overlay) {
+      console.error('[UL Product Bar] Modal not found');
+      return;
+    }
+
+    // Get product info from card
+    const productId = card.dataset.productId;
+    const productHandle = card.dataset.productHandle;
+    const variantId = card.dataset.variantId;
+    const productTitle = card.dataset.productTitle || 'Product';
+    const productPrice = card.dataset.productPrice || '$0.00';
+    const productImage = card.dataset.productImage || '';
+
+    // Parse price
+    const priceMatch = productPrice.match(/[\d.,]+/);
+    const priceValue = priceMatch ? parseFloat(priceMatch[0].replace(',', '')) : 0;
+
+    state.currentProduct = {
+      id: productId,
+      handle: productHandle,
+      variantId: variantId,
+      title: productTitle,
+      price: priceValue,
+      image: productImage
+    };
+
+    // Update modal product info
+    const modalProductImage = overlay.querySelector('.ul-modal-product-image');
+    const modalProductTitle = overlay.querySelector('.ul-modal-product-title');
+    const modalProductPrice = overlay.querySelector('.ul-modal-product-price');
+
+    if (modalProductImage) modalProductImage.src = productImage;
+    if (modalProductTitle) modalProductTitle.textContent = productTitle;
+    if (modalProductPrice) modalProductPrice.textContent = productPrice;
+
+    // Reset state
+    resetModalState(overlay);
+
+    // Show modal
+    state.modalOpen = true;
+    overlay.classList.add('active');
+    document.body.style.overflow = 'hidden';
+
+    // Update total
+    updateTotal(overlay);
+  }
+
+  function resetModalState(overlay) {
+    state.uploadedFile = null;
+    state.uploadedFileUrl = null;
+    state.selectedSize = '22x12';
+    state.quantity = 1;
+    
+    const uploadZone = overlay.querySelector('.ul-modal-upload-zone');
+    const preview = overlay.querySelector('.ul-modal-upload-preview');
+    const qtyInput = overlay.querySelector('.ul-modal-qty-input');
+    const sizeButtons = overlay.querySelectorAll('.ul-modal-size-btn');
+    const addToCartBtn = overlay.querySelector('.ul-modal-add-cart');
+    const checkoutBtn = overlay.querySelector('.ul-modal-checkout');
+    
+    if (uploadZone) uploadZone.style.display = '';
+    if (preview) preview.style.display = 'none';
+    if (qtyInput) qtyInput.value = 1;
+    
+    sizeButtons.forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.size === '22x12');
+    });
+    
+    if (addToCartBtn) {
+      addToCartBtn.disabled = true;
+      addToCartBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg> Add to Cart';
+      addToCartBtn.classList.remove('success');
+    }
+    
+    if (checkoutBtn) {
+      checkoutBtn.disabled = true;
+      checkoutBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> Checkout';
+    }
+  }
+
+  function handleFile(file, overlay) {
+    // Validate file type
+    if (!CONFIG.allowedTypes.includes(file.type)) {
+      alert('Invalid file type. Please upload PNG, JPG, WebP, PDF, or SVG.');
+      return;
+    }
+
+    // Validate file size
+    if (file.size > CONFIG.maxFileSize) {
+      alert('File too large. Maximum size is 50MB.');
+      return;
+    }
+
+    state.uploadedFile = file;
+    state.uploadedFileUrl = URL.createObjectURL(file);
+
+    // Show preview
+    const uploadZone = overlay.querySelector('.ul-modal-upload-zone');
+    const preview = overlay.querySelector('.ul-modal-upload-preview');
+    
+    if (uploadZone) uploadZone.style.display = 'none';
+    if (preview) {
+      const previewImg = preview.querySelector('img');
+      const fileName = preview.querySelector('.ul-file-name');
+      const fileSize = preview.querySelector('.ul-file-size');
+      
+      if (previewImg) previewImg.src = state.uploadedFileUrl;
+      if (fileName) fileName.textContent = file.name;
+      if (fileSize) fileSize.textContent = formatFileSize(file.size);
+      
+      preview.style.display = '';
+    }
+
+    updateTotal(overlay);
+  }
+
+  function updateTotal(overlay) {
+    const totalEl = overlay.querySelector('.ul-modal-total-price');
+    const addToCartBtn = overlay.querySelector('.ul-modal-add-cart');
+    const checkoutBtn = overlay.querySelector('.ul-modal-checkout');
+    
+    const size = SHEET_SIZES.find(s => s.id === state.selectedSize);
+    const sheetPrice = size ? size.price : 0;
+    const productPrice = state.currentProduct?.price || 0;
+    const total = (sheetPrice + productPrice) * state.quantity;
+    
+    if (totalEl) {
+      totalEl.textContent = formatMoney(total * 100);
+    }
+
+    // Enable/disable buttons
+    const hasUpload = !!state.uploadedFile;
+    if (addToCartBtn) addToCartBtn.disabled = !hasUpload;
+    if (checkoutBtn) checkoutBtn.disabled = !hasUpload;
+  }
+
+  // ========================================
+  // Add to Cart Buttons (without upload)
+  // ========================================
+  function initAddToCartButtons() {
+    const buttons = document.querySelectorAll('.ul-product-bar-item .ul-add-to-cart-btn');
+    
+    buttons.forEach(btn => {
+      if (btn.classList.contains('ul-sold-out')) return;
+      
+      btn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const variantId = btn.dataset.variantId;
+        if (!variantId) return;
+        
+        const originalHtml = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<svg class="ul-spinner" width="18" height="18" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" fill="none" stroke-dasharray="60" stroke-linecap="round"><animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite"/></circle></svg>';
+        
+        try {
+          await addToCartApi(variantId, 1);
+          
+          btn.classList.add('success');
+          btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg> Added!';
+          
+          updateCartCount();
+          
+          setTimeout(() => {
+            btn.classList.remove('success');
+            btn.innerHTML = originalHtml;
+            btn.disabled = false;
+          }, 2000);
+        } catch (error) {
+          console.error('[UL Product Bar] Add to cart error:', error);
+          btn.innerHTML = originalHtml;
+          btn.disabled = false;
+          alert('Failed to add to cart. Please try again.');
+        }
+      });
+    });
+  }
+
+  // ========================================
+  // Floating Cart
+  // ========================================
+  function initFloatingCart() {
+    const floatingBtns = document.querySelectorAll('.ul-floating-cart-btn');
+    
+    floatingBtns.forEach(btn => {
+      // Periodic shake
+      setInterval(() => {
+        btn.classList.add('shake');
+        setTimeout(() => {
+          btn.classList.remove('shake');
+        }, 600);
+      }, 5000);
+    });
+  }
+
+  // ========================================
+  // 3D T-Shirt Viewers
+  // ========================================
+  function initMiniTshirtViewers() {
+    const canvases = document.querySelectorAll('.ul-mini-tshirt-canvas');
+    if (canvases.length === 0) return;
+    
+    // Check if Three.js is loaded
+    if (typeof THREE === 'undefined') {
+      console.log('[UL Product Bar] Three.js not loaded, retrying...');
+      setTimeout(initMiniTshirtViewers, 500);
+      return;
+    }
+    
+    if (typeof THREE.GLTFLoader === 'undefined') {
+      console.log('[UL Product Bar] GLTFLoader not loaded, retrying...');
+      setTimeout(initMiniTshirtViewers, 500);
+      return;
+    }
+    
+    console.log('[UL Product Bar] Three.js ready, initializing 3D viewers...');
+    
+    // Get model path from Shopify assets
+    const section = document.querySelector('.ul-product-bar');
+    const modelPath = section?.dataset.modelPath || '/apps/product-3d-customizer/shirt_baked.glb';
+    
+    const lightColors = ['#7dd3fc', '#f472b6', '#fbbf24', '#86efac', '#a5b4fc', '#fca5a5'];
+    
+    canvases.forEach((canvas, index) => {
+      const container = canvas.parentElement;
+      const containerWidth = container.clientWidth || 200;
+      
+      // Scene
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0xf0f0f8);
+      
+      // Camera
+      const camera = new THREE.PerspectiveCamera(25, 1, 0.1, 100);
+      camera.position.set(0, 0, 2.5);
+      
+      // Renderer
+      const renderer = new THREE.WebGLRenderer({
+        canvas: canvas,
+        antialias: true,
+        alpha: false
+      });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(containerWidth, containerWidth);
+      renderer.outputEncoding = THREE.sRGBEncoding;
+      
+      // Lighting
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+      scene.add(ambientLight);
+      
+      const keyLight = new THREE.DirectionalLight(0xffffff, 0.8);
+      keyLight.position.set(3, 5, 5);
+      scene.add(keyLight);
+      
+      const fillLight = new THREE.DirectionalLight(0xffffff, 0.4);
+      fillLight.position.set(-3, 3, 3);
+      scene.add(fillLight);
+      
+      // Color for this card
+      const colorIndex = index % lightColors.length;
+      const shirtColor = new THREE.Color(lightColors[colorIndex]);
+      
+      // Load model
+      const loader = new THREE.GLTFLoader();
+      
+      loader.load(
+        modelPath,
+        function(gltf) {
+          console.log('[UL Product Bar] Mini shirt loaded for card', index);
+          const model = gltf.scene;
+          
+          model.traverse(function(child) {
+            if (child.isMesh) {
+              child.material = new THREE.MeshStandardMaterial({
+                color: shirtColor,
+                roughness: 0.85,
+                metalness: 0
+              });
+            }
+          });
+          
+          scene.add(model);
+          
+          let rotation = 0;
+          function animate() {
+            requestAnimationFrame(animate);
+            rotation += 0.01;
+            model.rotation.y = rotation;
+            renderer.render(scene, camera);
+          }
+          animate();
+        },
+        undefined,
+        function(error) {
+          console.error('[UL Product Bar] Mini shirt load error:', error);
+          // Fallback - create simple box
+          const geometry = new THREE.BoxGeometry(0.6, 0.8, 0.2);
+          const material = new THREE.MeshStandardMaterial({ color: shirtColor, roughness: 0.85 });
+          const fallback = new THREE.Mesh(geometry, material);
+          scene.add(fallback);
+          
+          let rotation = 0;
+          function animate() {
+            requestAnimationFrame(animate);
+            rotation += 0.01;
+            fallback.rotation.y = rotation;
+            renderer.render(scene, camera);
+          }
+          animate();
+        }
+      );
+    });
+  }
+
+  // ========================================
+  // File Upload API
+  // ========================================
+  async function uploadFile(file) {
+    const section = document.querySelector('.ul-product-bar');
+    const apiBase = section?.dataset.apiBase || CONFIG.apiBase;
+
+    // 1. Create upload intent
+    const intentResponse = await fetch(`${apiBase}/api/upload/intent`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        filename: file.name,
+        contentType: file.type,
+        size: file.size,
+        shop: window.Shopify?.shop || getShopFromUrl()
+      })
+    });
+
+    if (!intentResponse.ok) {
+      throw new Error('Failed to create upload intent');
+    }
+
+    const { uploadId, signedUrl, publicUrl } = await intentResponse.json();
+
+    // 2. Upload to signed URL
+    const uploadResponse = await fetch(signedUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': file.type },
+      body: file
+    });
+
+    if (!uploadResponse.ok) {
+      throw new Error('Failed to upload file');
+    }
+
+    // 3. Complete upload
+    const completeResponse = await fetch(`${apiBase}/api/upload/complete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uploadId })
+    });
+
+    if (!completeResponse.ok) {
+      throw new Error('Failed to complete upload');
+    }
+
+    return {
+      id: uploadId,
+      url: publicUrl
+    };
+  }
+
+  // ========================================
+  // Cart API
+  // ========================================
+  async function addToCartApi(variantId, quantity, properties = null) {
+    const body = {
+      items: [{
+        id: parseInt(variantId),
+        quantity: quantity
+      }]
+    };
+
+    if (properties) {
+      body.items[0].properties = properties;
+    }
+
+    const response = await fetch('/cart/add.js', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.description || 'Failed to add to cart');
+    }
+
+    return response.json();
+  }
+
+  async function updateCartCount() {
+    try {
+      const response = await fetch('/cart.js');
+      const cart = await response.json();
+      
+      // Update common cart count selectors
+      const selectors = [
+        '.cart-count',
+        '.cart-count-bubble',
+        '[data-cart-count]',
+        '.header__cart-count',
+        '.site-header__cart-count',
+        '.ul-floating-cart-count'
+      ];
+
+      selectors.forEach(selector => {
+        document.querySelectorAll(selector).forEach(el => {
+          el.textContent = cart.item_count;
+        });
+      });
+      
+      // Trigger cart refresh event
+      document.dispatchEvent(new CustomEvent('cart:refresh'));
+    } catch (e) {
+      console.log('[UL Product Bar] Could not update cart count');
+    }
+  }
+
+  // ========================================
+  // Utility Functions
+  // ========================================
+  function formatMoney(cents) {
+    const amount = cents / 100;
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD'
+    }).format(amount);
+  }
+
+  function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }
+
+  function getShopFromUrl() {
+    const hostname = window.location.hostname;
+    return hostname;
+  }
+
+})();
