@@ -237,9 +237,6 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   return json({ error: "Unknown action" });
-  }
-
-  return json({ error: "Unknown action" });
 }
 
 export default function ThemeSectionsPage() {
