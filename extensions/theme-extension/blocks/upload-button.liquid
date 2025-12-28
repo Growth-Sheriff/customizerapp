@@ -1,0 +1,30 @@
+{% comment %}
+  Upload Lift - Product Upload Button Block
+  ==========================================
+  A simple app block that adds an upload button to product pages.
+  Works independently from the DTF uploader.
+  
+  Add this block anywhere on a product page to show the upload button.
+{% endcomment %}
+
+{% render 'upload-button', product: product, button_text: block.settings.button_text %}
+
+{% schema %}
+{
+  "name": "Upload Button",
+  "target": "section",
+  "templates": ["product", "collection", "index"],
+  "settings": [
+    {
+      "type": "paragraph",
+      "content": "Adds a custom upload button that allows customers to upload their design for this product."
+    },
+    {
+      "type": "text",
+      "id": "button_text",
+      "label": "Button Text",
+      "default": "Upload Your Design"
+    }
+  ]
+}
+{% endschema %}
