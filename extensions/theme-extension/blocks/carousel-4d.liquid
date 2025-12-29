@@ -131,17 +131,31 @@
         <button class="ul-remove-btn" onclick="removeULFile('{{ block.id }}')">×</button>
       </div>
       
+      <div class="ul-size-section">
+        <label><strong>Select Sheet Size:</strong></label>
+        <div class="ul-size-grid" id="ulSizeGrid-{{ block.id }}">
+          <button type="button" class="ul-size-btn" data-size="22x6" data-price="7.50" onclick="selectULSize(this,'{{ block.id }}')">22" x 6"<br><span>$7.50</span></button>
+          <button type="button" class="ul-size-btn active" data-size="22x12" data-price="12.00" onclick="selectULSize(this,'{{ block.id }}')">22" x 12"<br><span>$12.00</span></button>
+          <button type="button" class="ul-size-btn" data-size="22x24" data-price="22.00" onclick="selectULSize(this,'{{ block.id }}')">22" x 24"<br><span>$22.00</span></button>
+          <button type="button" class="ul-size-btn" data-size="22x60" data-price="50.00" onclick="selectULSize(this,'{{ block.id }}')">22" x 60"<br><span>$50.00</span></button>
+        </div>
+      </div>
+      
       <div class="ul-qty-row">
         <span>Quantity:</span>
         <div class="ul-qty-controls">
-          <button onclick="changeULQty('{{ block.id }}',-1)">-</button>
-          <input type="number" id="ulQtyInput-{{ block.id }}" value="1" min="1">
-          <button onclick="changeULQty('{{ block.id }}',1)">+</button>
+          <button type="button" onclick="changeULQty('{{ block.id }}',-1)">-</button>
+          <input type="number" id="ulQtyInput-{{ block.id }}" value="1" min="1" onchange="updateULTotal('{{ block.id }}')">
+          <button type="button" onclick="changeULQty('{{ block.id }}',1)">+</button>
         </div>
       </div>
     </div>
     
     <div class="ul-modal-footer">
+      <div class="ul-total-row">
+        <span>Total:</span>
+        <span id="ulTotalPrice-{{ block.id }}">$12.00</span>
+      </div>
       <button class="ul-modal-cart-btn" id="ulModalCartBtn-{{ block.id }}" onclick="addULToCart('{{ block.id }}')" disabled>
         Upload design to continue
       </button>
@@ -201,10 +215,19 @@
 .ul-preview-zone{position:relative;margin-bottom:14px;text-align:center}
 .ul-preview-zone img{max-width:100%;max-height:120px;border-radius:10px}
 .ul-remove-btn{position:absolute;top:5px;right:5px;background:#ff4757;color:#fff;border:none;width:24px;height:24px;border-radius:50%;cursor:pointer;font-size:14px}
-.ul-qty-row{display:flex;justify-content:space-between;align-items:center}
+.ul-qty-row{display:flex;justify-content:space-between;align-items:center;margin-top:14px}
 .ul-qty-controls{display:flex;align-items:center;gap:8px}
 .ul-qty-controls button{width:32px;height:32px;border:1px solid #ddd;border-radius:8px;background:#fff;font-size:16px;cursor:pointer}
 .ul-qty-controls input{width:45px;text-align:center;border:1px solid #ddd;border-radius:8px;padding:6px;font-size:14px}
+.ul-size-section{margin-bottom:10px}
+.ul-size-section label{display:block;margin-bottom:8px;font-size:13px}
+.ul-size-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.ul-size-btn{padding:10px 8px;border:2px solid #e0e0e0;border-radius:8px;background:#fff;cursor:pointer;font-size:13px;text-align:center;transition:all .2s}
+.ul-size-btn:hover{border-color:#7367f0}
+.ul-size-btn.active{border-color:#7367f0;background:#f8f7ff}
+.ul-size-btn span{color:#7367f0;font-weight:600;font-size:12px}
+.ul-total-row{display:flex;justify-content:space-between;margin-bottom:10px;font-size:16px;font-weight:600}
+.ul-total-row span:last-child{color:#7367f0}
 .ul-modal-footer{padding:14px 18px;background:#f8f9fa;border-top:1px solid #eee}
 .ul-modal-cart-btn{width:100%;padding:12px;background:linear-gradient(135deg,#28c76f 0%,#48da89 100%);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer}
 .ul-modal-cart-btn:disabled{background:#ccc;cursor:not-allowed}
@@ -214,13 +237,15 @@
 (function(){
   window.ulData=window.ulData||{};
   window.slideCarousel=function(id,dir){var t=document.getElementById('ulCarouselTrack-'+id);if(t)t.scrollBy({left:dir*280,behavior:'smooth'})};
-  window.openULModal=function(btn){var c=btn.closest('.ul-carousel-card'),bid=btn.closest('.ul-carousel-widget').querySelector('[id^="ulCarouselTrack-"]').id.replace('ulCarouselTrack-','');if(c){ulData[bid]={vid:c.dataset.variantId,file:null};document.getElementById('ulModalImg-'+bid).src=c.dataset.productImage;document.getElementById('ulModalTitle-'+bid).textContent=c.dataset.productTitle;document.getElementById('ulModalPrice-'+bid).textContent=c.dataset.productPrice}document.getElementById('ulModalOverlay-'+bid).classList.add('active');document.body.style.overflow='hidden'};
+  window.openULModal=function(btn){var c=btn.closest('.ul-carousel-card'),bid=btn.closest('.ul-carousel-widget').querySelector('[id^="ulCarouselTrack-"]').id.replace('ulCarouselTrack-','');if(c){ulData[bid]={vid:c.dataset.variantId,file:null,size:'22x12',sizePrice:12};document.getElementById('ulModalImg-'+bid).src=c.dataset.productImage;document.getElementById('ulModalTitle-'+bid).textContent=c.dataset.productTitle;document.getElementById('ulModalPrice-'+bid).textContent=c.dataset.productPrice}document.getElementById('ulModalOverlay-'+bid).classList.add('active');document.body.style.overflow='hidden';updateULTotal(bid)};
   window.closeULModal=function(bid){document.getElementById('ulModalOverlay-'+bid).classList.remove('active');document.body.style.overflow=''};
   window.handleULFile=function(e,bid){var f=e.target.files[0];if(!f)return;ulData[bid].file=f;document.getElementById('ulUploadZone-'+bid).style.display='none';document.getElementById('ulPreviewZone-'+bid).style.display='block';document.getElementById('ulPreviewImg-'+bid).src=URL.createObjectURL(f);document.getElementById('ulModalCartBtn-'+bid).disabled=false;document.getElementById('ulModalCartBtn-'+bid).textContent='Add to Cart'};
   window.removeULFile=function(bid){ulData[bid].file=null;document.getElementById('ulUploadZone-'+bid).style.display='';document.getElementById('ulPreviewZone-'+bid).style.display='none';document.getElementById('ulFileInput-'+bid).value='';document.getElementById('ulModalCartBtn-'+bid).disabled=true;document.getElementById('ulModalCartBtn-'+bid).textContent='Upload design to continue'};
-  window.changeULQty=function(bid,d){var i=document.getElementById('ulQtyInput-'+bid),v=parseInt(i.value)+d;if(v<1)v=1;i.value=v};
+  window.selectULSize=function(btn,bid){document.querySelectorAll('#ulSizeGrid-'+bid+' .ul-size-btn').forEach(function(b){b.classList.remove('active')});btn.classList.add('active');ulData[bid].size=btn.dataset.size;ulData[bid].sizePrice=parseFloat(btn.dataset.price);updateULTotal(bid)};
+  window.changeULQty=function(bid,d){var i=document.getElementById('ulQtyInput-'+bid),v=parseInt(i.value)+d;if(v<1)v=1;i.value=v;updateULTotal(bid)};
+  window.updateULTotal=function(bid){var qty=parseInt(document.getElementById('ulQtyInput-'+bid).value)||1;var total=ulData[bid].sizePrice*qty;document.getElementById('ulTotalPrice-'+bid).textContent='$'+total.toFixed(2)};
   window.addToCart=function(vid){fetch('/cart/add.js',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({items:[{id:vid,quantity:1}]})}).then(function(){window.location.href='/cart'})};
-  window.addULToCart=function(bid){var btn=document.getElementById('ulModalCartBtn-'+bid),qty=parseInt(document.getElementById('ulQtyInput-'+bid).value)||1;btn.disabled=true;btn.textContent='Adding...';fetch('/cart/add.js',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({items:[{id:ulData[bid].vid,quantity:qty,properties:{'_upload':ulData[bid].file?.name||''}}]})}).then(function(){btn.textContent='✓ Added!';setTimeout(function(){closeULModal(bid);window.location.href='/cart'},800)}).catch(function(){btn.disabled=false;btn.textContent='Add to Cart'})};
+  window.addULToCart=function(bid){var btn=document.getElementById('ulModalCartBtn-'+bid),qty=parseInt(document.getElementById('ulQtyInput-'+bid).value)||1;btn.disabled=true;btn.textContent='Adding...';fetch('/cart/add.js',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({items:[{id:ulData[bid].vid,quantity:qty,properties:{'_upload':ulData[bid].file?.name||'','_size':ulData[bid].size,'_unit_price':'$'+ulData[bid].sizePrice}}]})}).then(function(){btn.textContent='✓ Added!';setTimeout(function(){closeULModal(bid);window.location.href='/cart'},800)}).catch(function(){btn.disabled=false;btn.textContent='Add to Cart'})};
   document.addEventListener('click',function(e){if(e.target.classList.contains('ul-modal-overlay'))e.target.classList.remove('active')});
 })();
 </script>
