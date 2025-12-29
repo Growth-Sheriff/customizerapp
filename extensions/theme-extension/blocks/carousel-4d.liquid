@@ -1,9 +1,7 @@
 {% comment %}
   3D Carousel 4D - App Block
-  Upload button ile premium 3D carousel widget
+  Collection-based carousel with upload button
 {% endcomment %}
-
-{{ 'carousel-upload.css' | asset_url | stylesheet_tag }}
 
 <div class="ul-carousel-widget" data-section-id="{{ section.id }}">
   <!-- Banner (optional) -->
@@ -15,148 +13,136 @@
   </div>
   {% endif %}
 
-  <!-- Products Carousel -->
+  <!-- Products Carousel from Collection -->
   <div class="ul-carousel-container">
     <div class="ul-carousel-track" id="ulCarouselTrack-{{ block.id }}">
-      {% for i in (1..6) %}
-        {% assign product_setting = 'product_' | append: i %}
-        {% assign product = block.settings[product_setting] %}
-        {% if product != blank %}
-          <div class="ul-carousel-card" 
-               data-product-id="{{ product.id }}"
-               data-variant-id="{{ product.selected_or_first_available_variant.id }}"
-               data-product-title="{{ product.title | escape }}"
-               data-product-price="{{ product.price | money }}"
-               data-product-image="{{ product.featured_image | image_url: width: 400 }}">
-            
-            <!-- 4D Badge -->
-            <span class="ul-4d-badge">4D</span>
-            
-            <!-- Wishlist -->
-            <button class="ul-wishlist-btn" type="button">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
-            </button>
-            
-            <!-- Product Image -->
-            <div class="ul-card-image">
+      {% assign coll = block.settings.collection %}
+      {% assign limit = block.settings.products_count | default: 6 %}
+      {% for product in coll.products limit: limit %}
+        <div class="ul-carousel-card" 
+             data-product-id="{{ product.id }}"
+             data-variant-id="{{ product.selected_or_first_available_variant.id }}"
+             data-product-title="{{ product.title | escape }}"
+             data-product-price="{{ product.price | money }}"
+             data-product-image="{{ product.featured_image | image_url: width: 400 }}">
+          
+          <!-- 4D Badge -->
+          <span class="ul-4d-badge">4D</span>
+          
+          <!-- Wishlist -->
+          <button class="ul-wishlist-btn" type="button" aria-label="Wishlist">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+          </button>
+          
+          <!-- Product Image -->
+          <div class="ul-card-image">
+            <a href="{{ product.url }}">
               <img src="{{ product.featured_image | image_url: width: 400 }}" 
                    alt="{{ product.title }}" 
                    loading="lazy"
                    width="400"
                    height="400">
+            </a>
+          </div>
+          
+          <!-- Product Info -->
+          <div class="ul-card-info">
+            <span class="ul-card-vendor">{{ product.vendor | default: 'DTF TRANSFER' }}</span>
+            <h3 class="ul-card-title"><a href="{{ product.url }}">{{ product.title }}</a></h3>
+            
+            <!-- Rating -->
+            <div class="ul-card-rating">
+              <div class="ul-stars">★★★★★</div>
+              <span class="ul-rating-count">({{ block.settings.review_count | default: 128 }})</span>
             </div>
             
-            <!-- Product Info -->
-            <div class="ul-card-info">
-              <span class="ul-card-vendor">{{ product.vendor | default: 'FAST DTF TRANSFER' }}</span>
-              <h3 class="ul-card-title">{{ product.title }}</h3>
-              
-              <!-- Rating -->
-              <div class="ul-card-rating">
-                <div class="ul-stars">★★★★★</div>
-                <span class="ul-rating-count">({{ block.settings.review_count | default: 128 }})</span>
-              </div>
-              
-              <!-- Price -->
-              <div class="ul-card-price">
-                {% if product.compare_at_price > product.price %}
-                  <span class="ul-compare-price">{{ product.compare_at_price | money }}</span>
-                {% endif %}
-                <span class="ul-current-price">{{ product.price | money }}</span>
-              </div>
-              
-              <!-- UPLOAD BUTTON - Fiyatın altında, Add to Cart'ın üstünde -->
-              <button class="ul-upload-btn" type="button" onclick="openULModal(this)">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                  <polyline points="17 8 12 3 7 8"/>
-                  <line x1="12" y1="3" x2="12" y2="15"/>
-                </svg>
-                <span>{{ block.settings.upload_text | default: 'Upload Your Design' }}</span>
-              </button>
-              
-              <!-- Add to Cart -->
-              <button class="ul-add-cart-btn" type="button" data-variant-id="{{ product.selected_or_first_available_variant.id }}">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/>
-                  <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
-                </svg>
-                <span>Add to Cart</span>
-              </button>
+            <!-- Price -->
+            <div class="ul-card-price">
+              {% if product.compare_at_price > product.price %}
+                <span class="ul-compare-price">{{ product.compare_at_price | money }}</span>
+              {% endif %}
+              <span class="ul-current-price">{{ product.price | money }}</span>
             </div>
+            
+            <!-- UPLOAD BUTTON -->
+            <button class="ul-upload-btn" type="button" onclick="openULModal(this)">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="17 8 12 3 7 8"/>
+                <line x1="12" y1="3" x2="12" y2="15"/>
+              </svg>
+              <span>{{ block.settings.upload_text | default: 'Upload Design' }}</span>
+            </button>
+            
+            <!-- Add to Cart -->
+            <button class="ul-add-cart-btn" type="button" onclick="addToCart('{{ product.selected_or_first_available_variant.id }}')">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/>
+                <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
+              </svg>
+              <span>Add to Cart</span>
+            </button>
           </div>
-        {% endif %}
+        </div>
+      {% else %}
+        <p style="padding:20px;color:#666;">No products. Select a collection in block settings.</p>
       {% endfor %}
     </div>
     
     <!-- Nav Arrows -->
-    <button class="ul-carousel-prev" onclick="slideCarousel('{{ block.id }}', -1)">
+    <button class="ul-carousel-prev" onclick="slideCarousel('{{ block.id }}', -1)" aria-label="Previous">
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
     </button>
-    <button class="ul-carousel-next" onclick="slideCarousel('{{ block.id }}', 1)">
+    <button class="ul-carousel-next" onclick="slideCarousel('{{ block.id }}', 1)" aria-label="Next">
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
     </button>
   </div>
 </div>
 
 <!-- Upload Modal -->
-<div class="ul-modal-overlay" id="ulModalOverlay">
+<div class="ul-modal-overlay" id="ulModalOverlay-{{ block.id }}">
   <div class="ul-modal">
     <div class="ul-modal-header">
       <h3>Upload Your Design</h3>
-      <button class="ul-modal-close" onclick="closeULModal()">×</button>
+      <button class="ul-modal-close" onclick="closeULModal('{{ block.id }}')">×</button>
     </div>
     <div class="ul-modal-body">
       <div class="ul-modal-product">
-        <img src="" alt="" id="ulModalImg" width="60" height="60">
+        <img src="" alt="" id="ulModalImg-{{ block.id }}" width="60" height="60">
         <div>
-          <h4 id="ulModalTitle">Product</h4>
-          <span id="ulModalPrice">$0.00</span>
+          <h4 id="ulModalTitle-{{ block.id }}">Product</h4>
+          <span id="ulModalPrice-{{ block.id }}">$0.00</span>
         </div>
       </div>
       
-      <div class="ul-upload-zone" onclick="document.getElementById('ulFileInput').click()">
-        <input type="file" id="ulFileInput" accept="image/*,.pdf,.svg" hidden onchange="handleULFile(event)">
+      <div class="ul-upload-zone" id="ulUploadZone-{{ block.id }}" onclick="document.getElementById('ulFileInput-{{ block.id }}').click()">
+        <input type="file" id="ulFileInput-{{ block.id }}" accept="image/*,.pdf" hidden onchange="handleULFile(event,'{{ block.id }}')">
         <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#7367f0" stroke-width="1.5">
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
           <polyline points="17 8 12 3 7 8"/>
           <line x1="12" y1="3" x2="12" y2="15"/>
         </svg>
-        <p><strong>Drag & drop your design</strong></p>
-        <p style="color:#666;font-size:13px;">or click to browse</p>
+        <p><strong>Drop your design here</strong></p>
+        <p style="color:#666;font-size:13px">or click to browse</p>
       </div>
       
-      <div class="ul-preview-zone" id="ulPreviewZone" style="display:none;">
-        <img src="" alt="Preview" id="ulPreviewImg">
-        <button class="ul-remove-btn" onclick="removeULFile()">×</button>
-      </div>
-      
-      <div class="ul-size-section">
-        <label><strong>Select Sheet Size:</strong></label>
-        <div class="ul-size-grid">
-          <button class="ul-size-btn" data-size="22x6" data-price="7.50" onclick="selectULSize(this)">22" x 6"<br><span>$7.50</span></button>
-          <button class="ul-size-btn active" data-size="22x12" data-price="12.00" onclick="selectULSize(this)">22" x 12"<br><span>$12.00</span></button>
-          <button class="ul-size-btn" data-size="22x24" data-price="22.00" onclick="selectULSize(this)">22" x 24"<br><span>$22.00</span></button>
-          <button class="ul-size-btn" data-size="22x60" data-price="50.00" onclick="selectULSize(this)">22" x 60"<br><span>$50.00</span></button>
-        </div>
+      <div class="ul-preview-zone" id="ulPreviewZone-{{ block.id }}" style="display:none">
+        <img src="" alt="Preview" id="ulPreviewImg-{{ block.id }}" width="200" height="200">
+        <button class="ul-remove-btn" onclick="removeULFile('{{ block.id }}')">×</button>
       </div>
       
       <div class="ul-qty-row">
         <span>Quantity:</span>
         <div class="ul-qty-controls">
-          <button onclick="changeULQty(-1)">-</button>
-          <input type="number" id="ulQtyInput" value="1" min="1">
-          <button onclick="changeULQty(1)">+</button>
+          <button onclick="changeULQty('{{ block.id }}',-1)">-</button>
+          <input type="number" id="ulQtyInput-{{ block.id }}" value="1" min="1">
+          <button onclick="changeULQty('{{ block.id }}',1)">+</button>
         </div>
       </div>
     </div>
     
     <div class="ul-modal-footer">
-      <div class="ul-total-row">
-        <span>Total:</span>
-        <span id="ulTotalPrice">$12.00</span>
-      </div>
-      <button class="ul-modal-cart-btn" id="ulModalCartBtn" onclick="addULToCart()" disabled>
+      <button class="ul-modal-cart-btn" id="ulModalCartBtn-{{ block.id }}" onclick="addULToCart('{{ block.id }}')" disabled>
         Upload design to continue
       </button>
     </div>
@@ -164,195 +150,78 @@
 </div>
 
 <style>
-  .ul-carousel-widget { padding: 20px 0; }
-  .ul-banner-box { text-align: center; padding: 30px; background: linear-gradient(135deg, #f8f7ff 0%, #fff 100%); border-radius: 16px; margin-bottom: 30px; }
-  .ul-banner-badge { background: linear-gradient(135deg, #ff6b6b 0%, #ff8e53 100%); color: white; padding: 6px 16px; border-radius: 20px; font-size: 12px; font-weight: 600; }
-  .ul-banner-title { font-size: 36px; font-weight: 800; margin: 15px 0 5px; letter-spacing: 8px; color: #333; }
-  .ul-banner-text { color: #666; margin: 0; }
-  
-  .ul-carousel-container { position: relative; padding: 0 50px; }
-  .ul-carousel-track { display: flex; gap: 20px; overflow-x: auto; scroll-behavior: smooth; padding: 20px 0; scrollbar-width: none; }
-  .ul-carousel-track::-webkit-scrollbar { display: none; }
-  
-  .ul-carousel-card { flex: 0 0 280px; background: white; border-radius: 16px; padding: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); position: relative; transition: transform 0.3s, box-shadow 0.3s; }
-  .ul-carousel-card:hover { transform: translateY(-5px); box-shadow: 0 8px 30px rgba(115,103,240,0.2); }
-  
-  .ul-4d-badge { position: absolute; top: 15px; left: 15px; background: linear-gradient(135deg, #7367f0 0%, #9e95f5 100%); color: white; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; }
-  .ul-wishlist-btn { position: absolute; top: 15px; right: 15px; background: white; border: none; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-  .ul-wishlist-btn:hover { color: #ff6b6b; }
-  
-  .ul-card-image { margin-bottom: 15px; }
-  .ul-card-image img { width: 100%; height: 200px; object-fit: contain; border-radius: 10px; }
-  
-  .ul-card-info { text-align: center; }
-  .ul-card-vendor { color: #7367f0; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
-  .ul-card-title { font-size: 16px; font-weight: 600; margin: 8px 0; color: #333; }
-  .ul-card-rating { display: flex; align-items: center; justify-content: center; gap: 5px; margin-bottom: 8px; }
-  .ul-stars { color: #ffc107; font-size: 14px; }
-  .ul-rating-count { color: #999; font-size: 12px; }
-  .ul-card-price { margin-bottom: 12px; }
-  .ul-compare-price { color: #999; text-decoration: line-through; font-size: 13px; margin-right: 8px; }
-  .ul-current-price { color: #7367f0; font-size: 20px; font-weight: 700; }
-  
-  /* UPLOAD BUTTON */
-  .ul-upload-btn { width: 100%; padding: 12px; background: linear-gradient(135deg, #7367f0 0%, #9e95f5 100%); color: white; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 10px; transition: all 0.3s; }
-  .ul-upload-btn:hover { transform: translateY(-2px); box-shadow: 0 4px 15px rgba(115,103,240,0.4); }
-  
-  /* ADD TO CART */
-  .ul-add-cart-btn { width: 100%; padding: 12px; background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%); color: #333; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.3s; }
-  .ul-add-cart-btn:hover { opacity: 0.9; }
-  
-  /* Nav */
-  .ul-carousel-prev, .ul-carousel-next { position: absolute; top: 50%; transform: translateY(-50%); width: 44px; height: 44px; background: white; border: none; border-radius: 50%; cursor: pointer; box-shadow: 0 2px 10px rgba(0,0,0,0.1); display: flex; align-items: center; justify-content: center; z-index: 10; }
-  .ul-carousel-prev { left: 0; }
-  .ul-carousel-next { right: 0; }
-  .ul-carousel-prev:hover, .ul-carousel-next:hover { background: #7367f0; color: white; }
-  
-  /* Modal */
-  .ul-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 99999; display: flex; align-items: center; justify-content: center; padding: 20px; opacity: 0; visibility: hidden; transition: all 0.3s; }
-  .ul-modal-overlay.active { opacity: 1; visibility: visible; }
-  .ul-modal { background: white; border-radius: 16px; width: 100%; max-width: 450px; max-height: 90vh; overflow: hidden; transform: scale(0.9); transition: transform 0.3s; }
-  .ul-modal-overlay.active .ul-modal { transform: scale(1); }
-  .ul-modal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; background: linear-gradient(135deg, #7367f0 0%, #9e95f5 100%); color: white; }
-  .ul-modal-header h3 { margin: 0; font-size: 18px; }
-  .ul-modal-close { background: rgba(255,255,255,0.2); border: none; color: white; width: 32px; height: 32px; border-radius: 50%; font-size: 20px; cursor: pointer; }
-  .ul-modal-body { padding: 20px; overflow-y: auto; max-height: 60vh; }
-  .ul-modal-product { display: flex; align-items: center; gap: 12px; padding: 12px; background: #f8f9fa; border-radius: 10px; margin-bottom: 16px; }
-  .ul-modal-product img { width: 60px; height: 60px; object-fit: cover; border-radius: 8px; }
-  .ul-modal-product h4 { margin: 0 0 4px; font-size: 14px; }
-  .ul-modal-product span { color: #7367f0; font-weight: 600; }
-  
-  .ul-upload-zone { border: 2px dashed #7367f0; border-radius: 12px; padding: 30px; text-align: center; cursor: pointer; background: #f8f7ff; margin-bottom: 16px; transition: all 0.3s; }
-  .ul-upload-zone:hover { background: #f0eeff; }
-  .ul-upload-zone p { margin: 8px 0 0; }
-  
-  .ul-preview-zone { position: relative; margin-bottom: 16px; text-align: center; }
-  .ul-preview-zone img { max-width: 100%; max-height: 150px; border-radius: 10px; }
-  .ul-remove-btn { position: absolute; top: 5px; right: 5px; background: #ff4757; color: white; border: none; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-size: 16px; }
-  
-  .ul-size-section { margin-bottom: 16px; }
-  .ul-size-section label { display: block; margin-bottom: 10px; }
-  .ul-size-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
-  .ul-size-btn { padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; background: white; cursor: pointer; font-size: 14px; transition: all 0.2s; }
-  .ul-size-btn:hover { border-color: #7367f0; }
-  .ul-size-btn.active { border-color: #7367f0; background: #f8f7ff; }
-  .ul-size-btn span { color: #7367f0; font-weight: 600; }
-  
-  .ul-qty-row { display: flex; justify-content: space-between; align-items: center; }
-  .ul-qty-controls { display: flex; align-items: center; gap: 10px; }
-  .ul-qty-controls button { width: 36px; height: 36px; border: 1px solid #ddd; border-radius: 8px; background: white; font-size: 18px; cursor: pointer; }
-  .ul-qty-controls input { width: 50px; text-align: center; border: 1px solid #ddd; border-radius: 8px; padding: 8px; font-size: 16px; }
-  
-  .ul-modal-footer { padding: 16px 20px; background: #f8f9fa; border-top: 1px solid #eee; }
-  .ul-total-row { display: flex; justify-content: space-between; margin-bottom: 12px; font-size: 18px; font-weight: 600; }
-  .ul-total-row span:last-child { color: #7367f0; }
-  .ul-modal-cart-btn { width: 100%; padding: 14px; background: linear-gradient(135deg, #28c76f 0%, #48da89 100%); color: white; border: none; border-radius: 10px; font-size: 16px; font-weight: 600; cursor: pointer; }
-  .ul-modal-cart-btn:disabled { background: #ccc; cursor: not-allowed; }
+.ul-carousel-widget{padding:20px 0}
+.ul-banner-box{text-align:center;padding:30px;background:linear-gradient(135deg,#f8f7ff 0%,#fff 100%);border-radius:16px;margin-bottom:30px}
+.ul-banner-badge{background:linear-gradient(135deg,#ff6b6b 0%,#ff8e53 100%);color:#fff;padding:6px 16px;border-radius:20px;font-size:12px;font-weight:600}
+.ul-banner-title{font-size:32px;font-weight:800;margin:15px 0 5px;letter-spacing:6px;color:#333}
+.ul-banner-text{color:#666;margin:0}
+.ul-carousel-container{position:relative;padding:0 50px}
+.ul-carousel-track{display:flex;gap:20px;overflow-x:auto;scroll-behavior:smooth;padding:20px 0;scrollbar-width:none}
+.ul-carousel-track::-webkit-scrollbar{display:none}
+.ul-carousel-card{flex:0 0 260px;background:#fff;border-radius:16px;padding:18px;box-shadow:0 4px 20px rgba(0,0,0,.08);position:relative;transition:transform .3s,box-shadow .3s}
+.ul-carousel-card:hover{transform:translateY(-5px);box-shadow:0 8px 30px rgba(115,103,240,.2)}
+.ul-4d-badge{position:absolute;top:12px;left:12px;background:linear-gradient(135deg,#7367f0 0%,#9e95f5 100%);color:#fff;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700}
+.ul-wishlist-btn{position:absolute;top:12px;right:12px;background:#fff;border:none;width:32px;height:32px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.1)}
+.ul-wishlist-btn:hover{color:#ff6b6b}
+.ul-card-image{margin-bottom:12px}
+.ul-card-image img{width:100%;height:180px;object-fit:contain;border-radius:10px}
+.ul-card-info{text-align:center}
+.ul-card-info a{text-decoration:none;color:inherit}
+.ul-card-vendor{color:#7367f0;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:1px}
+.ul-card-title{font-size:14px;font-weight:600;margin:6px 0;color:#333}
+.ul-card-rating{display:flex;align-items:center;justify-content:center;gap:5px;margin-bottom:6px}
+.ul-stars{color:#ffc107;font-size:12px}
+.ul-rating-count{color:#999;font-size:11px}
+.ul-card-price{margin-bottom:10px}
+.ul-compare-price{color:#999;text-decoration:line-through;font-size:12px;margin-right:6px}
+.ul-current-price{color:#7367f0;font-size:18px;font-weight:700}
+.ul-upload-btn{width:100%;padding:10px;background:linear-gradient(135deg,#7367f0 0%,#9e95f5 100%);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;margin-bottom:8px;transition:all .3s}
+.ul-upload-btn:hover{transform:translateY(-2px);box-shadow:0 4px 15px rgba(115,103,240,.4)}
+.ul-add-cart-btn{width:100%;padding:10px;background:linear-gradient(135deg,#ff9a9e 0%,#fecfef 100%);color:#333;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .3s}
+.ul-add-cart-btn:hover{opacity:.9}
+.ul-carousel-prev,.ul-carousel-next{position:absolute;top:50%;transform:translateY(-50%);width:40px;height:40px;background:#fff;border:none;border-radius:50%;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.1);display:flex;align-items:center;justify-content:center;z-index:10}
+.ul-carousel-prev{left:0}
+.ul-carousel-next{right:0}
+.ul-carousel-prev:hover,.ul-carousel-next:hover{background:#7367f0;color:#fff}
+.ul-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;opacity:0;visibility:hidden;transition:all .3s}
+.ul-modal-overlay.active{opacity:1;visibility:visible}
+.ul-modal{background:#fff;border-radius:16px;width:100%;max-width:400px;overflow:hidden;transform:scale(.9);transition:transform .3s}
+.ul-modal-overlay.active .ul-modal{transform:scale(1)}
+.ul-modal-header{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;background:linear-gradient(135deg,#7367f0 0%,#9e95f5 100%);color:#fff}
+.ul-modal-header h3{margin:0;font-size:16px}
+.ul-modal-close{background:rgba(255,255,255,.2);border:none;color:#fff;width:28px;height:28px;border-radius:50%;font-size:18px;cursor:pointer}
+.ul-modal-body{padding:18px}
+.ul-modal-product{display:flex;align-items:center;gap:12px;padding:10px;background:#f8f9fa;border-radius:10px;margin-bottom:14px}
+.ul-modal-product img{width:50px;height:50px;object-fit:cover;border-radius:8px}
+.ul-modal-product h4{margin:0 0 4px;font-size:13px}
+.ul-modal-product span{color:#7367f0;font-weight:600;font-size:14px}
+.ul-upload-zone{border:2px dashed #7367f0;border-radius:12px;padding:25px;text-align:center;cursor:pointer;background:#f8f7ff;margin-bottom:14px;transition:all .3s}
+.ul-upload-zone:hover{background:#f0eeff}
+.ul-upload-zone p{margin:6px 0 0}
+.ul-preview-zone{position:relative;margin-bottom:14px;text-align:center}
+.ul-preview-zone img{max-width:100%;max-height:120px;border-radius:10px}
+.ul-remove-btn{position:absolute;top:5px;right:5px;background:#ff4757;color:#fff;border:none;width:24px;height:24px;border-radius:50%;cursor:pointer;font-size:14px}
+.ul-qty-row{display:flex;justify-content:space-between;align-items:center}
+.ul-qty-controls{display:flex;align-items:center;gap:8px}
+.ul-qty-controls button{width:32px;height:32px;border:1px solid #ddd;border-radius:8px;background:#fff;font-size:16px;cursor:pointer}
+.ul-qty-controls input{width:45px;text-align:center;border:1px solid #ddd;border-radius:8px;padding:6px;font-size:14px}
+.ul-modal-footer{padding:14px 18px;background:#f8f9fa;border-top:1px solid #eee}
+.ul-modal-cart-btn{width:100%;padding:12px;background:linear-gradient(135deg,#28c76f 0%,#48da89 100%);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer}
+.ul-modal-cart-btn:disabled{background:#ccc;cursor:not-allowed}
 </style>
 
-<script>
-(function() {
-  window.ulState = { variantId: null, productTitle: '', productPrice: '', productImage: '', file: null, fileUrl: null, size: '22x12', sizePrice: 12, qty: 1 };
-
-  window.slideCarousel = function(id, dir) {
-    const track = document.getElementById('ulCarouselTrack-' + id);
-    if (track) track.scrollBy({ left: dir * 300, behavior: 'smooth' });
-  };
-
-  window.openULModal = function(btn) {
-    const card = btn.closest('.ul-carousel-card');
-    if (card) {
-      ulState.variantId = card.dataset.variantId;
-      ulState.productTitle = card.dataset.productTitle;
-      ulState.productPrice = card.dataset.productPrice;
-      ulState.productImage = card.dataset.productImage;
-      document.getElementById('ulModalImg').src = ulState.productImage;
-      document.getElementById('ulModalTitle').textContent = ulState.productTitle;
-      document.getElementById('ulModalPrice').textContent = ulState.productPrice;
-    }
-    document.getElementById('ulModalOverlay').classList.add('active');
-    document.body.style.overflow = 'hidden';
-    updateULTotal();
-  };
-
-  window.closeULModal = function() {
-    document.getElementById('ulModalOverlay').classList.remove('active');
-    document.body.style.overflow = '';
-  };
-
-  document.getElementById('ulModalOverlay')?.addEventListener('click', function(e) {
-    if (e.target === this) closeULModal();
-  });
-
-  window.handleULFile = function(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-    ulState.file = file;
-    ulState.fileUrl = URL.createObjectURL(file);
-    document.querySelector('.ul-upload-zone').style.display = 'none';
-    document.getElementById('ulPreviewZone').style.display = 'block';
-    document.getElementById('ulPreviewImg').src = ulState.fileUrl;
-    document.getElementById('ulModalCartBtn').disabled = false;
-    document.getElementById('ulModalCartBtn').textContent = 'Add to Cart';
-  };
-
-  window.removeULFile = function() {
-    ulState.file = null;
-    ulState.fileUrl = null;
-    document.querySelector('.ul-upload-zone').style.display = '';
-    document.getElementById('ulPreviewZone').style.display = 'none';
-    document.getElementById('ulFileInput').value = '';
-    document.getElementById('ulModalCartBtn').disabled = true;
-    document.getElementById('ulModalCartBtn').textContent = 'Upload design to continue';
-  };
-
-  window.selectULSize = function(btn) {
-    document.querySelectorAll('.ul-size-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    ulState.size = btn.dataset.size;
-    ulState.sizePrice = parseFloat(btn.dataset.price);
-    updateULTotal();
-  };
-
-  window.changeULQty = function(d) {
-    const input = document.getElementById('ulQtyInput');
-    let v = parseInt(input.value) + d;
-    if (v < 1) v = 1;
-    input.value = v;
-    ulState.qty = v;
-    updateULTotal();
-  };
-
-  function updateULTotal() {
-    ulState.qty = parseInt(document.getElementById('ulQtyInput').value) || 1;
-    const total = ulState.sizePrice * ulState.qty;
-    document.getElementById('ulTotalPrice').textContent = '$' + total.toFixed(2);
-  }
-
-  window.addULToCart = async function() {
-    const btn = document.getElementById('ulModalCartBtn');
-    btn.disabled = true;
-    btn.textContent = 'Adding...';
-    try {
-      await fetch('/cart/add.js', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          items: [{
-            id: ulState.variantId,
-            quantity: ulState.qty,
-            properties: { '_upload': ulState.file?.name, '_size': ulState.size, '_price': '$' + ulState.sizePrice }
-          }]
-        })
-      });
-      btn.textContent = '✓ Added!';
-      setTimeout(() => { closeULModal(); removeULFile(); window.location.href = '/cart'; }, 800);
-    } catch (e) {
-      btn.disabled = false;
-      btn.textContent = 'Add to Cart';
-      alert('Error adding to cart');
-    }
-  };
+<script defer>
+(function(){
+  window.ulData=window.ulData||{};
+  window.slideCarousel=function(id,dir){var t=document.getElementById('ulCarouselTrack-'+id);if(t)t.scrollBy({left:dir*280,behavior:'smooth'})};
+  window.openULModal=function(btn){var c=btn.closest('.ul-carousel-card'),bid=btn.closest('.ul-carousel-widget').querySelector('[id^="ulCarouselTrack-"]').id.replace('ulCarouselTrack-','');if(c){ulData[bid]={vid:c.dataset.variantId,file:null};document.getElementById('ulModalImg-'+bid).src=c.dataset.productImage;document.getElementById('ulModalTitle-'+bid).textContent=c.dataset.productTitle;document.getElementById('ulModalPrice-'+bid).textContent=c.dataset.productPrice}document.getElementById('ulModalOverlay-'+bid).classList.add('active');document.body.style.overflow='hidden'};
+  window.closeULModal=function(bid){document.getElementById('ulModalOverlay-'+bid).classList.remove('active');document.body.style.overflow=''};
+  window.handleULFile=function(e,bid){var f=e.target.files[0];if(!f)return;ulData[bid].file=f;document.getElementById('ulUploadZone-'+bid).style.display='none';document.getElementById('ulPreviewZone-'+bid).style.display='block';document.getElementById('ulPreviewImg-'+bid).src=URL.createObjectURL(f);document.getElementById('ulModalCartBtn-'+bid).disabled=false;document.getElementById('ulModalCartBtn-'+bid).textContent='Add to Cart'};
+  window.removeULFile=function(bid){ulData[bid].file=null;document.getElementById('ulUploadZone-'+bid).style.display='';document.getElementById('ulPreviewZone-'+bid).style.display='none';document.getElementById('ulFileInput-'+bid).value='';document.getElementById('ulModalCartBtn-'+bid).disabled=true;document.getElementById('ulModalCartBtn-'+bid).textContent='Upload design to continue'};
+  window.changeULQty=function(bid,d){var i=document.getElementById('ulQtyInput-'+bid),v=parseInt(i.value)+d;if(v<1)v=1;i.value=v};
+  window.addToCart=function(vid){fetch('/cart/add.js',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({items:[{id:vid,quantity:1}]})}).then(function(){window.location.href='/cart'})};
+  window.addULToCart=function(bid){var btn=document.getElementById('ulModalCartBtn-'+bid),qty=parseInt(document.getElementById('ulQtyInput-'+bid).value)||1;btn.disabled=true;btn.textContent='Adding...';fetch('/cart/add.js',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({items:[{id:ulData[bid].vid,quantity:qty,properties:{'_upload':ulData[bid].file?.name||''}}]})}).then(function(){btn.textContent='✓ Added!';setTimeout(function(){closeULModal(bid);window.location.href='/cart'},800)}).catch(function(){btn.disabled=false;btn.textContent='Add to Cart'})};
+  document.addEventListener('click',function(e){if(e.target.classList.contains('ul-modal-overlay'))e.target.classList.remove('active')});
 })();
 </script>
 
@@ -362,10 +231,6 @@
   "target": "section",
   "templates": ["index", "collection", "product", "page"],
   "settings": [
-    {
-      "type": "header",
-      "content": "Banner"
-    },
     {
       "type": "checkbox",
       "id": "show_banner",
@@ -388,51 +253,27 @@
       "type": "text",
       "id": "banner_text",
       "label": "Subtitle",
-      "default": "Exclusive deals on premium products"
+      "default": "Exclusive deals"
     },
     {
-      "type": "header",
-      "content": "Products"
+      "type": "collection",
+      "id": "collection",
+      "label": "Collection"
     },
     {
-      "type": "product",
-      "id": "product_1",
-      "label": "Product 1"
-    },
-    {
-      "type": "product",
-      "id": "product_2",
-      "label": "Product 2"
-    },
-    {
-      "type": "product",
-      "id": "product_3",
-      "label": "Product 3"
-    },
-    {
-      "type": "product",
-      "id": "product_4",
-      "label": "Product 4"
-    },
-    {
-      "type": "product",
-      "id": "product_5",
-      "label": "Product 5"
-    },
-    {
-      "type": "product",
-      "id": "product_6",
-      "label": "Product 6"
-    },
-    {
-      "type": "header",
-      "content": "Upload Button"
+      "type": "range",
+      "id": "products_count",
+      "label": "Products to Show",
+      "min": 4,
+      "max": 12,
+      "step": 1,
+      "default": 6
     },
     {
       "type": "text",
       "id": "upload_text",
-      "label": "Button Text",
-      "default": "Upload Your Design"
+      "label": "Upload Button Text",
+      "default": "Upload Design"
     },
     {
       "type": "number",
