@@ -1,128 +1,38 @@
 {% comment %}
-  Product Showcase Bar - App Block
-  5 Product Pickers with Upload functionality
+  Product Showcase Bar - App Block (5 Products Max)
 {% endcomment %}
 
-<div class="ul-showcase-section" data-block-id="{{ block.id }}" style="background:{{ block.settings.bg_color | default: '#f8f9fa' }};padding:{{ block.settings.padding_top | default: 40 }}px 20px {{ block.settings.padding_bottom | default: 40 }}px;">
-  
-  <!-- Section Header -->
+{{ 'ul-showcase.css' | asset_url | stylesheet_tag }}
+
+<div class="ul-showcase-section" data-block-id="{{ block.id }}" style="background:{{ block.settings.bg_color | default: '#f8f9fa' }};padding:40px 20px;">
   {% if block.settings.show_header %}
   <div class="ul-showcase-header">
-    <div class="ul-header-deco">
-      <span class="ul-deco-line"></span>
-      <div class="ul-header-box">
-        <span class="ul-header-tag">{{ block.settings.header_tag | default: 'SPECIAL OFFERS' }}</span>
-      </div>
-      <span class="ul-deco-line"></span>
-    </div>
-    <p class="ul-header-subtitle">{{ block.settings.header_subtitle | default: 'Handpicked products just for you' }}</p>
+    <div class="ul-header-deco"><span class="ul-sh-deco-line"></span><div class="ul-header-box"><span class="ul-sh-header-tag">SPECIAL OFFERS</span></div><span class="ul-sh-deco-line"></span></div>
+    <p class="ul-sh-header-subtitle">Handpicked products just for you</p>
   </div>
   {% endif %}
 
-  <!-- Product Grid -->
   <div class="ul-showcase-grid">
-    
-    {% comment %} Product 1 {% endcomment %}
-    {% assign p = block.settings.product_1 %}
-    {% if p %}
-    <div class="ul-showcase-card" data-product-id="{{ p.id }}" data-variant-id="{{ p.selected_or_first_available_variant.id }}" data-product-title="{{ p.title | escape }}" data-product-price="{{ p.price | money }}" data-product-image="{{ p.featured_image | image_url: width: 350 }}">
-      <div class="ul-card-badges">
-        <span class="ul-badge-4d">4D</span>
-        {% if p.compare_at_price > p.price %}
-          {% assign disc = p.compare_at_price | minus: p.price | times: 100 | divided_by: p.compare_at_price %}
-          <span class="ul-badge-sale">-{{ disc }}%</span>
-        {% endif %}
-      </div>
-      <button class="ul-wishlist-btn" type="button"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button>
-      <a href="{{ p.url }}" class="ul-card-image-wrap"><img src="{{ p.featured_image | image_url: width: 350 }}" alt="{{ p.title }}" loading="lazy"></a>
-      <div class="ul-card-content">
-        <span class="ul-card-vendor">{{ p.vendor | default: 'DTF TRANSFER' }}</span>
-        <h3 class="ul-card-title"><a href="{{ p.url }}">{{ p.title | truncate: 40 }}</a></h3>
-        {% if block.settings.show_reviews %}
-        <div class="ul-card-rating"><span class="ul-stars">★★★★★</span><span class="ul-count">({{ block.settings.review_1 | default: 128 }})</span></div>
-        {% endif %}
-        <div class="ul-card-price">
-          {% if p.compare_at_price > p.price %}<span class="ul-old">{{ p.compare_at_price | money }}</span>{% endif %}
-          <span class="ul-now">{{ p.price | money }}</span>
+    {% for i in (1..5) %}
+      {% case i %}{% when 1 %}{% assign p = block.settings.product_1 %}{% when 2 %}{% assign p = block.settings.product_2 %}{% when 3 %}{% assign p = block.settings.product_3 %}{% when 4 %}{% assign p = block.settings.product_4 %}{% when 5 %}{% assign p = block.settings.product_5 %}{% endcase %}
+      {% if p %}
+      <div class="ul-showcase-card" data-product-id="{{ p.id }}" data-variant-id="{{ p.selected_or_first_available_variant.id }}" data-product-title="{{ p.title | escape }}" data-product-price="{{ p.price | money }}" data-product-image="{{ p.featured_image | image_url: width: 350 }}">
+        <div class="ul-sh-badges">
+          <span class="ul-sh-badge-4d">4D</span>
+          {% if p.compare_at_price > p.price %}{% assign disc = p.compare_at_price | minus: p.price | times: 100 | divided_by: p.compare_at_price %}<span class="ul-sh-badge-sale">-{{ disc }}%</span>{% endif %}
         </div>
-        <button class="ul-upload-btn" type="button" onclick="openULShowcaseModal(this)">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-          {{ block.settings.upload_text | default: 'Upload Design' }}
-        </button>
+        <button class="ul-sh-wishlist" type="button"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button>
+        <a href="{{ p.url }}" class="ul-sh-image-wrap"><img src="{{ p.featured_image | image_url: width: 350 }}" alt="{{ p.title }}" width="350" height="350" loading="lazy"></a>
+        <div class="ul-sh-content">
+          <span class="ul-sh-vendor">{{ p.vendor | default: 'DTF TRANSFER' }}</span>
+          <h3 class="ul-sh-title"><a href="{{ p.url }}">{{ p.title | truncate: 40 }}</a></h3>
+          <div class="ul-sh-rating"><span class="ul-sh-stars">★★★★★</span><span class="ul-sh-count">({{ p.id | modulo: 200 | plus: 50 }})</span></div>
+          <div class="ul-sh-price">{% if p.compare_at_price > p.price %}<span class="ul-sh-old">{{ p.compare_at_price | money }}</span>{% endif %}<span class="ul-sh-now">{{ p.price | money }}</span></div>
+          <button class="ul-sh-upload-btn" type="button" onclick="openULShowcaseModal(this)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Upload Design</button>
+        </div>
       </div>
-    </div>
-    {% endif %}
-
-    {% comment %} Product 2 {% endcomment %}
-    {% assign p = block.settings.product_2 %}
-    {% if p %}
-    <div class="ul-showcase-card" data-product-id="{{ p.id }}" data-variant-id="{{ p.selected_or_first_available_variant.id }}" data-product-title="{{ p.title | escape }}" data-product-price="{{ p.price | money }}" data-product-image="{{ p.featured_image | image_url: width: 350 }}">
-      <div class="ul-card-badges">
-        <span class="ul-badge-4d">4D</span>
-        {% if p.compare_at_price > p.price %}{% assign disc = p.compare_at_price | minus: p.price | times: 100 | divided_by: p.compare_at_price %}<span class="ul-badge-sale">-{{ disc }}%</span>{% endif %}
-      </div>
-      <button class="ul-wishlist-btn" type="button"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button>
-      <a href="{{ p.url }}" class="ul-card-image-wrap"><img src="{{ p.featured_image | image_url: width: 350 }}" alt="{{ p.title }}" loading="lazy"></a>
-      <div class="ul-card-content">
-        <span class="ul-card-vendor">{{ p.vendor | default: 'DTF TRANSFER' }}</span>
-        <h3 class="ul-card-title"><a href="{{ p.url }}">{{ p.title | truncate: 40 }}</a></h3>
-        {% if block.settings.show_reviews %}<div class="ul-card-rating"><span class="ul-stars">★★★★★</span><span class="ul-count">({{ block.settings.review_2 | default: 95 }})</span></div>{% endif %}
-        <div class="ul-card-price">{% if p.compare_at_price > p.price %}<span class="ul-old">{{ p.compare_at_price | money }}</span>{% endif %}<span class="ul-now">{{ p.price | money }}</span></div>
-        <button class="ul-upload-btn" type="button" onclick="openULShowcaseModal(this)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>{{ block.settings.upload_text | default: 'Upload Design' }}</button>
-      </div>
-    </div>
-    {% endif %}
-
-    {% comment %} Product 3 {% endcomment %}
-    {% assign p = block.settings.product_3 %}
-    {% if p %}
-    <div class="ul-showcase-card" data-product-id="{{ p.id }}" data-variant-id="{{ p.selected_or_first_available_variant.id }}" data-product-title="{{ p.title | escape }}" data-product-price="{{ p.price | money }}" data-product-image="{{ p.featured_image | image_url: width: 350 }}">
-      <div class="ul-card-badges"><span class="ul-badge-4d">4D</span>{% if p.compare_at_price > p.price %}{% assign disc = p.compare_at_price | minus: p.price | times: 100 | divided_by: p.compare_at_price %}<span class="ul-badge-sale">-{{ disc }}%</span>{% endif %}</div>
-      <button class="ul-wishlist-btn" type="button"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button>
-      <a href="{{ p.url }}" class="ul-card-image-wrap"><img src="{{ p.featured_image | image_url: width: 350 }}" alt="{{ p.title }}" loading="lazy"></a>
-      <div class="ul-card-content">
-        <span class="ul-card-vendor">{{ p.vendor | default: 'DTF TRANSFER' }}</span>
-        <h3 class="ul-card-title"><a href="{{ p.url }}">{{ p.title | truncate: 40 }}</a></h3>
-        {% if block.settings.show_reviews %}<div class="ul-card-rating"><span class="ul-stars">★★★★★</span><span class="ul-count">({{ block.settings.review_3 | default: 203 }})</span></div>{% endif %}
-        <div class="ul-card-price">{% if p.compare_at_price > p.price %}<span class="ul-old">{{ p.compare_at_price | money }}</span>{% endif %}<span class="ul-now">{{ p.price | money }}</span></div>
-        <button class="ul-upload-btn" type="button" onclick="openULShowcaseModal(this)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>{{ block.settings.upload_text | default: 'Upload Design' }}</button>
-      </div>
-    </div>
-    {% endif %}
-
-    {% comment %} Product 4 {% endcomment %}
-    {% assign p = block.settings.product_4 %}
-    {% if p %}
-    <div class="ul-showcase-card" data-product-id="{{ p.id }}" data-variant-id="{{ p.selected_or_first_available_variant.id }}" data-product-title="{{ p.title | escape }}" data-product-price="{{ p.price | money }}" data-product-image="{{ p.featured_image | image_url: width: 350 }}">
-      <div class="ul-card-badges"><span class="ul-badge-4d">4D</span>{% if p.compare_at_price > p.price %}{% assign disc = p.compare_at_price | minus: p.price | times: 100 | divided_by: p.compare_at_price %}<span class="ul-badge-sale">-{{ disc }}%</span>{% endif %}</div>
-      <button class="ul-wishlist-btn" type="button"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button>
-      <a href="{{ p.url }}" class="ul-card-image-wrap"><img src="{{ p.featured_image | image_url: width: 350 }}" alt="{{ p.title }}" loading="lazy"></a>
-      <div class="ul-card-content">
-        <span class="ul-card-vendor">{{ p.vendor | default: 'DTF TRANSFER' }}</span>
-        <h3 class="ul-card-title"><a href="{{ p.url }}">{{ p.title | truncate: 40 }}</a></h3>
-        {% if block.settings.show_reviews %}<div class="ul-card-rating"><span class="ul-stars">★★★★★</span><span class="ul-count">({{ block.settings.review_4 | default: 67 }})</span></div>{% endif %}
-        <div class="ul-card-price">{% if p.compare_at_price > p.price %}<span class="ul-old">{{ p.compare_at_price | money }}</span>{% endif %}<span class="ul-now">{{ p.price | money }}</span></div>
-        <button class="ul-upload-btn" type="button" onclick="openULShowcaseModal(this)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>{{ block.settings.upload_text | default: 'Upload Design' }}</button>
-      </div>
-    </div>
-    {% endif %}
-
-    {% comment %} Product 5 {% endcomment %}
-    {% assign p = block.settings.product_5 %}
-    {% if p %}
-    <div class="ul-showcase-card" data-product-id="{{ p.id }}" data-variant-id="{{ p.selected_or_first_available_variant.id }}" data-product-title="{{ p.title | escape }}" data-product-price="{{ p.price | money }}" data-product-image="{{ p.featured_image | image_url: width: 350 }}">
-      <div class="ul-card-badges"><span class="ul-badge-4d">4D</span>{% if p.compare_at_price > p.price %}{% assign disc = p.compare_at_price | minus: p.price | times: 100 | divided_by: p.compare_at_price %}<span class="ul-badge-sale">-{{ disc }}%</span>{% endif %}</div>
-      <button class="ul-wishlist-btn" type="button"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button>
-      <a href="{{ p.url }}" class="ul-card-image-wrap"><img src="{{ p.featured_image | image_url: width: 350 }}" alt="{{ p.title }}" loading="lazy"></a>
-      <div class="ul-card-content">
-        <span class="ul-card-vendor">{{ p.vendor | default: 'DTF TRANSFER' }}</span>
-        <h3 class="ul-card-title"><a href="{{ p.url }}">{{ p.title | truncate: 40 }}</a></h3>
-        {% if block.settings.show_reviews %}<div class="ul-card-rating"><span class="ul-stars">★★★★★</span><span class="ul-count">({{ block.settings.review_5 | default: 156 }})</span></div>{% endif %}
-        <div class="ul-card-price">{% if p.compare_at_price > p.price %}<span class="ul-old">{{ p.compare_at_price | money }}</span>{% endif %}<span class="ul-now">{{ p.price | money }}</span></div>
-        <button class="ul-upload-btn" type="button" onclick="openULShowcaseModal(this)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>{{ block.settings.upload_text | default: 'Upload Design' }}</button>
-      </div>
-    </div>
-    {% endif %}
+      {% endif %}
+    {% endfor %}
 
     {% unless block.settings.product_1 or block.settings.product_2 or block.settings.product_3 or block.settings.product_4 or block.settings.product_5 %}
     <p style="grid-column:1/-1;text-align:center;padding:40px;color:#888;">Select products in block settings (Product 1-5)</p>
@@ -130,128 +40,34 @@
   </div>
 </div>
 
-<!-- Upload Modal -->
-<div class="ul-modal-overlay" id="ulShowcaseModal-{{ block.id }}">
-  <div class="ul-modal">
-    <div class="ul-modal-header">
-      <h3>Upload Your Design</h3>
-      <button class="ul-modal-close" onclick="closeULShowcaseModal('{{ block.id }}')">×</button>
-    </div>
-    <div class="ul-modal-body">
-      <div class="ul-modal-product">
-        <img id="ulShowcaseImg-{{ block.id }}" src="" alt="">
-        <div><strong id="ulShowcaseTitle-{{ block.id }}"></strong><span id="ulShowcasePrice-{{ block.id }}"></span></div>
-      </div>
-      <div class="ul-upload-zone" id="ulShowcaseZone-{{ block.id }}" onclick="document.getElementById('ulShowcaseFile-{{ block.id }}').click()">
+<div class="ul-sh-modal-overlay" id="ulShowcaseModal-{{ block.id }}">
+  <div class="ul-sh-modal">
+    <div class="ul-sh-modal-header"><h3>Upload Your Design</h3><button class="ul-sh-modal-close" onclick="closeULShowcaseModal('{{ block.id }}')">×</button></div>
+    <div class="ul-sh-modal-body">
+      <div class="ul-sh-modal-product"><img id="ulShowcaseImg-{{ block.id }}" src="" alt="" width="55" height="55"><div><strong id="ulShowcaseTitle-{{ block.id }}"></strong><span id="ulShowcasePrice-{{ block.id }}"></span></div></div>
+      <div class="ul-sh-upload-zone" id="ulShowcaseZone-{{ block.id }}" onclick="document.getElementById('ulShowcaseFile-{{ block.id }}').click()">
         <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#7367f0" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
         <p>Click to upload or drag & drop</p>
         <input type="file" id="ulShowcaseFile-{{ block.id }}" accept="image/*,.pdf" style="display:none" onchange="handleULShowcaseFile(event,'{{ block.id }}')">
       </div>
-      <div class="ul-preview-zone" id="ulShowcasePreview-{{ block.id }}" style="display:none">
-        <img id="ulShowcasePreviewImg-{{ block.id }}" src="">
-        <button class="ul-remove-btn" onclick="removeULShowcaseFile('{{ block.id }}')">×</button>
+      <div class="ul-sh-preview-zone" id="ulShowcasePreview-{{ block.id }}" style="display:none">
+        <img id="ulShowcasePreviewImg-{{ block.id }}" src="" alt="" width="200" height="200"><button class="ul-sh-remove-btn" onclick="removeULShowcaseFile('{{ block.id }}')">×</button>
       </div>
-      <div class="ul-size-section">
-        <label>Sheet Size:</label>
-        <select class="ul-size-select" id="ulShowcaseSize-{{ block.id }}" onchange="selectULShowcaseSize(this,'{{ block.id }}')">
+      <div class="ul-sh-size-section"><label>Sheet Size:</label>
+        <select class="ul-sh-size-select" id="ulShowcaseSize-{{ block.id }}" onchange="selectULShowcaseSize(this,'{{ block.id }}')">
           <option value="22x6" data-price="7.50">22" x 6" - $7.50</option>
           <option value="22x12" data-price="12.00" selected>22" x 12" - $12.00</option>
           <option value="22x24" data-price="22.00">22" x 24" - $22.00</option>
           <option value="22x60" data-price="50.00">22" x 60" - $50.00</option>
         </select>
       </div>
-      <div class="ul-qty-row">
-        <span>Quantity:</span>
-        <div class="ul-qty-controls">
-          <button onclick="changeULShowcaseQty('{{ block.id }}',-1)">−</button>
-          <input type="number" id="ulShowcaseQty-{{ block.id }}" value="1" min="1">
-          <button onclick="changeULShowcaseQty('{{ block.id }}',1)">+</button>
-        </div>
-      </div>
+      <div class="ul-sh-qty-row"><span>Quantity:</span><div class="ul-sh-qty-controls"><button onclick="changeULShowcaseQty('{{ block.id }}',-1)">−</button><input type="number" id="ulShowcaseQty-{{ block.id }}" value="1" min="1"><button onclick="changeULShowcaseQty('{{ block.id }}',1)">+</button></div></div>
     </div>
-    <div class="ul-modal-footer">
-      <button class="ul-modal-cart-btn" id="ulShowcaseCartBtn-{{ block.id }}" onclick="addULShowcaseToCart('{{ block.id }}')" disabled>Upload design to continue</button>
-    </div>
+    <div class="ul-sh-modal-footer"><button class="ul-sh-cart-btn" id="ulShowcaseCartBtn-{{ block.id }}" onclick="addULShowcaseToCart('{{ block.id }}')" disabled>Upload design to continue</button></div>
   </div>
 </div>
 
-<style>
-.ul-showcase-section{max-width:1400px;margin:0 auto}
-.ul-showcase-header{text-align:center;margin-bottom:30px}
-.ul-header-deco{display:flex;align-items:center;justify-content:center;gap:15px;margin-bottom:10px}
-.ul-deco-line{width:80px;height:1px;background:linear-gradient(90deg,transparent,#ddd,transparent)}
-.ul-header-box{border:1px dashed #ccc;border-radius:8px;padding:10px 25px}
-.ul-header-tag{font-size:13px;font-weight:700;color:#7367f0;letter-spacing:2px}
-.ul-header-subtitle{color:#888;font-size:14px;margin:0}
-.ul-showcase-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:20px}
-.ul-showcase-card{background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.06);position:relative;transition:all .3s}
-.ul-showcase-card:hover{transform:translateY(-6px);box-shadow:0 12px 35px rgba(115,103,240,0.15)}
-.ul-card-badges{position:absolute;top:12px;left:12px;display:flex;gap:6px;z-index:2}
-.ul-badge-4d{background:linear-gradient(135deg,#ffd700,#ffaa00);color:#1a1a2e;padding:4px 8px;border-radius:6px;font-size:10px;font-weight:700}
-.ul-badge-sale{background:#ff4757;color:#fff;padding:4px 8px;border-radius:6px;font-size:10px;font-weight:600}
-.ul-wishlist-btn{position:absolute;top:12px;right:12px;width:34px;height:34px;border-radius:50%;background:#fff;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.1);z-index:2;transition:all .2s}
-.ul-wishlist-btn:hover{background:#ff6b6b}.ul-wishlist-btn:hover svg{stroke:#fff}
-.ul-card-image-wrap{display:block;aspect-ratio:1;overflow:hidden;background:#f8f9fa}
-.ul-card-image-wrap img{width:100%;height:100%;object-fit:cover;transition:transform .3s}
-.ul-showcase-card:hover .ul-card-image-wrap img{transform:scale(1.05)}
-.ul-card-content{padding:16px}
-.ul-card-vendor{font-size:10px;color:#7367f0;font-weight:600;text-transform:uppercase;letter-spacing:0.5px}
-.ul-card-title{margin:6px 0;font-size:14px;font-weight:600;line-height:1.3}
-.ul-card-title a{color:#1a1a2e;text-decoration:none}
-.ul-card-rating{display:flex;align-items:center;gap:5px;margin:8px 0}
-.ul-stars{color:#ffd700;font-size:13px}
-.ul-count{font-size:11px;color:#888}
-.ul-card-price{margin:10px 0}
-.ul-old{text-decoration:line-through;color:#999;font-size:12px;margin-right:6px}
-.ul-now{font-size:17px;font-weight:700;color:#1a1a2e}
-.ul-upload-btn{width:100%;padding:11px;background:linear-gradient(135deg,#7367f0,#9d4edd);color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .3s}
-.ul-upload-btn:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(115,103,240,0.35)}
-.ul-modal-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);display:none;align-items:center;justify-content:center;z-index:9999;backdrop-filter:blur(4px)}
-.ul-modal-overlay.active{display:flex}
-.ul-modal{background:#fff;border-radius:16px;width:90%;max-width:400px;max-height:90vh;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.3)}
-.ul-modal-header{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;background:linear-gradient(135deg,#7367f0,#9d4edd);color:#fff}
-.ul-modal-header h3{margin:0;font-size:17px}
-.ul-modal-close{background:none;border:none;color:#fff;font-size:26px;cursor:pointer;line-height:1}
-.ul-modal-body{padding:18px}
-.ul-modal-product{display:flex;align-items:center;gap:12px;padding:10px;background:#f8f9fa;border-radius:10px;margin-bottom:14px}
-.ul-modal-product img{width:55px;height:55px;border-radius:8px;object-fit:cover}
-.ul-modal-product strong{display:block;font-size:13px}
-.ul-modal-product span{color:#7367f0;font-weight:600;font-size:13px}
-.ul-upload-zone{border:2px dashed #7367f0;border-radius:12px;padding:25px;text-align:center;cursor:pointer;background:#f8f7ff;transition:all .3s}
-.ul-upload-zone:hover{background:#f0eeff}
-.ul-upload-zone p{margin:8px 0 0;color:#666;font-size:13px}
-.ul-preview-zone{position:relative;text-align:center;margin-bottom:14px}
-.ul-preview-zone img{max-width:100%;max-height:130px;border-radius:10px}
-.ul-remove-btn{position:absolute;top:5px;right:5px;background:#ff4757;color:#fff;border:none;width:26px;height:26px;border-radius:50%;cursor:pointer;font-size:15px}
-.ul-size-section{margin:14px 0}
-.ul-size-section label{display:block;margin-bottom:6px;font-weight:600;font-size:13px}
-.ul-size-select{width:100%;padding:11px;border:2px solid #e0e0e0;border-radius:10px;font-size:13px;cursor:pointer}
-.ul-size-select:focus{border-color:#7367f0;outline:none}
-.ul-qty-row{display:flex;justify-content:space-between;align-items:center}
-.ul-qty-controls{display:flex;align-items:center;gap:6px}
-.ul-qty-controls button{width:34px;height:34px;border:1px solid #ddd;border-radius:8px;background:#fff;font-size:17px;cursor:pointer}
-.ul-qty-controls button:hover{background:#7367f0;color:#fff;border-color:#7367f0}
-.ul-qty-controls input{width:45px;text-align:center;border:1px solid #ddd;border-radius:8px;padding:7px;font-size:13px}
-.ul-modal-footer{padding:14px 18px;background:#f8f9fa;border-top:1px solid #eee}
-.ul-modal-cart-btn{width:100%;padding:13px;background:linear-gradient(135deg,#28c76f,#48da89);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;transition:all .3s}
-.ul-modal-cart-btn:disabled{background:#ccc;cursor:not-allowed}
-.ul-modal-cart-btn:not(:disabled):hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(40,199,111,0.4)}
-@media(max-width:600px){.ul-showcase-grid{grid-template-columns:repeat(2,1fr);gap:12px}.ul-card-content{padding:12px}.ul-card-title{font-size:13px}}
-</style>
-
-<script>
-(function(){
-  window.ulShowcaseData=window.ulShowcaseData||{};
-  window.openULShowcaseModal=function(btn){var c=btn.closest('.ul-showcase-card'),sec=btn.closest('.ul-showcase-section'),bid=sec.dataset.blockId;if(c&&bid){ulShowcaseData[bid]={vid:c.dataset.variantId,file:null,size:'22x12',price:12};document.getElementById('ulShowcaseImg-'+bid).src=c.dataset.productImage;document.getElementById('ulShowcaseTitle-'+bid).textContent=c.dataset.productTitle;document.getElementById('ulShowcasePrice-'+bid).textContent=c.dataset.productPrice;document.getElementById('ulShowcaseModal-'+bid).classList.add('active');document.body.style.overflow='hidden'}};
-  window.closeULShowcaseModal=function(bid){document.getElementById('ulShowcaseModal-'+bid).classList.remove('active');document.body.style.overflow=''};
-  window.handleULShowcaseFile=function(e,bid){var f=e.target.files[0];if(!f)return;ulShowcaseData[bid].file=f;document.getElementById('ulShowcaseZone-'+bid).style.display='none';document.getElementById('ulShowcasePreview-'+bid).style.display='block';document.getElementById('ulShowcasePreviewImg-'+bid).src=URL.createObjectURL(f);document.getElementById('ulShowcaseCartBtn-'+bid).disabled=false;document.getElementById('ulShowcaseCartBtn-'+bid).textContent='Add to Cart'};
-  window.removeULShowcaseFile=function(bid){ulShowcaseData[bid].file=null;document.getElementById('ulShowcaseZone-'+bid).style.display='';document.getElementById('ulShowcasePreview-'+bid).style.display='none';document.getElementById('ulShowcaseFile-'+bid).value='';document.getElementById('ulShowcaseCartBtn-'+bid).disabled=true;document.getElementById('ulShowcaseCartBtn-'+bid).textContent='Upload design to continue'};
-  window.selectULShowcaseSize=function(sel,bid){ulShowcaseData[bid].size=sel.value;ulShowcaseData[bid].price=parseFloat(sel.options[sel.selectedIndex].dataset.price)};
-  window.changeULShowcaseQty=function(bid,d){var i=document.getElementById('ulShowcaseQty-'+bid),v=parseInt(i.value)+d;if(v<1)v=1;i.value=v};
-  window.addULShowcaseToCart=function(bid){var btn=document.getElementById('ulShowcaseCartBtn-'+bid),qty=parseInt(document.getElementById('ulShowcaseQty-'+bid).value)||1;btn.disabled=true;btn.textContent='Adding...';fetch('/cart/add.js',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({items:[{id:ulShowcaseData[bid].vid,quantity:qty,properties:{'_upload_file':ulShowcaseData[bid].file?.name||'','_sheet_size':ulShowcaseData[bid].size,'_unit_price':'$'+ulShowcaseData[bid].price}}]})}).then(r=>r.json()).then(function(){btn.textContent='✓ Added!';setTimeout(function(){closeULShowcaseModal(bid);window.location.href='/cart'},800)}).catch(function(){btn.disabled=false;btn.textContent='Add to Cart'})};
-  document.addEventListener('click',function(e){if(e.target.classList.contains('ul-modal-overlay'))closeULShowcaseModal(e.target.id.replace('ulShowcaseModal-',''))});
-})();
-</script>
+<script src="{{ 'ul-showcase.js' | asset_url }}" defer></script>
 
 {% schema %}
 {
@@ -259,30 +75,10 @@
   "target": "section",
   "settings": [
     {
-      "type": "header",
-      "content": "Header Settings"
-    },
-    {
       "type": "checkbox",
       "id": "show_header",
       "label": "Show Header",
       "default": true
-    },
-    {
-      "type": "text",
-      "id": "header_tag",
-      "label": "Header Tag",
-      "default": "SPECIAL OFFERS"
-    },
-    {
-      "type": "text",
-      "id": "header_subtitle",
-      "label": "Subtitle",
-      "default": "Handpicked products just for you"
-    },
-    {
-      "type": "header",
-      "content": "Product 1"
     },
     {
       "type": "product",
@@ -290,29 +86,9 @@
       "label": "Product 1"
     },
     {
-      "type": "number",
-      "id": "review_1",
-      "label": "Review Count",
-      "default": 128
-    },
-    {
-      "type": "header",
-      "content": "Product 2"
-    },
-    {
       "type": "product",
       "id": "product_2",
       "label": "Product 2"
-    },
-    {
-      "type": "number",
-      "id": "review_2",
-      "label": "Review Count",
-      "default": 95
-    },
-    {
-      "type": "header",
-      "content": "Product 3"
     },
     {
       "type": "product",
@@ -320,82 +96,14 @@
       "label": "Product 3"
     },
     {
-      "type": "number",
-      "id": "review_3",
-      "label": "Review Count",
-      "default": 203
-    },
-    {
-      "type": "header",
-      "content": "Product 4"
-    },
-    {
       "type": "product",
       "id": "product_4",
       "label": "Product 4"
     },
     {
-      "type": "number",
-      "id": "review_4",
-      "label": "Review Count",
-      "default": 67
-    },
-    {
-      "type": "header",
-      "content": "Product 5"
-    },
-    {
       "type": "product",
       "id": "product_5",
       "label": "Product 5"
-    },
-    {
-      "type": "number",
-      "id": "review_5",
-      "label": "Review Count",
-      "default": 156
-    },
-    {
-      "type": "header",
-      "content": "Display Settings"
-    },
-    {
-      "type": "checkbox",
-      "id": "show_reviews",
-      "label": "Show Reviews",
-      "default": true
-    },
-    {
-      "type": "text",
-      "id": "upload_text",
-      "label": "Upload Button Text",
-      "default": "Upload Design"
-    },
-    {
-      "type": "color",
-      "id": "bg_color",
-      "label": "Background Color",
-      "default": "#f8f9fa"
-    },
-    {
-      "type": "range",
-      "id": "padding_top",
-      "label": "Padding Top",
-      "min": 0,
-      "max": 100,
-      "step": 5,
-      "default": 40,
-      "unit": "px"
-    },
-    {
-      "type": "range",
-      "id": "padding_bottom",
-      "label": "Padding Bottom",
-      "min": 0,
-      "max": 100,
-      "step": 5,
-      "default": 40,
-      "unit": "px"
     }
   ]
 }
