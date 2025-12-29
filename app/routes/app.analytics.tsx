@@ -61,6 +61,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
     uploadsByStatus,
     recentUploads,
     uploadsByDay,
+    // ORDER METRICS - NEW
+    totalOrders,
+    ordersWithUploads,
+    recentOrders,
   ] = await Promise.all([
     // Total uploads in period
     prisma.upload.count({
@@ -110,6 +114,30 @@ export async function loader({ request }: LoaderFunctionArgs) {
       select: { createdAt: true },
       orderBy: { createdAt: "asc" },
     }),
+    // ORDER METRICS - Total unique orders linked to uploads
+    prisma.orderLink.groupBy({
+      by: ["orderId"],
+      where: { shopId: shop.id, createdAt: { gte: startDate } },
+    }).then(orders => orders.length),
+    // Uploads that have been ordered
+    prisma.upload.count({
+      where: { 
+        shopId: shop.id, 
+        createdAt: { gte: startDate },
+        orderId: { not: null }
+      },
+    }),
+    // Recent orders with uploads
+    prisma.orderLink.findMany({
+      where: { shopId: shop.id },
+      include: {
+        upload: {
+          select: { id: true, mode: true, status: true }
+        }
+      },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+    }),
   ]);
 
   // Process uploads by day for chart
@@ -141,6 +169,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
     ? Math.round((blockedUploads / totalUploads) * 100)
     : 0;
 
+  // Order conversion rate - what % of uploads resulted in orders
+  const orderConversionRate = totalUploads > 0
+    ? Math.round((ordersWithUploads / totalUploads) * 100)
+    : 0;
+
   return json({
     period,
     metrics: {
@@ -151,6 +184,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
       successRate,
       warningRate,
       blockedRate,
+      // ORDER METRICS
+      totalOrders,
+      ordersWithUploads,
+      orderConversionRate,
     },
     modeBreakdown: uploadsByMode.map((m: { mode: string; _count: number }) => ({
       mode: m.mode,
@@ -175,6 +212,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       id: u.id,
       mode: u.mode,
       status: u.status,
+      orderId: u.orderId,
       locations: u.items.map((i: { location: string }) => i.location),
       preflightStatus: u.items.some((i: { preflightStatus: string }) => i.preflightStatus === "error")
         ? "error"
@@ -182,6 +220,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
           ? "warning"
           : "ok",
       createdAt: u.createdAt.toISOString(),
+    })),
+    recentOrders: recentOrders.map((o: any) => ({
+      orderId: o.orderId,
+      uploadId: o.uploadId,
+      uploadMode: o.upload?.mode || "unknown",
+      uploadStatus: o.upload?.status || "unknown",
+      createdAt: o.createdAt.toISOString(),
     })),
   });
 }
@@ -234,7 +279,7 @@ function ProgressBar({ value, color }: { value: number; color: string }) {
 }
 
 export default function AnalyticsPage() {
-  const { period, metrics, modeBreakdown, statusBreakdown, locationUsage, dailyTrend, recentUploads } = useLoaderData<typeof loader>();
+  const { period, metrics, modeBreakdown, statusBreakdown, locationUsage, dailyTrend, recentUploads, recentOrders } = useLoaderData<typeof loader>();
   const [selectedPeriod, setSelectedPeriod] = useState(period);
 
   const handlePeriodChange = useCallback((value: string) => {
@@ -283,8 +328,23 @@ export default function AnalyticsPage() {
     }>
       {statusLabels[u.status] || u.status.replace("_", " ")}
     </Badge>,
+    u.orderId ? <Badge key={`order-${u.id}`} tone="success">#{u.orderId.slice(-6)}</Badge> : <Text key={`no-order-${u.id}`} as="span" tone="subdued">-</Text>,
     u.locations.join(", "),
     new Date(u.createdAt).toLocaleDateString(),
+  ]);
+
+  const orderRows = recentOrders.map((o: any) => [
+    <Text key={o.orderId} as="span" fontWeight="semibold">#{o.orderId.slice(-8)}</Text>,
+    o.uploadId.slice(0, 8) + "...",
+    <Badge key={`mode-${o.orderId}`}>{o.uploadMode}</Badge>,
+    <Badge key={`status-${o.orderId}`} tone={
+      o.uploadStatus === "uploaded" ? "success" :
+      o.uploadStatus === "blocked" ? "attention" :
+      o.uploadStatus === "needs_review" ? "attention" : "info"
+    }>
+      {statusLabels[o.uploadStatus] || o.uploadStatus.replace("_", " ")}
+    </Badge>,
+    new Date(o.createdAt).toLocaleDateString(),
   ]);
 
   return (
@@ -340,6 +400,34 @@ export default function AnalyticsPage() {
               value={`${metrics.warningRate}%`}
               subtitle={`${metrics.warningUploads} with warnings`}
               tone="warning"
+            />
+          </Layout.Section>
+
+          {/* Order Metrics Row */}
+          <Layout.Section variant="oneThird">
+            <MetricCard
+              title="Total Orders"
+              value={metrics.totalOrders}
+              subtitle={`with custom uploads`}
+              tone="success"
+            />
+          </Layout.Section>
+
+          <Layout.Section variant="oneThird">
+            <MetricCard
+              title="Conversion Rate"
+              value={`${metrics.orderConversionRate}%`}
+              subtitle={`${metrics.ordersWithUploads} uploads ordered`}
+              tone="success"
+            />
+          </Layout.Section>
+
+          <Layout.Section variant="oneThird">
+            <MetricCard
+              title="Blocked Rate"
+              value={`${metrics.blockedRate}%`}
+              subtitle={`${metrics.blockedUploads} blocked`}
+              tone="critical"
             />
           </Layout.Section>
 
@@ -483,10 +571,41 @@ export default function AnalyticsPage() {
                 </InlineStack>
 
                 <DataTable
-                  columnContentTypes={["text", "text", "text", "text", "text"]}
-                  headings={["ID", "Mode", "Status", "Locations", "Date"]}
+                  columnContentTypes={["text", "text", "text", "text", "text", "text"]}
+                  headings={["ID", "Mode", "Status", "Order", "Locations", "Date"]}
                   rows={recentRows}
                 />
+              </BlockStack>
+            </Card>
+          </Layout.Section>
+
+          {/* Recent Orders with Uploads */}
+          <Layout.Section>
+            <Card>
+              <BlockStack gap="400">
+                <InlineStack align="space-between">
+                  <Text as="h2" variant="headingMd">Recent Orders with Custom Uploads</Text>
+                  <a href="/app/queue">View Queue</a>
+                </InlineStack>
+
+                {orderRows.length > 0 ? (
+                  <DataTable
+                    columnContentTypes={["text", "text", "text", "text", "text"]}
+                    headings={["Order", "Upload ID", "Mode", "Status", "Date"]}
+                    rows={orderRows}
+                  />
+                ) : (
+                  <Box padding="400" background="bg-surface-secondary" borderRadius="200">
+                    <BlockStack gap="200" inlineAlign="center">
+                      <Text as="p" tone="subdued" alignment="center">
+                        No orders with custom uploads yet
+                      </Text>
+                      <Text as="p" variant="bodySm" tone="subdued" alignment="center">
+                        When customers place orders with uploaded designs, they'll appear here
+                      </Text>
+                    </BlockStack>
+                  </Box>
+                )}
               </BlockStack>
             </Card>
           </Layout.Section>
