@@ -812,17 +812,36 @@ export default function ProductConfigurePage() {
           <Card>
             <BlockStack gap="400">
               <Text as="h2" variant="headingMd">🔧 Theme Integration</Text>
-              <Text as="p">
-                Add this snippet to your product template to display the upload widget:
-              </Text>
-              <Box padding="300" background="bg-surface-secondary" borderRadius="200">
-                <pre style={{ margin: 0, fontFamily: "monospace", fontSize: 13 }}>
-{`{% render 'dtf-uploader', product: product %}`}
-                </pre>
-              </Box>
+              
+              <Banner tone="info">
+                <p><strong>Important:</strong> Theme App Extension blocks must be added via Theme Editor, not code.</p>
+              </Banner>
+              
+              <Text as="h3" variant="headingSm">How to Add the Upload Widget:</Text>
+              
+              <BlockStack gap="200">
+                <Text as="p">
+                  <strong>Step 1:</strong> Go to your Shopify Admin → Online Store → Themes → Customize
+                </Text>
+                <Text as="p">
+                  <strong>Step 2:</strong> Navigate to a Product page template
+                </Text>
+                <Text as="p">
+                  <strong>Step 3:</strong> Click "Add block" or "Add section"
+                </Text>
+                <Text as="p">
+                  <strong>Step 4:</strong> Look under "Apps" section → Select "<strong>UL DTF Transfer</strong>"
+                </Text>
+                <Text as="p">
+                  <strong>Step 5:</strong> Position the block where you want it and Save
+                </Text>
+              </BlockStack>
+              
+              <Divider />
+              
               <Text as="p" tone="subdued">
-                Place this code in your product template (e.g., sections/main-product.liquid) 
-                where you want the upload widget to appear.
+                ⚠️ Note: The old method <code>{`{% render 'dtf-uploader' %}`}</code> does NOT work with Theme App Extensions. 
+                You must use the Theme Editor to add app blocks.
               </Text>
             </BlockStack>
           </Card>
