@@ -222,8 +222,9 @@ export async function action({ request }: ActionFunctionArgs) {
       printLocations,
     };
 
+    // SECURITY: Compound where prevents TOCTOU race condition
     await prisma.assetSet.update({
-      where: { id: assetSetId },
+      where: { id: assetSetId, shopId: shop.id },
       data: {
         name: name || existing.name,
         schema,
@@ -257,8 +258,9 @@ export async function action({ request }: ActionFunctionArgs) {
       return json({ error: `Cannot delete: ${inUse} products are using this asset set` });
     }
 
+    // SECURITY: Compound where prevents TOCTOU race condition
     await prisma.assetSet.delete({
-      where: { id: assetSetId },
+      where: { id: assetSetId, shopId: shop.id },
     });
 
     // Audit log
@@ -277,8 +279,9 @@ export async function action({ request }: ActionFunctionArgs) {
   if (action === "archive") {
     const assetSetId = formData.get("assetSetId") as string;
 
+    // SECURITY: Compound where prevents TOCTOU race condition
     await prisma.assetSet.update({
-      where: { id: assetSetId },
+      where: { id: assetSetId, shopId: shop.id },
       data: { status: "archived" },
     });
 

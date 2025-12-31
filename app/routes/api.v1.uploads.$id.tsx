@@ -131,8 +131,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
     updateData.rejectedAt = new Date();
   }
 
+  // SECURITY: Update with compound where to enforce ownership
+  // This prevents TOCTOU race conditions
   await prisma.upload.update({
-    where: { id },
+    where: { 
+      id,
+      shopId: ctx.shopId, // Compound where enforces ownership at DB level
+    },
     data: updateData,
   });
 
@@ -156,7 +161,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     data: {
       shopId: ctx.shopId,
       eventType: `upload_${actionType}d`,
-      resourceId: id,
+      resourceId: id!, // id is validated earlier via upload lookup
       payload: {
         uploadId: id,
         status: updateData.status,

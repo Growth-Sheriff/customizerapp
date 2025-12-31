@@ -11,6 +11,7 @@ import {
   CheckCircleIcon,
   ProductIcon,
   ClockIcon,
+  CartIcon,
 } from "@shopify/polaris-icons";
 import { useState, useCallback } from "react";
 import { authenticate } from "~/shopify.server";
@@ -64,11 +65,20 @@ export async function loader({ request }: LoaderFunctionArgs) {
   startOfMonth.setDate(1);
   startOfMonth.setHours(0, 0, 0, 0);
 
-  const [totalUploads, monthlyUploads, productsConfigured, pendingQueue] = await Promise.all([
+  const [totalUploads, monthlyUploads, productsConfigured, pendingQueue, totalOrders, monthlyOrders] = await Promise.all([
     prisma.upload.count({ where: { shopId: shop.id } }),
     prisma.upload.count({ where: { shopId: shop.id, createdAt: { gte: startOfMonth } } }),
     prisma.productConfig.count({ where: { shopId: shop.id, enabled: true } }),
     prisma.upload.count({ where: { shopId: shop.id, status: "needs_review" } }),
+    // Order stats from OrderLink
+    prisma.orderLink.groupBy({
+      by: ["orderId"],
+      where: { shopId: shop.id },
+    }).then(groups => groups.length),
+    prisma.orderLink.groupBy({
+      by: ["orderId"],
+      where: { shopId: shop.id, createdAt: { gte: startOfMonth } },
+    }).then(groups => groups.length),
   ]);
 
   // Plan limits
@@ -97,6 +107,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
       monthlyLimit,
       productsConfigured,
       pendingQueue,
+      totalOrders,
+      monthlyOrders,
+      conversionRate: monthlyUploads > 0 ? Math.round((monthlyOrders / monthlyUploads) * 100) : 0,
     },
     usageAlerts,
     uploads: uploads.map((u: any) => ({
@@ -465,8 +478,10 @@ export default function AppDashboard() {
   ]);
 
   const successRate = stats.totalUploads > 0 
-    ? Math.round((stats.totalUploads - 0) / stats.totalUploads * 100) 
+    ? Math.round((stats.totalUploads - stats.pendingQueue) / stats.totalUploads * 100) 
     : 100;
+  
+  const conversionRate = stats.conversionRate || 0;
 
   return (
     <Page
@@ -495,7 +510,7 @@ export default function AppDashboard() {
           />
         )}
 
-        {/* Stats Cards */}
+        {/* Stats Cards - Row 1 */}
         <Grid>
           <Grid.Cell columnSpan={{ xs: 6, sm: 3, md: 3, lg: 3, xl: 3 }}>
             <Card>
@@ -521,11 +536,13 @@ export default function AppDashboard() {
             <Card>
               <BlockStack gap="200">
                 <InlineStack align="space-between">
-                  <Text as="h3" variant="headingSm" tone="subdued">Success Rate</Text>
-                  <Icon source={CheckCircleIcon} tone="success" />
+                  <Text as="h3" variant="headingSm" tone="subdued">Orders This Month</Text>
+                  <Icon source={CartIcon} tone="success" />
                 </InlineStack>
-                <Text as="p" variant="heading2xl">{successRate}%</Text>
-                <Text as="p" variant="bodySm" tone="subdued">{stats.totalUploads} total uploads</Text>
+                <Text as="p" variant="heading2xl">{stats.monthlyOrders}</Text>
+                <Text as="p" variant="bodySm" tone="subdued">
+                  {conversionRate}% conversion rate
+                </Text>
               </BlockStack>
             </Card>
           </Grid.Cell>

@@ -10,6 +10,7 @@ import {
 import { useState, useCallback } from "react";
 import { authenticate } from "~/shopify.server";
 import prisma from "~/lib/prisma.server";
+import { getStorageConfig, getDownloadSignedUrl } from "~/lib/storage.server";
 
 // Production Queue Statuses
 const QUEUE_STATUSES = [
@@ -113,24 +114,43 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const countsMap = new Map(statusCounts.map((s: { status: string; _count: number }) => [s.status, s._count]));
 
+  // Generate signed URLs for thumbnails
+  const storageConfig = getStorageConfig(shop.storageConfig as any);
+  const uploadsWithThumbnails = await Promise.all(
+    uploads.map(async (u) => {
+      let thumbnailUrl: string | null = null;
+      const firstItem = u.items[0];
+      
+      if (firstItem?.thumbnailKey) {
+        try {
+          thumbnailUrl = await getDownloadSignedUrl(storageConfig, firstItem.thumbnailKey, 3600);
+        } catch (e) {
+          console.warn(`[Queue] Failed to get thumbnail URL for ${u.id}:`, e);
+        }
+      }
+
+      return {
+        id: u.id,
+        mode: u.mode,
+        status: u.status,
+        orderId: u.orderId,
+        customerEmail: u.customerEmail,
+        itemCount: u.items.length,
+        locations: u.items.map((i: { location: string }) => i.location),
+        preflightStatus: u.items.some((i: { preflightStatus: string }) => i.preflightStatus === "error")
+          ? "error"
+          : u.items.some((i: { preflightStatus: string }) => i.preflightStatus === "warning")
+            ? "warning"
+            : "ok",
+        thumbnailUrl,
+        createdAt: u.createdAt.toISOString(),
+        approvedAt: u.approvedAt?.toISOString() || null,
+      };
+    })
+  );
+
   return json({
-    uploads: uploads.map((u) => ({
-      id: u.id,
-      mode: u.mode,
-      status: u.status,
-      orderId: u.orderId,
-      customerEmail: u.customerEmail,
-      itemCount: u.items.length,
-      locations: u.items.map((i: { location: string }) => i.location),
-      preflightStatus: u.items.some((i: { preflightStatus: string }) => i.preflightStatus === "error")
-        ? "error"
-        : u.items.some((i: { preflightStatus: string }) => i.preflightStatus === "warning")
-          ? "warning"
-          : "ok",
-      thumbnailUrl: u.items[0]?.thumbnailKey || null,
-      createdAt: u.createdAt.toISOString(),
-      approvedAt: u.approvedAt?.toISOString() || null,
-    })),
+    uploads: uploadsWithThumbnails,
     pagination: {
       page,
       pageSize,
@@ -178,8 +198,9 @@ export async function action({ request }: ActionFunctionArgs) {
       updateData.rejectedAt = new Date();
     }
 
+    // SECURITY: Compound where prevents TOCTOU race condition
     await prisma.upload.update({
-      where: { id: uploadId },
+      where: { id: uploadId, shopId: shop.id },
       data: updateData,
     });
 
@@ -292,12 +313,14 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 function PreflightBadge({ status }: { status: string }) {
-  const tones: Record<string, "success" | "warning" | "critical"> = {
-    ok: "success",
-    warning: "warning",
-    error: "critical",
+  // Merchant-friendly labels with softer tones
+  const config: Record<string, { tone: "success" | "info" | "attention"; label: string }> = {
+    ok: { tone: "success", label: "Ready ✓" },
+    warning: { tone: "info", label: "Review" },
+    error: { tone: "attention", label: "Check" },
   };
-  return <Badge tone={tones[status] || "info"}>{status}</Badge>;
+  const { tone, label } = config[status] || { tone: "info" as const, label: status };
+  return <Badge tone={tone}>{label}</Badge>;
 }
 
 export default function ProductionQueuePage() {
@@ -367,7 +390,7 @@ export default function ProductionQueuePage() {
     <InlineStack key={upload.id} gap="200" align="start">
       {upload.thumbnailUrl ? (
         <img
-          src={`/api/storage/preview/${upload.thumbnailUrl}`}
+          src={upload.thumbnailUrl}
           alt="Preview"
           style={{ width: 40, height: 40, objectFit: "cover", borderRadius: 4 }}
         />

@@ -105,8 +105,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const action = formData.get("_action");
 
   if (action === "approve") {
+    // SECURITY: Compound where prevents TOCTOU race condition
     await prisma.upload.update({
-      where: { id: uploadId },
+      where: { id: uploadId, shopId: shop.id },
       data: {
         status: "approved",
         approvedAt: new Date(),
@@ -129,8 +130,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
   if (action === "reject") {
     const reason = formData.get("reason") as string;
+    // SECURITY: Compound where prevents TOCTOU race condition
     await prisma.upload.update({
-      where: { id: uploadId },
+      where: { id: uploadId, shopId: shop.id },
       data: {
         status: "rejected",
         rejectedAt: new Date(),
@@ -156,8 +158,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
   }
 
   if (action === "continue_with_warnings") {
+    // SECURITY: Compound where prevents TOCTOU race condition
     await prisma.upload.update({
-      where: { id: uploadId },
+      where: { id: uploadId, shopId: shop.id },
       data: { status: "approved", approvedAt: new Date() },
     });
     
@@ -179,11 +182,12 @@ export async function action({ request, params }: ActionFunctionArgs) {
 }
 
 function PreflightBadge({ status }: { status: string }) {
+  // Merchant-friendly labels with softer tones
   const config: Record<string, { tone: "success" | "warning" | "critical" | "info"; label: string }> = {
-    ok: { tone: "success", label: "OK" },
-    warning: { tone: "warning", label: "Warning" },
-    error: { tone: "critical", label: "Error" },
-    pending: { tone: "info", label: "Pending" },
+    ok: { tone: "success", label: "Print Ready ✓" },
+    warning: { tone: "info", label: "Review Suggested" },
+    error: { tone: "warning", label: "Needs Attention" },
+    pending: { tone: "info", label: "Processing..." },
   };
   const { tone, label } = config[status] || config.pending;
   return <Badge tone={tone}>{label}</Badge>;
@@ -191,9 +195,90 @@ function PreflightBadge({ status }: { status: string }) {
 
 function StatusIcon({ status }: { status: string }) {
   if (status === "ok") return <Icon source={CheckCircleIcon} tone="success" />;
-  if (status === "warning") return <Icon source={AlertTriangleIcon} tone="warning" />;
-  if (status === "error") return <Icon source={AlertCircleIcon} tone="critical" />;
+  if (status === "warning") return <Icon source={AlertTriangleIcon} tone="base" />;
+  if (status === "error") return <Icon source={AlertCircleIcon} tone="warning" />;
   return null;
+}
+
+// Convert technical preflight messages to merchant-friendly language
+function getPreflightMessage(check: { name: string; status: string; message?: string; value?: unknown }): { title: string; detail: string } {
+  const name = check.name?.toLowerCase() || "";
+  const status = check.status;
+  const value = check.value;
+  
+  // DPI checks
+  if (name.includes("dpi") || name.includes("resolution")) {
+    if (status === "ok") {
+      return { title: "Resolution", detail: "Excellent quality for printing ✓" };
+    } else if (status === "warning") {
+      return { title: "Resolution", detail: "Good quality - may be slightly improved with higher resolution" };
+    } else {
+      return { title: "Resolution", detail: "Lower resolution detected - results may vary" };
+    }
+  }
+  
+  // File size checks
+  if (name.includes("size") || name.includes("filesize")) {
+    if (status === "ok") {
+      return { title: "File Size", detail: "Within optimal range ✓" };
+    } else if (status === "warning") {
+      return { title: "File Size", detail: "Larger file - upload may take longer" };
+    } else {
+      return { title: "File Size", detail: "File may be too large" };
+    }
+  }
+  
+  // Format checks
+  if (name.includes("format") || name.includes("type")) {
+    if (status === "ok") {
+      return { title: "File Format", detail: "Compatible format ✓" };
+    } else {
+      return { title: "File Format", detail: check.message || "Format check needed" };
+    }
+  }
+  
+  // Transparency checks
+  if (name.includes("transparency") || name.includes("alpha")) {
+    if (status === "ok") {
+      return { title: "Transparency", detail: "Ready for printing ✓" };
+    } else if (status === "warning") {
+      return { title: "Transparency", detail: "Transparent areas detected - will be handled automatically" };
+    } else {
+      return { title: "Transparency", detail: "Transparency settings may affect print" };
+    }
+  }
+  
+  // Color profile checks
+  if (name.includes("color") || name.includes("profile") || name.includes("cmyk") || name.includes("rgb")) {
+    if (status === "ok") {
+      return { title: "Colors", detail: "Color profile ready ✓" };
+    } else if (status === "warning") {
+      return { title: "Colors", detail: "Colors will be optimized for printing" };
+    } else {
+      return { title: "Colors", detail: "Color conversion may be applied" };
+    }
+  }
+  
+  // Dimensions
+  if (name.includes("dimension") || name.includes("width") || name.includes("height")) {
+    if (status === "ok") {
+      return { title: "Dimensions", detail: "Perfect size for print area ✓" };
+    } else if (status === "warning") {
+      return { title: "Dimensions", detail: "Will be scaled to fit - quality preserved" };
+    } else {
+      return { title: "Dimensions", detail: "May need resizing" };
+    }
+  }
+  
+  // Default fallback with friendlier tone
+  const friendlyName = check.name?.replace(/_/g, " ").replace(/^\w/, c => c.toUpperCase()) || "Check";
+  if (status === "ok") {
+    return { title: friendlyName, detail: "Passed ✓" };
+  } else if (status === "warning") {
+    return { title: friendlyName, detail: check.message || "May need review" };
+  } else {
+    return { title: friendlyName, detail: check.message || "Attention needed" };
+  }
 }
 
 export default function UploadDetail() {
@@ -245,21 +330,21 @@ export default function UploadDetail() {
             </Layout.Section>
           )}
 
-          {/* Overall Status Banner */}
+          {/* Overall Status Banner - Merchant Friendly */}
           <Layout.Section>
             {hasErrors && (
-              <Banner title="Preflight Errors Detected" tone="critical">
-                <p>This upload has blocking errors and cannot be approved until the customer re-uploads.</p>
+              <Banner title="Attention Needed" tone="warning">
+                <p>This upload needs customer attention before it can be approved. The customer will be notified to make adjustments.</p>
               </Banner>
             )}
             {hasWarnings && !hasErrors && (
-              <Banner title="Preflight Warnings" tone="warning">
-                <p>Some checks have warnings. You can still approve this upload or ask the customer to re-upload.</p>
+              <Banner title="Ready for Review" tone="info">
+                <p>This upload is ready! There are some minor suggestions that won't affect the final print. You can safely approve it.</p>
               </Banner>
             )}
             {!hasWarnings && !hasErrors && overallStatus === "ok" && (
-              <Banner title="All Checks Passed" tone="success">
-                <p>This upload passed all preflight checks.</p>
+              <Banner title="Excellent Quality! ✓" tone="success">
+                <p>This upload passed all quality checks and is ready for production.</p>
               </Banner>
             )}
           </Layout.Section>
@@ -326,18 +411,42 @@ export default function UploadDetail() {
                           Size: {item.fileSize ? `${(item.fileSize / 1024 / 1024).toFixed(2)} MB` : "Unknown"}
                         </Text>
 
-                        {/* Preflight Checks */}
+                        {/* Preflight Checks - Merchant Friendly */}
                         {item.preflightResult?.checks && (
-                          <BlockStack gap="100">
-                            <Text as="p" variant="bodySm" fontWeight="semibold">Preflight Checks:</Text>
-                            {(item.preflightResult.checks as any[]).map((check, idx) => (
-                              <InlineStack key={idx} gap="100" align="start">
-                                <StatusIcon status={check.status} />
-                                <Text as="span" variant="bodySm">
-                                  {check.name}: {check.message || check.value}
+                          <BlockStack gap="200">
+                            <Text as="p" variant="bodySm" fontWeight="semibold">Quality Check:</Text>
+                            {/* Show summary first */}
+                            {item.preflightStatus === "ok" && (
+                              <Box padding="200" background="bg-surface-success" borderRadius="100">
+                                <InlineStack gap="100">
+                                  <Icon source={CheckCircleIcon} tone="success" />
+                                  <Text as="span" variant="bodySm" tone="success">
+                                    All checks passed - ready for production!
+                                  </Text>
+                                </InlineStack>
+                              </Box>
+                            )}
+                            {item.preflightStatus === "warning" && (
+                              <Box padding="200" background="bg-surface-secondary" borderRadius="100">
+                                <Text as="span" variant="bodySm" tone="subdued">
+                                  Good quality - minor suggestions below
                                 </Text>
-                              </InlineStack>
-                            ))}
+                              </Box>
+                            )}
+                            {/* Individual checks */}
+                            <BlockStack gap="100">
+                              {(item.preflightResult.checks as any[]).map((check, idx) => {
+                                const { title, detail } = getPreflightMessage(check);
+                                return (
+                                  <InlineStack key={idx} gap="100" align="start">
+                                    <StatusIcon status={check.status} />
+                                    <Text as="span" variant="bodySm">
+                                      <Text as="span" fontWeight="semibold">{title}:</Text> {detail}
+                                    </Text>
+                                  </InlineStack>
+                                );
+                              })}
+                            </BlockStack>
                           </BlockStack>
                         )}
 

@@ -8,6 +8,7 @@ import {
 import { useState, useCallback } from "react";
 import { authenticate } from "~/shopify.server";
 import prisma from "~/lib/prisma.server";
+import { getStorageConfig, getDownloadSignedUrl } from "~/lib/storage.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { session } = await authenticate.admin(request);
@@ -48,6 +49,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
             id: true,
             location: true,
             preflightStatus: true,
+            thumbnailKey: true,
           },
         },
       },
@@ -60,24 +62,44 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const totalPages = Math.ceil(total / limit);
 
+  // Generate signed URLs for thumbnails
+  const storageConfig = getStorageConfig(shop.storageConfig as any);
+  const uploadsWithThumbnails = await Promise.all(
+    uploads.map(async (u) => {
+      let thumbnailUrl: string | null = null;
+      const firstItem = u.items[0];
+      
+      if (firstItem?.thumbnailKey) {
+        try {
+          thumbnailUrl = await getDownloadSignedUrl(storageConfig, firstItem.thumbnailKey, 3600);
+        } catch (e) {
+          console.warn(`[Uploads] Failed to get thumbnail URL for ${u.id}:`, e);
+        }
+      }
+
+      return {
+        id: u.id,
+        mode: u.mode,
+        status: u.status,
+        productId: u.productId,
+        customerId: u.customerId,
+        customerEmail: u.customerEmail,
+        itemCount: u.items.length,
+        thumbnailUrl,
+        preflightStatus: u.items.some(i => i.preflightStatus === "error")
+          ? "error"
+          : u.items.some(i => i.preflightStatus === "warning")
+            ? "warning"
+            : u.items.every(i => i.preflightStatus === "ok")
+              ? "ok"
+              : "pending",
+        createdAt: u.createdAt.toISOString(),
+      };
+    })
+  );
+
   return json({
-    uploads: uploads.map(u => ({
-      id: u.id,
-      mode: u.mode,
-      status: u.status,
-      productId: u.productId,
-      customerId: u.customerId,
-      customerEmail: u.customerEmail,
-      itemCount: u.items.length,
-      preflightStatus: u.items.some(i => i.preflightStatus === "error")
-        ? "error"
-        : u.items.some(i => i.preflightStatus === "warning")
-          ? "warning"
-          : u.items.every(i => i.preflightStatus === "ok")
-            ? "ok"
-            : "pending",
-      createdAt: u.createdAt.toISOString(),
-    })),
+    uploads: uploadsWithThumbnails,
     pagination: {
       page,
       totalPages,
@@ -92,31 +114,31 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 function StatusBadge({ status }: { status: string }) {
-  // Friendly status labels
+  // Merchant-friendly status labels with positive tone
   const labelMap: Record<string, string> = {
-    ok: "Ready",
+    ok: "Ready ✓",
     warning: "Review",
-    error: "Needs Fix",
+    error: "Check",
     pending: "Processing",
     draft: "Draft",
     uploaded: "Received",
     processing: "Processing",
     needs_review: "Pending",
-    approved: "Approved",
+    approved: "Approved ✓",
     rejected: "Rejected",
     blocked: "On Hold",
-    printed: "Completed",
+    printed: "Completed ✓",
   };
 
   const toneMap: Record<string, "success" | "warning" | "critical" | "info" | "attention"> = {
     ok: "success",
-    warning: "attention",
-    error: "warning",
+    warning: "info",
+    error: "attention",
     pending: "info",
     draft: "info",
     uploaded: "success",
     processing: "info",
-    needs_review: "attention",
+    needs_review: "info",
     approved: "success",
     rejected: "critical",
     blocked: "attention",
@@ -166,9 +188,22 @@ export default function UploadsPage() {
   }, [setSearchParams]);
 
   const rows = uploads.map(upload => [
-    <Link key={upload.id} to={`/app/uploads/${upload.id}`} style={{ textDecoration: "none" }}>
-      {upload.id.slice(0, 12)}...
-    </Link>,
+    <InlineStack key={upload.id} gap="200" align="start">
+      {upload.thumbnailUrl ? (
+        <img
+          src={upload.thumbnailUrl}
+          alt="Preview"
+          style={{ width: 36, height: 36, objectFit: "cover", borderRadius: 4 }}
+        />
+      ) : (
+        <Box background="bg-surface-secondary" padding="200" borderRadius="100" minWidth="36px" minHeight="36px">
+          <Text as="span" tone="subdued">—</Text>
+        </Box>
+      )}
+      <Link to={`/app/uploads/${upload.id}`} style={{ textDecoration: "none" }}>
+        {upload.id.slice(0, 10)}...
+      </Link>
+    </InlineStack>,
     upload.mode,
     <StatusBadge key={`${upload.id}-status`} status={upload.status} />,
     <StatusBadge key={`${upload.id}-preflight`} status={upload.preflightStatus} />,
@@ -261,7 +296,7 @@ export default function UploadsPage() {
                 {uploads.length > 0 ? (
                   <DataTable
                     columnContentTypes={["text", "text", "text", "text", "numeric", "text", "text"]}
-                    headings={["ID", "Mode", "Status", "Preflight", "Items", "Customer", "Date"]}
+                    headings={["Upload", "Mode", "Status", "Quality", "Items", "Customer", "Date"]}
                     rows={rows}
                   />
                 ) : (

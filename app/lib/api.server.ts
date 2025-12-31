@@ -151,3 +151,64 @@ export function requireApiPermission(ctx: ApiContext, permission: string): Respo
   return null;
 }
 
+/**
+ * Verify resource ownership - ensures resource belongs to the authenticated shop
+ * This is a critical security check for ID-based resource access
+ * 
+ * @param resourceShopId - The shopId of the resource being accessed
+ * @param ctx - The authenticated API context
+ * @returns Response error if ownership fails, null if verified
+ */
+export function verifyResourceOwnership(
+  resourceShopId: string | undefined,
+  ctx: ApiContext
+): Response | null {
+  if (!resourceShopId) {
+    console.error(`[OWNERSHIP] Resource missing shopId - potential data integrity issue`);
+    return json(
+      { error: "Resource not found", code: "NOT_FOUND" },
+      { status: 404 }
+    );
+  }
+  
+  if (resourceShopId !== ctx.shopId) {
+    // Log potential cross-tenant access attempt (security audit)
+    console.error(
+      `[OWNERSHIP VIOLATION] Shop ${ctx.shopId} attempted to access resource belonging to shop ${resourceShopId}`
+    );
+    
+    // Return generic 404 to prevent information leakage
+    return json(
+      { error: "Resource not found", code: "NOT_FOUND" },
+      { status: 404 }
+    );
+  }
+  
+  return null;
+}
+
+/**
+ * Create audit log entry for security-sensitive operations
+ */
+export async function createSecurityAuditLog(
+  shopId: string,
+  action: string,
+  details: Record<string, unknown>
+): Promise<void> {
+  try {
+    await prisma.auditLog.create({
+      data: {
+        shopId,
+        action: `security:${action}`,
+        resourceType: "security",
+        metadata: {
+          ...details,
+          timestamp: new Date().toISOString(),
+        },
+      },
+    });
+  } catch (error) {
+    console.error(`[AUDIT] Failed to create security audit log:`, error);
+  }
+}
+

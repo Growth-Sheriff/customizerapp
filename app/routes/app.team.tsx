@@ -167,8 +167,9 @@ export async function action({ request }: ActionFunctionArgs) {
       return json({ error: "Cannot change owner role" });
     }
 
+    // SECURITY: Compound where prevents TOCTOU race condition
     await prisma.teamMember.update({
-      where: { id: memberId },
+      where: { id: memberId, shopId: shop.id },
       data: { role: newRole },
     });
 
@@ -200,8 +201,9 @@ export async function action({ request }: ActionFunctionArgs) {
       return json({ error: "Cannot remove owner" });
     }
 
+    // SECURITY: Compound where prevents TOCTOU race condition
     await prisma.teamMember.delete({
-      where: { id: memberId },
+      where: { id: memberId, shopId: shop.id },
     });
 
     await prisma.auditLog.create({
@@ -231,8 +233,9 @@ export async function action({ request }: ActionFunctionArgs) {
     // Generate new token
     const inviteToken = nanoid(32);
 
+    // SECURITY: Compound where prevents TOCTOU race condition
     await prisma.teamMember.update({
-      where: { id: memberId },
+      where: { id: memberId, shopId: shop.id },
       data: { inviteToken, invitedAt: new Date() },
     });
 

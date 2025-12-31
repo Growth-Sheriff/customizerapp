@@ -841,7 +841,7 @@ export default function ProductConfigurePage() {
               
               <Box padding="200" background="bg-surface-secondary" borderRadius="100">
                 <Text as="p" tone="subdued">
-                  ⚠️ Note: The old method "{% render 'dtf-uploader' %}" does NOT work with Theme App Extensions. 
+                  ⚠️ Note: The old method using render tags does NOT work with Theme App Extensions. 
                   You must use the Theme Editor to add app blocks.
                 </Text>
               </Box>

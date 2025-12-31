@@ -4,6 +4,21 @@ declare global {
   var __prisma: PrismaClient | undefined;
 }
 
+/**
+ * Tenant Isolation Error - thrown when query lacks shop scope
+ * This provides hard enforcement of tenant isolation rules
+ */
+export class TenantIsolationError extends Error {
+  constructor(model: string, action: string) {
+    super(`Tenant isolation violation: Query to ${model} without shopId scope (action: ${action})`);
+    this.name = "TenantIsolationError";
+  }
+}
+
+// Strict mode - when enabled, unscoped queries throw instead of warn
+// Enable with STRICT_TENANT_GUARD=true in production for maximum security
+const STRICT_MODE = process.env.STRICT_TENANT_GUARD === "true";
+
 // Tenant-scoped Prisma client with shop_id guard middleware
 function createPrismaClient() {
   const client = new PrismaClient({
@@ -46,9 +61,14 @@ function createPrismaClient() {
           where?.shopId_fileKey?.shopId;
         
         if (!hasShopScope) {
-          console.warn(`[TENANT GUARD] Query to ${params.model} without shopId scope - action: ${params.action}`);
-          // In production, log but don't break - let DB constraints handle it
-          // This prevents false positives from relation-based queries
+          const message = `[TENANT GUARD] Query to ${params.model} without shopId scope - action: ${params.action}`;
+          console.warn(message);
+          
+          // Strict mode: throw error instead of just warning
+          // This provides hard enforcement in production
+          if (STRICT_MODE) {
+            throw new TenantIsolationError(params.model ?? "Unknown", params.action);
+          }
         }
       }
     }
@@ -64,7 +84,12 @@ function createPrismaClient() {
           where?.id; // Direct ID access is OK (already scoped by caller)
         
         if (!hasRelationScope) {
-          console.warn(`[TENANT GUARD] Query to ${params.model} without relation scope - action: ${params.action}`);
+          const message = `[TENANT GUARD] Query to ${params.model} without relation scope - action: ${params.action}`;
+          console.warn(message);
+          
+          if (STRICT_MODE) {
+            throw new TenantIsolationError(params.model ?? "Unknown", params.action);
+          }
         }
       }
     }
