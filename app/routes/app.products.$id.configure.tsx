@@ -839,10 +839,12 @@ export default function ProductConfigurePage() {
               
               <Divider />
               
-              <Text as="p" tone="subdued">
-                ⚠️ Note: The old method <code>{`{% render 'dtf-uploader' %}`}</code> does NOT work with Theme App Extensions. 
-                You must use the Theme Editor to add app blocks.
-              </Text>
+              <Box padding="200" background="bg-surface-secondary" borderRadius="100">
+                <Text as="p" tone="subdued">
+                  ⚠️ Note: The old method "{% render 'dtf-uploader' %}" does NOT work with Theme App Extensions. 
+                  You must use the Theme Editor to add app blocks.
+                </Text>
+              </Box>
             </BlockStack>
           </Card>
         </Layout.Section>
