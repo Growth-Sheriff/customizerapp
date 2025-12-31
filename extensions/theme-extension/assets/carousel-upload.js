@@ -19,7 +19,7 @@
   // Configuration
   // ========================================
   const CONFIG = {
-    apiBase: 'https://customizerapp.dev',
+    apiBase: '/apps/customizer',
     maxFileSize: 50 * 1024 * 1024, // 50MB
     allowedTypes: ['image/png', 'image/jpeg', 'image/webp', 'application/pdf', 'image/svg+xml'],
     bannerAutoplayInterval: 5000,

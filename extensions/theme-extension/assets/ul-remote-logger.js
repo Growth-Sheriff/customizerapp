@@ -20,7 +20,7 @@
   // Configuration
   const CONFIG = {
     enabled: true,
-    endpoint: 'https://customizerapp.dev/api/debug/log',
+    endpoint: '/apps/customizer/api/debug/log',
     batchSize: 10,
     flushInterval: 3000, // 3 seconds
     maxQueueSize: 100,

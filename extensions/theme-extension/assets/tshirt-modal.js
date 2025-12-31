@@ -1033,7 +1033,7 @@ console.log('[ULTShirtModal] Script loading...');
 
     async performUpload(file) {
       // API base from customizerapp.dev
-      const apiBase = 'https://customizerapp.dev';
+      const apiBase = '/apps/customizer';
       
       // FAZ 0 - TSM-003: Robust shopDomain detection with validation
       const shopDomain = this.getShopDomain();
@@ -2480,7 +2480,8 @@ console.log('[ULTShirtModal] Script loading...');
       if (glTFLoaderReady) {
         return new Promise((resolve) => {
           const loader = new THREE.GLTFLoader();
-          const glbUrl = window.UL_TSHIRT_GLB_URL || 'https://customizerapp.dev/shirt_baked.glb';
+          // Use app proxy for multi-store support
+          const glbUrl = window.UL_TSHIRT_GLB_URL || '/apps/customizer/shirt_baked.glb';
           
           console.log('[ULTShirtModal] Loading GLB model from:', glbUrl);
           

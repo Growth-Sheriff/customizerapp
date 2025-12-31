@@ -23,7 +23,11 @@
 {% endcomment %}
 
 {% liquid
-  assign api_base = "https://customizerapp.dev"
+  comment
+    API base URL - uses App Proxy for multi-store support
+    Each store's app proxy routes to its own app instance
+  endcomment
+  assign api_base = "/apps/customizer"
   assign shop_domain = shop.permanent_domain
   assign product_id = product.id
   assign current_variant = product.selected_or_first_available_variant
