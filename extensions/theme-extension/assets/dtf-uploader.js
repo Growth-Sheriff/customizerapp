@@ -655,6 +655,7 @@
 
         // Step 3: Complete upload
         // For Shopify uploads, include the fileUrl so backend can update storageKey
+        // Also include fileId in case URL is not ready yet (Shopify async processing)
         const completeResponse = await fetch(`${apiBase}/api/upload/complete`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -665,7 +666,8 @@
               itemId: intentData.itemId,
               location: 'front',
               fileUrl: uploadResult?.fileUrl || null,
-              fileId: uploadResult?.fileId || null
+              fileId: uploadResult?.fileId || null,
+              storageProvider: intentData.storageProvider || 'shopify'
             }]
           })
         });

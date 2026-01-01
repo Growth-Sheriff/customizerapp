@@ -4,6 +4,58 @@ import { rateLimitGuard, getIdentifier } from "~/lib/rateLimit.server";
 import { generateLocalFileToken } from "~/lib/storage.server";
 import prisma from "~/lib/prisma.server";
 
+// Shopify File Query - Get file URL by ID
+const FILE_QUERY = `
+  query getFile($id: ID!) {
+    node(id: $id) {
+      ... on MediaImage {
+        image {
+          url
+          originalSrc
+        }
+        fileStatus
+      }
+      ... on GenericFile {
+        url
+        fileStatus
+      }
+    }
+  }
+`;
+
+// Helper: Resolve Shopify fileId to URL
+async function resolveShopifyFileUrl(fileId: string, shopDomain: string, accessToken: string): Promise<string | null> {
+  try {
+    const response = await fetch(`https://${shopDomain}/admin/api/2025-10/graphql.json`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Shopify-Access-Token": accessToken,
+      },
+      body: JSON.stringify({
+        query: FILE_QUERY,
+        variables: { id: fileId },
+      }),
+    });
+
+    const result = await response.json();
+    const node = result.data?.node;
+    
+    if (!node) return null;
+    
+    // MediaImage type
+    if (node.image?.url) return node.image.url;
+    if (node.image?.originalSrc) return node.image.originalSrc;
+    // GenericFile type
+    if (node.url) return node.url;
+    
+    return null;
+  } catch (error) {
+    console.error("[Shopify File Resolve] Error:", error);
+    return null;
+  }
+}
+
 // GET /api/upload/status/:id?shopDomain=xxx
 export async function loader({ request, params }: LoaderFunctionArgs) {
   // Handle CORS preflight
@@ -87,8 +139,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   
   // FAZ 2 - API-002: Extended token expiry to 1 hour for T-Shirt modal long sessions
   const expiresAt = Date.now() + 60 * 60 * 1000; // 1 hour (was 15 minutes)
-  let downloadUrl = null;
-  let thumbnailUrl = null;
+  let downloadUrl: string | null = null;
+  let thumbnailUrl: string | null = null;
   
   // Check if storageKey is an external URL (Shopify, R2, S3)
   const isExternalUrl = (key: string | null | undefined): boolean => {
@@ -96,10 +148,33 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     return key.startsWith('http://') || key.startsWith('https://');
   };
   
+  // Check if storageKey is a Shopify fileId (shopify:gid://...)
+  const isShopifyFileId = (key: string | null | undefined): boolean => {
+    if (!key) return false;
+    return key.startsWith('shopify:');
+  };
+  
   if (firstItem?.storageKey) {
     if (isExternalUrl(firstItem.storageKey)) {
       // Shopify or external storage - use URL directly
       downloadUrl = firstItem.storageKey;
+    } else if (isShopifyFileId(firstItem.storageKey)) {
+      // Shopify fileId - resolve to URL via API
+      const fileId = firstItem.storageKey.replace('shopify:', '');
+      const resolvedUrl = await resolveShopifyFileUrl(fileId, shop.shopDomain, shop.accessToken);
+      if (resolvedUrl) {
+        downloadUrl = resolvedUrl;
+        // Update storageKey with resolved URL for future requests (cache)
+        await prisma.uploadItem.update({
+          where: { id: firstItem.id },
+          data: { storageKey: resolvedUrl },
+        });
+        console.log(`[Upload Status] Resolved Shopify fileId to URL: ${resolvedUrl}`);
+      } else {
+        // Fallback: file still processing, return placeholder
+        downloadUrl = null;
+        console.log(`[Upload Status] Shopify file still processing: ${fileId}`);
+      }
     } else {
       // Local storage - generate signed URL
       const token = generateLocalFileToken(firstItem.storageKey, expiresAt);
@@ -107,21 +182,24 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     }
   }
   
+  // Thumbnail URL logic
   if (firstItem?.thumbnailKey) {
     if (isExternalUrl(firstItem.thumbnailKey)) {
       thumbnailUrl = firstItem.thumbnailKey;
+    } else if (isShopifyFileId(firstItem.thumbnailKey)) {
+      const fileId = firstItem.thumbnailKey.replace('shopify:', '');
+      thumbnailUrl = await resolveShopifyFileUrl(fileId, shop.shopDomain, shop.accessToken);
     } else {
       const token = generateLocalFileToken(firstItem.thumbnailKey, expiresAt);
       thumbnailUrl = `${host}/api/files/${encodeURIComponent(firstItem.thumbnailKey)}?token=${encodeURIComponent(token)}`;
     }
-  } else if (firstItem?.storageKey) {
+  } else if (downloadUrl) {
     // Fallback to original file if no thumbnail
-    if (isExternalUrl(firstItem.storageKey)) {
-      thumbnailUrl = firstItem.storageKey;
-    } else {
-      const token = generateLocalFileToken(firstItem.storageKey, expiresAt);
-      thumbnailUrl = `${host}/api/files/${encodeURIComponent(firstItem.storageKey)}?token=${encodeURIComponent(token)}`;
-    }
+    thumbnailUrl = downloadUrl;
+  } else if (firstItem?.storageKey && !isShopifyFileId(firstItem.storageKey) && !isExternalUrl(firstItem.storageKey)) {
+    // Local storage fallback
+    const token = generateLocalFileToken(firstItem.storageKey, expiresAt);
+    thumbnailUrl = `${host}/api/files/${encodeURIComponent(firstItem.storageKey)}?token=${encodeURIComponent(token)}`;
   }
 
   return corsJson({
