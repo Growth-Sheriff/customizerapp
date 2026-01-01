@@ -941,6 +941,7 @@
           if (finishedStatuses.includes(data.status)) {
             // Success - upload processing complete (may have warnings)
             state.upload.status = 'ready';
+            state.upload.uploadId = uploadId; // CRITICAL: Set uploadId for addToCart
             state.upload.result = {
               thumbnailUrl: data.thumbnailUrl || '',
               originalUrl: data.downloadUrl || data.url || '',
