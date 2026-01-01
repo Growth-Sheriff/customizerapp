@@ -1,12 +1,166 @@
 (function(){
-  window.ul3dData=window.ul3dData||{};
-  window.slideUL3D=function(id,dir){var t=document.getElementById('ulTrack-'+id);if(t)t.scrollBy({left:dir*300,behavior:'smooth'})};
-  window.openUL3DModal=function(btn){if(window.Shopify&&window.Shopify.designMode)return;var c=btn.closest('.ul-carousel-card'),sec=btn.closest('.ul-carousel-section'),bid=sec.dataset.blockId;if(c&&bid){ul3dData[bid]={vid:c.dataset.variantId,file:null,size:'22x12',price:12};document.getElementById('ulModalImg-'+bid).src=c.dataset.productImage;document.getElementById('ulModalTitle-'+bid).textContent=c.dataset.productTitle;document.getElementById('ulModalPrice-'+bid).textContent=c.dataset.productPrice;document.getElementById('ulModal-'+bid).classList.add('active');document.body.style.overflow='hidden'}};
-  window.closeUL3DModal=function(bid){document.getElementById('ulModal-'+bid).classList.remove('active');document.body.style.overflow=''};
-  window.handleUL3DFile=function(e,bid){var f=e.target.files[0];if(!f)return;ul3dData[bid].file=f;document.getElementById('ulUploadZone-'+bid).style.display='none';document.getElementById('ulPreviewZone-'+bid).style.display='block';document.getElementById('ulPreviewImg-'+bid).src=URL.createObjectURL(f);document.getElementById('ulCartBtn-'+bid).disabled=false;document.getElementById('ulCartBtn-'+bid).textContent='Add to Cart'};
-  window.removeUL3DFile=function(bid){ul3dData[bid].file=null;document.getElementById('ulUploadZone-'+bid).style.display='';document.getElementById('ulPreviewZone-'+bid).style.display='none';document.getElementById('ulFileInput-'+bid).value='';document.getElementById('ulCartBtn-'+bid).disabled=true;document.getElementById('ulCartBtn-'+bid).textContent='Upload design to continue'};
-  window.selectUL3DSize=function(sel,bid){ul3dData[bid].size=sel.value;ul3dData[bid].price=parseFloat(sel.options[sel.selectedIndex].dataset.price)};
-  window.changeUL3DQty=function(bid,d){var i=document.getElementById('ulQtyInput-'+bid),v=parseInt(i.value)+d;if(v<1)v=1;i.value=v};
-  window.addUL3DToCart=function(bid){var btn=document.getElementById('ulCartBtn-'+bid),qty=parseInt(document.getElementById('ulQtyInput-'+bid).value)||1;btn.disabled=true;btn.textContent='Adding...';fetch('/cart/add.js',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({items:[{id:ul3dData[bid].vid,quantity:qty,properties:{'_upload_file':ul3dData[bid].file?.name||'','_sheet_size':ul3dData[bid].size,'_unit_price':'$'+ul3dData[bid].price}}]})}).then(function(r){return r.json()}).then(function(){btn.textContent='✓ Added!';setTimeout(function(){closeUL3DModal(bid);window.location.href='/cart'},800)}).catch(function(){btn.disabled=false;btn.textContent='Add to Cart'})};
-  document.addEventListener('click',function(e){if(e.target.classList.contains('ul-modal-overlay'))closeUL3DModal(e.target.id.replace('ulModal-',''))});
+  // Prevent execution in Shopify theme editor
+  if (window.Shopify && window.Shopify.designMode) {
+    console.log('[UL Carousel] Disabled in theme editor');
+    return;
+  }
+
+  window.ul3dData = window.ul3dData || {};
+
+  window.slideUL3D = function(id, dir) {
+    var t = document.getElementById('ulTrack-' + id);
+    if (t) t.scrollBy({left: dir * 300, behavior: 'smooth'});
+  };
+
+  window.openUL3DModal = function(btn) {
+    // Double-check for design mode
+    if (window.Shopify && window.Shopify.designMode) return;
+    
+    if (!btn) return;
+    
+    var c = btn.closest('.ul-carousel-card');
+    var sec = btn.closest('.ul-carousel-section');
+    
+    if (!c || !sec) return;
+    
+    // Check data-design-mode attribute from Liquid
+    if (sec.dataset.designMode === 'true') return;
+    
+    var bid = sec.dataset.blockId;
+    if (!bid) return;
+    
+    var modal = document.getElementById('ulModal-' + bid);
+    if (!modal) return;
+    
+    // Prevent opening if already open
+    if (modal.classList.contains('active')) return;
+    
+    ul3dData[bid] = {
+      vid: c.dataset.variantId,
+      file: null,
+      size: '22x12',
+      price: 12
+    };
+    
+    var img = document.getElementById('ulModalImg-' + bid);
+    var title = document.getElementById('ulModalTitle-' + bid);
+    var price = document.getElementById('ulModalPrice-' + bid);
+    
+    if (img) img.src = c.dataset.productImage;
+    if (title) title.textContent = c.dataset.productTitle;
+    if (price) price.textContent = c.dataset.productPrice;
+    
+    modal.classList.add('active');
+    document.body.style.overflow = 'hidden';
+  };
+
+  window.closeUL3DModal = function(bid) {
+    var modal = document.getElementById('ulModal-' + bid);
+    if (modal) {
+      modal.classList.remove('active');
+    }
+    document.body.style.overflow = '';
+  };
+
+  window.handleUL3DFile = function(e, bid) {
+    var f = e.target.files[0];
+    if (!f) return;
+    
+    if (!ul3dData[bid]) ul3dData[bid] = {};
+    ul3dData[bid].file = f;
+    
+    var zone = document.getElementById('ulUploadZone-' + bid);
+    var preview = document.getElementById('ulPreviewZone-' + bid);
+    var previewImg = document.getElementById('ulPreviewImg-' + bid);
+    var cartBtn = document.getElementById('ulCartBtn-' + bid);
+    
+    if (zone) zone.style.display = 'none';
+    if (preview) preview.style.display = 'block';
+    if (previewImg) previewImg.src = URL.createObjectURL(f);
+    if (cartBtn) {
+      cartBtn.disabled = false;
+      cartBtn.textContent = 'Add to Cart';
+    }
+  };
+
+  window.removeUL3DFile = function(bid) {
+    if (ul3dData[bid]) ul3dData[bid].file = null;
+    
+    var zone = document.getElementById('ulUploadZone-' + bid);
+    var preview = document.getElementById('ulPreviewZone-' + bid);
+    var fileInput = document.getElementById('ulFileInput-' + bid);
+    var cartBtn = document.getElementById('ulCartBtn-' + bid);
+    
+    if (zone) zone.style.display = '';
+    if (preview) preview.style.display = 'none';
+    if (fileInput) fileInput.value = '';
+    if (cartBtn) {
+      cartBtn.disabled = true;
+      cartBtn.textContent = 'Upload design to continue';
+    }
+  };
+
+  window.selectUL3DSize = function(sel, bid) {
+    if (!ul3dData[bid]) ul3dData[bid] = {};
+    ul3dData[bid].size = sel.value;
+    ul3dData[bid].price = parseFloat(sel.options[sel.selectedIndex].dataset.price);
+  };
+
+  window.changeUL3DQty = function(bid, d) {
+    var i = document.getElementById('ulQtyInput-' + bid);
+    if (!i) return;
+    var v = parseInt(i.value) + d;
+    if (v < 1) v = 1;
+    i.value = v;
+  };
+
+  window.addUL3DToCart = function(bid) {
+    var btn = document.getElementById('ulCartBtn-' + bid);
+    var qtyInput = document.getElementById('ulQtyInput-' + bid);
+    
+    if (!btn || !ul3dData[bid]) return;
+    
+    var qty = parseInt(qtyInput ? qtyInput.value : 1) || 1;
+    
+    btn.disabled = true;
+    btn.textContent = 'Adding...';
+    
+    fetch('/cart/add.js', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        items: [{
+          id: ul3dData[bid].vid,
+          quantity: qty,
+          properties: {
+            '_upload_file': ul3dData[bid].file ? ul3dData[bid].file.name : '',
+            '_sheet_size': ul3dData[bid].size,
+            '_unit_price': '$' + ul3dData[bid].price
+          }
+        }]
+      })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function() {
+      btn.textContent = '✓ Added!';
+      setTimeout(function() {
+        closeUL3DModal(bid);
+        window.location.href = '/cart';
+      }, 800);
+    })
+    .catch(function() {
+      btn.disabled = false;
+      btn.textContent = 'Add to Cart';
+    });
+  };
+
+  // Click outside to close
+  document.addEventListener('click', function(e) {
+    if (e.target && e.target.classList && e.target.classList.contains('ul-modal-overlay')) {
+      var id = e.target.id;
+      if (id && id.startsWith('ulModal-')) {
+        closeUL3DModal(id.replace('ulModal-', ''));
+      }
+    }
+  });
 })();

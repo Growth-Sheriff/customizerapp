@@ -1,11 +1,161 @@
 (function(){
-  window.ulShowcaseData=window.ulShowcaseData||{};
-  window.openULShowcaseModal=function(btn){if(window.Shopify&&window.Shopify.designMode)return;var c=btn.closest('.ul-showcase-card'),sec=btn.closest('.ul-showcase-section'),bid=sec.dataset.blockId;if(c&&bid){ulShowcaseData[bid]={vid:c.dataset.variantId,file:null,size:'22x12',price:12};document.getElementById('ulShowcaseImg-'+bid).src=c.dataset.productImage;document.getElementById('ulShowcaseTitle-'+bid).textContent=c.dataset.productTitle;document.getElementById('ulShowcasePrice-'+bid).textContent=c.dataset.productPrice;document.getElementById('ulShowcaseModal-'+bid).classList.add('active');document.body.style.overflow='hidden'}};
-  window.closeULShowcaseModal=function(bid){document.getElementById('ulShowcaseModal-'+bid).classList.remove('active');document.body.style.overflow=''};
-  window.handleULShowcaseFile=function(e,bid){var f=e.target.files[0];if(!f)return;ulShowcaseData[bid].file=f;document.getElementById('ulShowcaseZone-'+bid).style.display='none';document.getElementById('ulShowcasePreview-'+bid).style.display='block';document.getElementById('ulShowcasePreviewImg-'+bid).src=URL.createObjectURL(f);document.getElementById('ulShowcaseCartBtn-'+bid).disabled=false;document.getElementById('ulShowcaseCartBtn-'+bid).textContent='Add to Cart'};
-  window.removeULShowcaseFile=function(bid){ulShowcaseData[bid].file=null;document.getElementById('ulShowcaseZone-'+bid).style.display='';document.getElementById('ulShowcasePreview-'+bid).style.display='none';document.getElementById('ulShowcaseFile-'+bid).value='';document.getElementById('ulShowcaseCartBtn-'+bid).disabled=true;document.getElementById('ulShowcaseCartBtn-'+bid).textContent='Upload design to continue'};
-  window.selectULShowcaseSize=function(sel,bid){ulShowcaseData[bid].size=sel.value;ulShowcaseData[bid].price=parseFloat(sel.options[sel.selectedIndex].dataset.price)};
-  window.changeULShowcaseQty=function(bid,d){var i=document.getElementById('ulShowcaseQty-'+bid),v=parseInt(i.value)+d;if(v<1)v=1;i.value=v};
-  window.addULShowcaseToCart=function(bid){var btn=document.getElementById('ulShowcaseCartBtn-'+bid),qty=parseInt(document.getElementById('ulShowcaseQty-'+bid).value)||1;btn.disabled=true;btn.textContent='Adding...';fetch('/cart/add.js',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({items:[{id:ulShowcaseData[bid].vid,quantity:qty,properties:{'_upload_file':ulShowcaseData[bid].file?.name||'','_sheet_size':ulShowcaseData[bid].size,'_unit_price':'$'+ulShowcaseData[bid].price}}]})}).then(r=>r.json()).then(function(){btn.textContent='✓ Added!';setTimeout(function(){closeULShowcaseModal(bid);window.location.href='/cart'},800)}).catch(function(){btn.disabled=false;btn.textContent='Add to Cart'})};
-  document.addEventListener('click',function(e){if(e.target.classList.contains('ul-sh-modal-overlay'))closeULShowcaseModal(e.target.id.replace('ulShowcaseModal-',''))});
+  // Prevent execution in Shopify theme editor
+  if (window.Shopify && window.Shopify.designMode) {
+    console.log('[UL Showcase] Disabled in theme editor');
+    return;
+  }
+
+  window.ulShowcaseData = window.ulShowcaseData || {};
+
+  window.openULShowcaseModal = function(btn) {
+    // Double-check for design mode
+    if (window.Shopify && window.Shopify.designMode) return;
+    
+    if (!btn) return;
+    
+    var c = btn.closest('.ul-showcase-card');
+    var sec = btn.closest('.ul-showcase-section');
+    
+    if (!c || !sec) return;
+    
+    // Check data-design-mode attribute from Liquid
+    if (sec.dataset.designMode === 'true') return;
+    
+    var bid = sec.dataset.blockId;
+    if (!bid) return;
+    
+    var modal = document.getElementById('ulShowcaseModal-' + bid);
+    if (!modal) return;
+    
+    // Prevent opening if already open
+    if (modal.classList.contains('active')) return;
+    
+    ulShowcaseData[bid] = {
+      vid: c.dataset.variantId,
+      file: null,
+      size: '22x12',
+      price: 12
+    };
+    
+    var img = document.getElementById('ulShowcaseImg-' + bid);
+    var title = document.getElementById('ulShowcaseTitle-' + bid);
+    var price = document.getElementById('ulShowcasePrice-' + bid);
+    
+    if (img) img.src = c.dataset.productImage;
+    if (title) title.textContent = c.dataset.productTitle;
+    if (price) price.textContent = c.dataset.productPrice;
+    
+    modal.classList.add('active');
+    document.body.style.overflow = 'hidden';
+  };
+
+  window.closeULShowcaseModal = function(bid) {
+    var modal = document.getElementById('ulShowcaseModal-' + bid);
+    if (modal) {
+      modal.classList.remove('active');
+    }
+    document.body.style.overflow = '';
+  };
+
+  window.handleULShowcaseFile = function(e, bid) {
+    var f = e.target.files[0];
+    if (!f) return;
+    
+    if (!ulShowcaseData[bid]) ulShowcaseData[bid] = {};
+    ulShowcaseData[bid].file = f;
+    
+    var zone = document.getElementById('ulShowcaseZone-' + bid);
+    var preview = document.getElementById('ulShowcasePreview-' + bid);
+    var previewImg = document.getElementById('ulShowcasePreviewImg-' + bid);
+    var cartBtn = document.getElementById('ulShowcaseCartBtn-' + bid);
+    
+    if (zone) zone.style.display = 'none';
+    if (preview) preview.style.display = 'block';
+    if (previewImg) previewImg.src = URL.createObjectURL(f);
+    if (cartBtn) {
+      cartBtn.disabled = false;
+      cartBtn.textContent = 'Add to Cart';
+    }
+  };
+
+  window.removeULShowcaseFile = function(bid) {
+    if (ulShowcaseData[bid]) ulShowcaseData[bid].file = null;
+    
+    var zone = document.getElementById('ulShowcaseZone-' + bid);
+    var preview = document.getElementById('ulShowcasePreview-' + bid);
+    var fileInput = document.getElementById('ulShowcaseFile-' + bid);
+    var cartBtn = document.getElementById('ulShowcaseCartBtn-' + bid);
+    
+    if (zone) zone.style.display = '';
+    if (preview) preview.style.display = 'none';
+    if (fileInput) fileInput.value = '';
+    if (cartBtn) {
+      cartBtn.disabled = true;
+      cartBtn.textContent = 'Upload design to continue';
+    }
+  };
+
+  window.selectULShowcaseSize = function(sel, bid) {
+    if (!ulShowcaseData[bid]) ulShowcaseData[bid] = {};
+    ulShowcaseData[bid].size = sel.value;
+    ulShowcaseData[bid].price = parseFloat(sel.options[sel.selectedIndex].dataset.price);
+  };
+
+  window.changeULShowcaseQty = function(bid, d) {
+    var i = document.getElementById('ulShowcaseQty-' + bid);
+    if (!i) return;
+    var v = parseInt(i.value) + d;
+    if (v < 1) v = 1;
+    i.value = v;
+  };
+
+  window.addULShowcaseToCart = function(bid) {
+    var btn = document.getElementById('ulShowcaseCartBtn-' + bid);
+    var qtyInput = document.getElementById('ulShowcaseQty-' + bid);
+    
+    if (!btn || !ulShowcaseData[bid]) return;
+    
+    var qty = parseInt(qtyInput ? qtyInput.value : 1) || 1;
+    
+    btn.disabled = true;
+    btn.textContent = 'Adding...';
+    
+    fetch('/cart/add.js', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        items: [{
+          id: ulShowcaseData[bid].vid,
+          quantity: qty,
+          properties: {
+            '_upload_file': ulShowcaseData[bid].file ? ulShowcaseData[bid].file.name : '',
+            '_sheet_size': ulShowcaseData[bid].size,
+            '_unit_price': '$' + ulShowcaseData[bid].price
+          }
+        }]
+      })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function() {
+      btn.textContent = '✓ Added!';
+      setTimeout(function() {
+        closeULShowcaseModal(bid);
+        window.location.href = '/cart';
+      }, 800);
+    })
+    .catch(function() {
+      btn.disabled = false;
+      btn.textContent = 'Add to Cart';
+    });
+  };
+
+  // Click outside to close
+  document.addEventListener('click', function(e) {
+    if (e.target && e.target.classList && e.target.classList.contains('ul-sh-modal-overlay')) {
+      var id = e.target.id;
+      if (id && id.startsWith('ulShowcaseModal-')) {
+        closeULShowcaseModal(id.replace('ulShowcaseModal-', ''));
+      }
+    }
+  });
 })();
