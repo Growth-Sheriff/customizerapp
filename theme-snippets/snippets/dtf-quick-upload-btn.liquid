@@ -725,12 +725,25 @@
       progressFill.style.width = '30%';
       progressText.textContent = 'Uploading file...';
       
-      // Step 2: Upload file
-      const uploadResponse = await fetch(intentData.uploadUrl, {
-        method: 'PUT',
-        headers: { 'Content-Type': file.type },
-        body: file
-      });
+      // Step 2: Upload file - handle local vs signed URL
+      let uploadResponse;
+      if (intentData.isLocal) {
+        // Local storage: POST with FormData
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('key', intentData.key);
+        uploadResponse = await fetch(intentData.uploadUrl, {
+          method: 'POST',
+          body: formData
+        });
+      } else {
+        // R2/S3: PUT with signed URL
+        uploadResponse = await fetch(intentData.uploadUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': file.type },
+          body: file
+        });
+      }
       
       if (!uploadResponse.ok) throw new Error('Upload failed');
       
