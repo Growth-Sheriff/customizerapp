@@ -7,14 +7,20 @@
 
 // Allowed origins for CORS
 const ALLOWED_ORIGINS = [
-  // All Shopify stores
+  // All Shopify stores (*.myshopify.com)
   /\.myshopify\.com$/,
+  // Custom storefront domains (any https domain for flexibility)
+  /^https:\/\/.+$/,
   // Development
   "http://localhost:3000",
   "http://localhost:5173",
   "http://127.0.0.1:3000",
   // Production app domain
   "https://customizerapp.dev",
+  "https://fdt.customizerapp.dev",
+  // Customer domains
+  "https://fastdtftransfer.com",
+  "https://www.fastdtftransfer.com",
 ];
 
 /**
