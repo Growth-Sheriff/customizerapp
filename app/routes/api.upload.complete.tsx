@@ -75,9 +75,11 @@ export async function action({ request }: ActionFunctionArgs) {
     return corsJson({ error: "Missing required field: shopDomain" }, request, { status: 400 });
   }
 
-  if (!uploadId || !items || !Array.isArray(items)) {
-    return corsJson({ error: "Missing required fields: uploadId, items" }, request, { status: 400 });
+  if (!uploadId) {
+    return corsJson({ error: "Missing required field: uploadId" }, request, { status: 400 });
   }
+
+  // items is optional for quick mode - will use existing items from intent
 
   const shop = await prisma.shop.findUnique({
     where: { shopDomain },
@@ -110,26 +112,29 @@ export async function action({ request }: ActionFunctionArgs) {
     });
 
     // Update items with location, transform, and fileUrl/fileId (for Shopify uploads)
-    for (const item of items) {
-      const updateData: Record<string, unknown> = {
-        location: item.location || "front",
-        transform: item.transform || null,
-      };
-      
-      // For Shopify uploads: prefer fileUrl, fallback to fileId for later resolution
-      if (item.fileUrl) {
-        updateData.storageKey = item.fileUrl;
-        console.log(`[Upload Complete] Updated storageKey with Shopify URL: ${item.fileUrl}`);
-      } else if (item.fileId && item.storageProvider === 'shopify') {
-        // Store fileId as storageKey with shopify: prefix for later resolution
-        updateData.storageKey = `shopify:${item.fileId}`;
-        console.log(`[Upload Complete] Stored Shopify fileId for later resolution: ${item.fileId}`);
+    // If items array is provided, use it; otherwise skip item updates (quick mode)
+    if (items && Array.isArray(items) && items.length > 0) {
+      for (const item of items) {
+        const updateData: Record<string, unknown> = {
+          location: item.location || "front",
+          transform: item.transform || null,
+        };
+        
+        // For Shopify uploads: prefer fileUrl, fallback to fileId for later resolution
+        if (item.fileUrl) {
+          updateData.storageKey = item.fileUrl;
+          console.log(`[Upload Complete] Updated storageKey with Shopify URL: ${item.fileUrl}`);
+        } else if (item.fileId && item.storageProvider === 'shopify') {
+          // Store fileId as storageKey with shopify: prefix for later resolution
+          updateData.storageKey = `shopify:${item.fileId}`;
+          console.log(`[Upload Complete] Stored Shopify fileId for later resolution: ${item.fileId}`);
+        }
+        
+        await prisma.uploadItem.update({
+          where: { id: item.itemId },
+          data: updateData,
+        });
       }
-      
-      await prisma.uploadItem.update({
-        where: { id: item.itemId },
-        data: updateData,
-      });
     }
 
     // Enqueue preflight job for each item
