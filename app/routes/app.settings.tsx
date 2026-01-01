@@ -526,8 +526,8 @@ export default function SettingsPage() {
                       <pre id="snippet-code-full" style={{ fontSize: '10px', lineHeight: '1.3', margin: 0, whiteSpace: 'pre' }}>
 {`{% liquid
   assign btn_text = button_text | default: 'Upload Design'
-  assign rand_suffix = 'now' | date: '%N' | slice: 0, 6
-  assign unique_id = product.id | append: '-' | append: rand_suffix
+  assign section_suffix = section.id | default: 'main'
+  assign unique_id = product.id | append: '-' | append: section_suffix
   assign modal_id = 'ul-modal-' | append: unique_id
   assign first_variant = product.selected_or_first_available_variant
   assign api_base = '/apps/customizer'
