@@ -1,7 +1,7 @@
 {% liquid
   assign btn_text = button_text | default: 'Upload Design'
-  assign section_suffix = section.id | default: 'main'
-  assign unique_id = product.id | append: '-' | append: section_suffix
+  assign section_id = section.id | default: 'main'
+  assign unique_id = section_id | append: '-' | append: product.id
   assign modal_id = 'ul-modal-' | append: unique_id
   assign first_variant = product.selected_or_first_available_variant
   assign api_base = '/apps/customizer'
@@ -722,13 +722,19 @@
       progressFill.style.width = '30%';
       progressText.textContent = 'Uploading file...';
       
-      // Step 2: Upload file - handle local vs signed URL
+      // Step 2: Upload file - handle storage type
       let uploadResponse;
-      if (intentData.isLocal) {
+      const storageType = intentData.storageProvider || 
+                         (intentData.isShopify ? 'shopify' : 
+                          intentData.isLocal ? 'local' : 'signed_url');
+      
+      if (storageType === 'local') {
         // Local storage: POST with FormData
         const formData = new FormData();
         formData.append('file', file);
         formData.append('key', intentData.key);
+        formData.append('uploadId', intentData.uploadId);
+        formData.append('itemId', intentData.itemId);
         uploadResponse = await fetch(intentData.uploadUrl, {
           method: 'POST',
           body: formData
@@ -747,13 +753,18 @@
       progressFill.style.width = '60%';
       progressText.textContent = 'Processing...';
       
-      // Step 3: Complete upload
+      // Step 3: Complete upload - include items array like theme extension
       const completeResponse = await fetch(`${apiBase}/api/upload/complete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           uploadId: intentData.uploadId,
-          shopDomain: shopDomain
+          shopDomain: shopDomain,
+          items: [{
+            itemId: intentData.itemId,
+            location: 'front',
+            storageProvider: intentData.storageProvider || 'local'
+          }]
         })
       });
       
