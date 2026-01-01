@@ -165,7 +165,7 @@
   width: 100%;
   height: 100%;
   z-index: 99999;
-  display: flex;
+  display: none;
   align-items: center;
   justify-content: center;
 }
@@ -509,6 +509,24 @@
   // Prevent multiple initializations
   if (window.ULQuickUploadInit) return;
   window.ULQuickUploadInit = true;
+  
+  // Hide all modals function (for theme editor events)
+  function hideAllModals() {
+    document.querySelectorAll('.ul-quick-modal').forEach(function(modal) {
+      modal.style.display = 'none';
+    });
+    document.body.style.overflow = '';
+  }
+  
+  // Theme editor events - hide modals when sections/blocks are selected/deselected
+  document.addEventListener('shopify:section:select', hideAllModals);
+  document.addEventListener('shopify:section:deselect', hideAllModals);
+  document.addEventListener('shopify:section:load', hideAllModals);
+  document.addEventListener('shopify:section:unload', hideAllModals);
+  document.addEventListener('shopify:block:select', hideAllModals);
+  document.addEventListener('shopify:block:deselect', hideAllModals);
+  document.addEventListener('shopify:inspector:activate', hideAllModals);
+  document.addEventListener('shopify:inspector:deactivate', hideAllModals);
   
   // Modal container in body
   let modalContainer = document.getElementById('ul-modal-container');
