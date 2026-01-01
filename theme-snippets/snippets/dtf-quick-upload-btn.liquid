@@ -623,6 +623,12 @@
   });
   
   function openModal(id) {
+    // Don't open modal in Shopify theme editor/preview mode
+    if (window.Shopify && window.Shopify.designMode) {
+      console.log('[Upload Lift] Design mode detected, modal disabled');
+      return;
+    }
+    
     const modal = document.getElementById(id);
     if (!modal) {
       console.error('Modal not found:', id);
