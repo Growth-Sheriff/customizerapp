@@ -37,7 +37,7 @@ redirect_urls = [
 ]
 
 [app_proxy]
-url = "https://fdt.customizerapp.dev/api"
+url = "https://fdt.customizerapp.dev"
 subpath = "customizer"
 prefix = "apps"
 
