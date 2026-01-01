@@ -15,12 +15,16 @@ const PLAN_LIMITS = {
   enterprise: { maxSizeMB: 150, uploadsPerMonth: -1 },
 };
 
-// OPTIONS handler for CORS preflight
+// GET handler - returns API info
 export async function loader({ request }: LoaderFunctionArgs) {
   if (request.method === "OPTIONS") {
     return handleCorsOptions(request);
   }
-  return corsJson({ error: "Method not allowed" }, request, { status: 405 });
+  return corsJson({ 
+    method: "POST",
+    description: "Upload Intent API - Get signed upload URL",
+    modes: ["quick", "full", "bulk"]
+  }, request);
 }
 
 // POST /api/upload/intent

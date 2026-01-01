@@ -162,7 +162,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
 // GET /api/upload/complete?uploadId=xxx&shopDomain=xxx (get upload status)
 export async function loader({ request }: LoaderFunctionArgs) {
-  // Handle CORS preflight
+  // Handle CORS preflight - loader handles GET but action handles OPTIONS
   if (request.method === "OPTIONS") {
     return handleCorsOptions(request);
   }

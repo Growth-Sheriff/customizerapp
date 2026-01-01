@@ -65,17 +65,24 @@ const FILE_CREATE_MUTATION = `
   }
 `;
 
-// OPTIONS handler for CORS preflight
+// OPTIONS handler for CORS preflight - Uses action because loader only handles GET
 export async function loader({ request }: LoaderFunctionArgs) {
+  // Handle CORS preflight (browser may use GET for some checks)
   if (request.method === "OPTIONS") {
     return handleCorsOptions(request);
   }
-  return corsJson({ error: "Method not allowed" }, request, { status: 405 });
+  // Return method info for GET requests
+  return corsJson({ 
+    method: "POST",
+    description: "Shopify Files API Upload Handler",
+    actions: ["get_staged_url", "create_file"]
+  }, request);
 }
 
 // POST /api/upload/shopify
 // Step 1: Get staged upload URL from Shopify
 export async function action({ request }: ActionFunctionArgs) {
+  // Handle CORS preflight - this is where OPTIONS actually comes
   if (request.method === "OPTIONS") {
     return handleCorsOptions(request);
   }
