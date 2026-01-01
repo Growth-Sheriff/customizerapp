@@ -561,9 +561,6 @@
   
   // Event delegation for all clicks
   document.addEventListener('click', function(e) {
-    // Double-check for design mode
-    if (window.Shopify && window.Shopify.designMode) return;
-    
     const target = e.target;
     
     // Open modal button
