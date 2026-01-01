@@ -109,14 +109,22 @@ export async function action({ request }: ActionFunctionArgs) {
       data: { status: "uploaded" },
     });
 
-    // Update items with location and transform
+    // Update items with location, transform, and fileUrl (for Shopify uploads)
     for (const item of items) {
+      const updateData: Record<string, unknown> = {
+        location: item.location || "front",
+        transform: item.transform || null,
+      };
+      
+      // If fileUrl is provided (Shopify uploads), update storageKey with the Shopify URL
+      if (item.fileUrl) {
+        updateData.storageKey = item.fileUrl;
+        console.log(`[Upload Complete] Updated storageKey with Shopify URL: ${item.fileUrl}`);
+      }
+      
       await prisma.uploadItem.update({
         where: { id: item.itemId },
-        data: {
-          location: item.location || "front",
-          transform: item.transform || null,
-        },
+        data: updateData,
       });
     }
 

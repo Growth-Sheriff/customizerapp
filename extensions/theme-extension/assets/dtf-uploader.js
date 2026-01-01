@@ -647,12 +647,14 @@
         elements.progressText.textContent = 'Uploading...';
 
         // Step 2: Upload file directly to storage
-        await this.uploadToStorage(productId, file, intentData);
+        // uploadToStorage returns result with fileUrl for Shopify uploads
+        const uploadResult = await this.uploadToStorage(productId, file, intentData);
 
         elements.progressFill.style.width = '80%';
         elements.progressText.textContent = 'Processing...';
 
         // Step 3: Complete upload
+        // For Shopify uploads, include the fileUrl so backend can update storageKey
         const completeResponse = await fetch(`${apiBase}/api/upload/complete`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -661,7 +663,9 @@
             uploadId: intentData.uploadId,
             items: [{
               itemId: intentData.itemId,
-              location: 'front'
+              location: 'front',
+              fileUrl: uploadResult?.fileUrl || null,
+              fileId: uploadResult?.fileId || null
             }]
           })
         });

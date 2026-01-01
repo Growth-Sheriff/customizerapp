@@ -81,6 +81,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   }
 
   // Build download URLs for local storage with signed tokens (WI-004)
+  // OR use Shopify URLs directly if storageKey is an external URL
   const host = process.env.HOST || "https://customizerapp.dev";
   const firstItem = upload.items[0];
   
@@ -89,18 +90,38 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   let downloadUrl = null;
   let thumbnailUrl = null;
   
+  // Check if storageKey is an external URL (Shopify, R2, S3)
+  const isExternalUrl = (key: string | null | undefined): boolean => {
+    if (!key) return false;
+    return key.startsWith('http://') || key.startsWith('https://');
+  };
+  
   if (firstItem?.storageKey) {
-    const token = generateLocalFileToken(firstItem.storageKey, expiresAt);
-    downloadUrl = `${host}/api/files/${encodeURIComponent(firstItem.storageKey)}?token=${encodeURIComponent(token)}`;
+    if (isExternalUrl(firstItem.storageKey)) {
+      // Shopify or external storage - use URL directly
+      downloadUrl = firstItem.storageKey;
+    } else {
+      // Local storage - generate signed URL
+      const token = generateLocalFileToken(firstItem.storageKey, expiresAt);
+      downloadUrl = `${host}/api/files/${encodeURIComponent(firstItem.storageKey)}?token=${encodeURIComponent(token)}`;
+    }
   }
   
   if (firstItem?.thumbnailKey) {
-    const token = generateLocalFileToken(firstItem.thumbnailKey, expiresAt);
-    thumbnailUrl = `${host}/api/files/${encodeURIComponent(firstItem.thumbnailKey)}?token=${encodeURIComponent(token)}`;
+    if (isExternalUrl(firstItem.thumbnailKey)) {
+      thumbnailUrl = firstItem.thumbnailKey;
+    } else {
+      const token = generateLocalFileToken(firstItem.thumbnailKey, expiresAt);
+      thumbnailUrl = `${host}/api/files/${encodeURIComponent(firstItem.thumbnailKey)}?token=${encodeURIComponent(token)}`;
+    }
   } else if (firstItem?.storageKey) {
     // Fallback to original file if no thumbnail
-    const token = generateLocalFileToken(firstItem.storageKey, expiresAt);
-    thumbnailUrl = `${host}/api/files/${encodeURIComponent(firstItem.storageKey)}?token=${encodeURIComponent(token)}`;
+    if (isExternalUrl(firstItem.storageKey)) {
+      thumbnailUrl = firstItem.storageKey;
+    } else {
+      const token = generateLocalFileToken(firstItem.storageKey, expiresAt);
+      thumbnailUrl = `${host}/api/files/${encodeURIComponent(firstItem.storageKey)}?token=${encodeURIComponent(token)}`;
+    }
   }
 
   return corsJson({
