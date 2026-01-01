@@ -506,6 +506,12 @@
 <!-- JavaScript - Full API Integration with Event Delegation -->
 <script>
 (function() {
+  // Prevent execution in Shopify theme editor
+  if (window.Shopify && window.Shopify.designMode) {
+    console.log('[Upload Lift Quick] Disabled in theme editor');
+    return;
+  }
+  
   // Prevent multiple initializations
   if (window.ULQuickUploadInit) return;
   window.ULQuickUploadInit = true;
@@ -543,6 +549,9 @@
   
   // Event delegation for all clicks
   document.addEventListener('click', function(e) {
+    // Double-check for design mode
+    if (window.Shopify && window.Shopify.designMode) return;
+    
     const target = e.target;
     
     // Open modal button
