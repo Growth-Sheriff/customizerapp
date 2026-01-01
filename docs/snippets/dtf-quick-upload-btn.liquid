@@ -1,0 +1,122 @@
+{% comment %}
+  DTF Quick Upload Button
+  =======================
+  Collection/Product listing sayfalarında Add to Cart yerine kullanılır.
+  Ürün sayfasına yönlendirir ve upload widget'ı orada açılır.
+  
+  Kullanım: {% render 'dtf-quick-upload-btn', product: product %}
+  
+  Özelleştirme:
+  - button_text: Buton yazısı (varsayılan: "Upload Design")
+  - button_style: 'primary' | 'secondary' | 'outline' (varsayılan: 'primary')
+  - show_icon: true | false (varsayılan: true)
+  - full_width: true | false (varsayılan: true)
+  
+  Version: 1.0.0
+{% endcomment %}
+
+{% liquid
+  assign btn_text = button_text | default: 'Upload Design'
+  assign btn_style = button_style | default: 'primary'
+  assign show_upload_icon = show_icon | default: true
+  assign is_full_width = full_width | default: true
+%}
+
+<style>
+  .dtf-quick-btn {
+    --dtf-primary: #6366f1;
+    --dtf-primary-hover: #5558e3;
+    --dtf-secondary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    --dtf-text: #1f2937;
+    --dtf-border: #e5e7eb;
+    --dtf-radius: 8px;
+    
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 20px;
+    border: none;
+    border-radius: var(--dtf-radius);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-decoration: none;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    box-sizing: border-box;
+    line-height: 1.4;
+  }
+  
+  .dtf-quick-btn.full-width {
+    width: 100%;
+  }
+  
+  /* Primary Style */
+  .dtf-quick-btn.dtf-btn-primary {
+    background: var(--dtf-primary);
+    color: white;
+  }
+  
+  .dtf-quick-btn.dtf-btn-primary:hover {
+    background: var(--dtf-primary-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
+  }
+  
+  /* Secondary Style (Gradient) */
+  .dtf-quick-btn.dtf-btn-secondary {
+    background: var(--dtf-secondary);
+    color: white;
+  }
+  
+  .dtf-quick-btn.dtf-btn-secondary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  }
+  
+  /* Outline Style */
+  .dtf-quick-btn.dtf-btn-outline {
+    background: transparent;
+    color: var(--dtf-primary);
+    border: 2px solid var(--dtf-primary);
+  }
+  
+  .dtf-quick-btn.dtf-btn-outline:hover {
+    background: var(--dtf-primary);
+    color: white;
+  }
+  
+  .dtf-quick-btn svg {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+  }
+  
+  /* Mobile */
+  @media (max-width: 480px) {
+    .dtf-quick-btn {
+      padding: 10px 16px;
+      font-size: 13px;
+    }
+    .dtf-quick-btn svg {
+      width: 16px;
+      height: 16px;
+    }
+  }
+</style>
+
+<a 
+  href="{{ product.url }}" 
+  class="dtf-quick-btn dtf-btn-{{ btn_style }}{% if is_full_width %} full-width{% endif %}"
+  title="{{ btn_text }} - {{ product.title }}"
+>
+  {% if show_upload_icon %}
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+      <polyline points="17 8 12 3 7 8"/>
+      <line x1="12" y1="3" x2="12" y2="15"/>
+    </svg>
+  {% endif %}
+  <span>{{ btn_text }}</span>
+</a>

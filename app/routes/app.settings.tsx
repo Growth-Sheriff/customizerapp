@@ -465,6 +465,126 @@ export default function SettingsPage() {
               </BlockStack>
             </Card>
           </Layout.Section>
+
+          {/* Collection Button Integration Guide */}
+          <Layout.Section>
+            <Card>
+              <BlockStack gap="400">
+                <Text as="h2" variant="headingMd">📦 Collection Button Integration</Text>
+                
+                <Text as="p" variant="bodyMd" tone="subdued">
+                  Add an "Upload Design" button to your collection pages instead of the default Add to Cart button.
+                </Text>
+
+                <Box paddingBlockStart="200">
+                  <Text as="h3" variant="headingSm">Step 1: Create the Snippet</Text>
+                  <Text as="p" variant="bodySm" tone="subdued">
+                    Go to <strong>Online Store → Themes → Edit Code → snippets</strong> and create a new file called <code>dtf-quick-upload-btn.liquid</code>
+                  </Text>
+                </Box>
+
+                <Box 
+                  background="bg-surface-secondary" 
+                  padding="400" 
+                  borderRadius="200"
+                  overflowX="auto"
+                >
+                  <pre style={{ fontSize: '11px', lineHeight: '1.4', margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+{`{% comment %}
+  DTF Quick Upload Button - Collection Pages
+  Usage: {% render 'dtf-quick-upload-btn', product: product %}
+{% endcomment %}
+
+{% liquid
+  assign btn_text = button_text | default: 'Upload Design'
+  assign btn_style = button_style | default: 'primary'
+%}
+
+<style>
+.dtf-quick-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+  width: 100%;
+  background: #6366f1;
+  color: white;
+}
+.dtf-quick-btn:hover {
+  background: #5558e3;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(99,102,241,0.35);
+}
+.dtf-quick-btn svg {
+  width: 18px;
+  height: 18px;
+}
+</style>
+
+<a href="{{ product.url }}" class="dtf-quick-btn">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+    <polyline points="17 8 12 3 7 8"/>
+    <line x1="12" y1="3" x2="12" y2="15"/>
+  </svg>
+  <span>{{ btn_text }}</span>
+</a>`}
+                  </pre>
+                </Box>
+
+                <Box paddingBlockStart="200">
+                  <Text as="h3" variant="headingSm">Step 2: Replace Add to Cart in Your Theme</Text>
+                  <Text as="p" variant="bodySm" tone="subdued">
+                    Find your product card template (usually <code>snippets/card-product.liquid</code> or <code>snippets/product-card.liquid</code>) and replace the Add to Cart button with:
+                  </Text>
+                </Box>
+
+                <Box 
+                  background="bg-surface-secondary" 
+                  padding="400" 
+                  borderRadius="200"
+                >
+                  <pre style={{ fontSize: '12px', lineHeight: '1.5', margin: 0 }}>
+{`{% render 'dtf-quick-upload-btn', product: product %}`}
+                  </pre>
+                </Box>
+
+                <Box paddingBlockStart="200">
+                  <Text as="h3" variant="headingSm">Customization Options</Text>
+                  <Text as="p" variant="bodySm" tone="subdued">
+                    You can customize the button text:
+                  </Text>
+                </Box>
+
+                <Box 
+                  background="bg-surface-secondary" 
+                  padding="400" 
+                  borderRadius="200"
+                >
+                  <pre style={{ fontSize: '12px', lineHeight: '1.5', margin: 0 }}>
+{`{% render 'dtf-quick-upload-btn', 
+  product: product, 
+  button_text: 'Customize Now' 
+%}`}
+                  </pre>
+                </Box>
+
+                <Banner tone="info">
+                  <Text as="p" variant="bodySm">
+                    When customers click this button, they will be redirected to the product page where the full upload widget is available.
+                  </Text>
+                </Banner>
+              </BlockStack>
+            </Card>
+          </Layout.Section>
         </Layout>
       </Page>
   );
