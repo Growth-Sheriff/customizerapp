@@ -1472,22 +1472,10 @@
           bubbles: true
         }));
 
-        // Show confirmation screen (FAZ 3)
+        // Redirect to Shopify cart page after short delay
         setTimeout(() => {
-          document.dispatchEvent(new CustomEvent('ul:showConfirmation', {
-            detail: { source: 'dtf-uploader', productId }
-          }));
+          window.location.href = '/cart';
         }, 500);
-
-        // Reset after 2 seconds
-        setTimeout(() => {
-          elements.addCartBtn.classList.remove('success');
-          elements.addCartBtn.querySelector('.ul-btn-text').textContent = 'Add to Cart';
-          elements.addCartBtn.disabled = false;
-          
-          // Optionally clear upload for next design
-          // this.clearUpload(productId);
-        }, 2000);
 
       } catch (error) {
         console.error('[UL] Add to cart error:', error);

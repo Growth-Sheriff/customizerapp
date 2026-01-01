@@ -3576,20 +3576,9 @@ console.log('[ULTShirtModal] Script loading...');
         // Close modal
         this.close();
         
-        // Show confirmation screen (FAZ 3)
+        // Redirect to Shopify cart page
         setTimeout(() => {
-          // Emit confirmation event via global state (FAZ 4)
-          if (window.ULState) {
-            window.ULState.openConfirmation();
-          }
-          
-          if (window.ULEvents) {
-            window.ULEvents.emit('showConfirmation', { source: 'tshirt-modal' });
-          }
-          
-          document.dispatchEvent(new CustomEvent('ul:showConfirmation', {
-            detail: { source: 'tshirt-modal' }
-          }));
+          window.location.href = '/cart';
         }, 300);
       }
     },
