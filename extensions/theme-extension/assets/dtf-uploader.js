@@ -1322,6 +1322,9 @@
      * Open T-Shirt modal (FAZ 2 integration)
      */
     openTShirtModal(productId) {
+      // Prevent opening in Shopify theme editor
+      if (window.Shopify && window.Shopify.designMode) return;
+      
       console.log('[UL] openTShirtModal called with productId:', productId);
       const instance = this.instances[productId];
       const { state } = instance;

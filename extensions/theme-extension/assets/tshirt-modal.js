@@ -382,6 +382,9 @@ console.log('[ULTShirtModal] Script loading...');
     // MODAL OPEN / CLOSE
     // ==========================================================================
     open(detail = {}) {
+      // Prevent opening in Shopify theme editor
+      if (window.Shopify && window.Shopify.designMode) return;
+      
       const { uploadData, productId, config, shopDomain } = detail;
       
       console.log('[ULTShirtModal] Opening with:', detail);

@@ -552,6 +552,9 @@
   }
 
   function openUploadModal(card) {
+    // Prevent opening in Shopify theme editor
+    if (window.Shopify && window.Shopify.designMode) return;
+    
     const overlay = document.querySelector('.ul-upload-modal-overlay');
     if (!overlay) return;
 

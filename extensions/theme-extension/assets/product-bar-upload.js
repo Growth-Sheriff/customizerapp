@@ -295,6 +295,9 @@
   }
 
   function openUploadModal(card) {
+    // Prevent opening in Shopify theme editor
+    if (window.Shopify && window.Shopify.designMode) return;
+    
     // Find the modal in the same section
     const section = card.closest('.ul-product-bar');
     const overlay = section?.querySelector('.ul-upload-modal-overlay');
