@@ -89,6 +89,10 @@ export async function action({ request }: ActionFunctionArgs) {
     return corsJson({ error: "Shop not found" }, request, { status: 404 });
   }
 
+  // Get shop settings for auto-approve feature
+  const shopSettings = (shop.settings as Record<string, any>) || {};
+  const autoApprove = shopSettings.autoApprove !== false; // Default to true
+
 
   // Verify upload belongs to shop
   const upload = await prisma.upload.findFirst({
@@ -105,10 +109,19 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   try {
-    // Update upload status
+    // Update upload status based on auto-approve setting
+    // If autoApprove is true: status goes to "uploaded" -> "processing" -> "ready"
+    // If autoApprove is false: status goes to "uploaded" -> "processing" -> "pending_approval"
     await prisma.upload.update({
       where: { id: uploadId },
-      data: { status: "uploaded" },
+      data: { 
+        status: "uploaded",
+        // Store autoApprove flag in metadata for preflight worker to use
+        metadata: {
+          ...(upload.metadata as Record<string, any> || {}),
+          autoApprove,
+        }
+      },
     });
 
     // Update items with location, transform, and fileUrl/fileId (for Shopify uploads)

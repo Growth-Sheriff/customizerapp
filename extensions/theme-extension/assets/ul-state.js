@@ -112,7 +112,31 @@
       // Bind cart events
       this._bindCartEvents();
       
-      console.log('[ULState] Global State Manager initialized v1.0.0');
+      // Load storefront config (async)
+      const productId = this._getProductIdFromPage();
+      if (productId) {
+        this.loadStorefrontConfig(productId);
+      } else {
+        this.loadStorefrontConfig();
+      }
+      
+      console.log('[ULState] Global State Manager initialized v1.1.0');
+    },
+    
+    _getProductIdFromPage() {
+      // Try to get product ID from various sources
+      if (window.ShopifyAnalytics?.meta?.product?.id) {
+        return window.ShopifyAnalytics.meta.product.id;
+      }
+      if (window.meta?.product?.id) {
+        return window.meta.product.id;
+      }
+      // Try from data attribute
+      const productEl = document.querySelector('[data-product-id]');
+      if (productEl) {
+        return productEl.dataset.productId;
+      }
+      return null;
     },
     
     // ==========================================================================
@@ -488,6 +512,144 @@
       });
       this.set('cart.pendingItems', []);
       this.clearPersistedState();
+    },
+
+    // ==========================================================================
+    // STOREFRONT CONFIG LOADING
+    // ==========================================================================
+    
+    /**
+     * Load storefront config from API
+     * This includes: white-label, asset sets, product config, settings
+     */
+    async loadStorefrontConfig(productId) {
+      try {
+        const shopDomain = window.Shopify?.shop || '';
+        const apiBase = '/apps/customizer';
+        
+        const url = new URL(`${apiBase}/api/storefront/config`, window.location.origin);
+        url.searchParams.set('shopDomain', shopDomain);
+        if (productId) {
+          url.searchParams.set('productId', productId);
+        }
+        
+        console.log('[ULState] Loading storefront config...');
+        
+        const response = await fetch(url.toString());
+        if (!response.ok) {
+          console.warn('[ULState] Failed to load storefront config:', response.status);
+          return null;
+        }
+        
+        const config = await response.json();
+        console.log('[ULState] Storefront config loaded:', config);
+        
+        // Store in state
+        this.set('storefrontConfig', config);
+        
+        // Apply white-label styles if enabled
+        if (config.whiteLabel?.enabled) {
+          this.applyWhiteLabelStyles(config.whiteLabel);
+        }
+        
+        // Update config from settings
+        if (config.settings) {
+          this.update('config', {
+            maxFileSizeMB: config.settings.maxFileSizeMB || 25,
+            minDPI: config.settings.minDpi || 150,
+            autoApprove: config.settings.autoApprove ?? true,
+          });
+        }
+        
+        // Set asset set model URL globally
+        if (config.assetSet?.model?.url) {
+          window.UL_TSHIRT_GLB_URL = config.assetSet.model.url;
+          console.log('[ULState] Set 3D model URL:', window.UL_TSHIRT_GLB_URL);
+        }
+        
+        // Update location prices from asset set
+        if (config.assetSet?.printLocations) {
+          const locationPrices = {};
+          config.assetSet.printLocations.forEach(loc => {
+            locationPrices[loc.id] = loc.price || 0;
+          });
+          this.set('config.pricing.locationPrices', locationPrices);
+        }
+        
+        // Emit config loaded event
+        if (window.ULEvents) {
+          window.ULEvents.emit('configLoaded', config);
+        }
+        
+        return config;
+        
+      } catch (e) {
+        console.error('[ULState] Config load error:', e);
+        return null;
+      }
+    },
+    
+    /**
+     * Apply white-label CSS styles dynamically
+     */
+    applyWhiteLabelStyles(whiteLabel) {
+      if (!whiteLabel?.enabled) return;
+      
+      // Create or update style element
+      let styleEl = document.getElementById('ul-whitelabel-styles');
+      if (!styleEl) {
+        styleEl = document.createElement('style');
+        styleEl.id = 'ul-whitelabel-styles';
+        document.head.appendChild(styleEl);
+      }
+      
+      const primary = whiteLabel.primaryColor || '#667eea';
+      const secondary = whiteLabel.secondaryColor || '#764ba2';
+      
+      styleEl.textContent = `
+        /* Upload Lift White-Label Styles */
+        :root {
+          --ul-primary: ${primary};
+          --ul-secondary: ${secondary};
+          --ul-gradient: linear-gradient(135deg, ${primary} 0%, ${secondary} 100%);
+        }
+        
+        .ul-quick-btn-trigger,
+        .ul-quick-btn-primary,
+        .ul-upload-btn,
+        .ul-sh-upload-btn,
+        .ul-tshirt-btn-primary {
+          background: var(--ul-gradient) !important;
+        }
+        
+        .ul-quick-dropzone:hover,
+        .ul-upload-zone:hover,
+        .ul-sh-upload-zone:hover {
+          border-color: var(--ul-primary) !important;
+        }
+        
+        .ul-progress-fill,
+        .ul-sh-progress-fill {
+          background: var(--ul-gradient) !important;
+        }
+        
+        .ul-price,
+        .ul-card-vendor,
+        .ul-sh-vendor {
+          color: var(--ul-primary) !important;
+        }
+        
+        ${whiteLabel.customCss || ''}
+      `;
+      
+      console.log('[ULState] White-label styles applied');
+    },
+    
+    /**
+     * Get storefront config (cached)
+     */
+    getStorefrontConfig() {
+      return this.get('storefrontConfig');
     }
   };
 

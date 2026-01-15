@@ -270,6 +270,14 @@ const preflightWorker = new Worker<PreflightJobData>(
         select: { preflightStatus: true },
       });
 
+      // Get upload to check autoApprove setting
+      const currentUpload = await prisma.upload.findUnique({
+        where: { id: uploadId },
+        select: { metadata: true },
+      });
+      const uploadMetadata = (currentUpload?.metadata as Record<string, any>) || {};
+      const autoApprove = uploadMetadata.autoApprove !== false; // Default to true
+
       const hasError = allItems.some(i => i.preflightStatus === "error");
       const hasWarning = allItems.some(i => i.preflightStatus === "warning");
       const allDone = allItems.every(i => i.preflightStatus !== "pending");
@@ -278,8 +286,14 @@ const preflightWorker = new Worker<PreflightJobData>(
         let uploadStatus = "needs_review";
         if (hasError) {
           uploadStatus = "blocked";
-        } else if (!hasWarning) {
-          // All OK - could auto-approve based on rules
+        } else if (!hasWarning && autoApprove) {
+          // All OK and autoApprove enabled - set to ready
+          uploadStatus = "ready";
+        } else if (!hasWarning && !autoApprove) {
+          // All OK but autoApprove disabled - needs manual review
+          uploadStatus = "pending_approval";
+        } else {
+          // Has warnings - needs review regardless of autoApprove
           uploadStatus = "needs_review";
         }
 
@@ -291,6 +305,7 @@ const preflightWorker = new Worker<PreflightJobData>(
               overall: hasError ? "error" : hasWarning ? "warning" : "ok",
               completedAt: new Date().toISOString(),
               itemCount: allItems.length,
+              autoApproved: autoApprove && !hasError && !hasWarning,
             },
           },
         });
