@@ -1,12 +1,10 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { authenticate } from "~/shopify.server";
-import { getStorageConfig, createStorageClient } from "~/lib/storage.server";
-import { PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
-import prisma from "~/lib/prisma.server";
+import { saveLocalFile, readLocalFile, deleteLocalFile } from "~/lib/storage.server";
 
 // POST /api/storage/test
-// Test storage connection with merchant's settings
+// Test local storage connection - always succeeds for local
 export async function action({ request }: ActionFunctionArgs) {
   if (request.method !== "POST") {
     return json({ error: "Method not allowed" }, { status: 405 });
@@ -15,74 +13,36 @@ export async function action({ request }: ActionFunctionArgs) {
   const { session } = await authenticate.admin(request);
   const shopDomain = session.shop;
 
-  let shop = await prisma.shop.findUnique({
-    where: { shopDomain },
-  });
-
-  if (!shop) {
-    shop = await prisma.shop.create({
-      data: {
-        shopDomain,
-        accessToken: session.accessToken || "",
-        plan: "starter",
-        billingStatus: "active",
-        storageProvider: "r2",
-        settings: {},
-      },
-    });
-  }
-
-  // Get storage config - can be from request body (testing new config) or from shop settings
-  let testConfig;
   try {
-    const body = await request.json();
-    testConfig = body.storageConfig;
-  } catch {
-    testConfig = null;
-  }
-
-  const storageConfig = testConfig
-    ? getStorageConfig(testConfig)
-    : getStorageConfig(shop.storageConfig as any);
-
-  try {
-    const client = createStorageClient(storageConfig);
+    // Test local storage write/read/delete
     const testKey = `_test/${shopDomain}/connection-test-${Date.now()}.txt`;
     const testContent = `Connection test at ${new Date().toISOString()}`;
 
     // Test write
-    await client.send(new PutObjectCommand({
-      Bucket: storageConfig.bucket,
-      Key: testKey,
-      Body: testContent,
-      ContentType: "text/plain",
-    }));
+    await saveLocalFile(testKey, Buffer.from(testContent));
 
     // Test read
-    const getResult = await client.send(new GetObjectCommand({
-      Bucket: storageConfig.bucket,
-      Key: testKey,
-    }));
-
-    const body = await getResult.Body?.transformToString();
-
-    if (body !== testContent) {
+    const readContent = await readLocalFile(testKey);
+    
+    if (readContent.toString() !== testContent) {
       throw new Error("Content mismatch");
     }
 
+    // Clean up
+    await deleteLocalFile(testKey);
+
     return json({
       success: true,
-      provider: storageConfig.provider,
-      bucket: storageConfig.bucket,
-      message: "Connection successful! Read and write operations verified.",
+      provider: "local",
+      message: "Local storage is working correctly.",
     });
   } catch (error) {
     console.error("[Storage Test] Error:", error);
     return json({
       success: false,
-      provider: storageConfig.provider,
+      provider: "local",
       error: error instanceof Error ? error.message : "Unknown error",
-      message: "Connection failed. Please check your credentials and bucket settings.",
+      message: "Local storage test failed. Check server permissions.",
     }, { status: 400 });
   }
 }
