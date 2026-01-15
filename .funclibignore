@@ -1,0 +1,36 @@
+# FuncLib Ignore File
+# Prevents indexing large/unnecessary directories
+
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+build/
+dist/
+.cache/
+
+# Documentation (markdown parsing issue)
+*.md
+docs/
+
+# Shopify
+.shopify/
+
+# IDE
+.idea/
+.vscode/
+
+# Git
+.git/
+
+# Logs
+*.log
+logs/
+
+# Test coverage
+coverage/
+
+# Temp files
+tmp/
+temp/

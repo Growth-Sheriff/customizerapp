@@ -537,13 +537,32 @@
   }
   
   // Move modals from templates to body
+  let isInitializing = false;
+  
   function initModals() {
+    // Prevent re-entry during initialization
+    if (isInitializing) return;
+    isInitializing = true;
+    
     document.querySelectorAll('template[id$="-tpl"]').forEach(tpl => {
       if (tpl.dataset.initialized) return;
       tpl.dataset.initialized = 'true';
+      
+      // Disconnect observer temporarily to prevent loop
+      if (observer) observer.disconnect();
+      
       const content = tpl.content.cloneNode(true);
       modalContainer.appendChild(content);
+      
+      // Re-connect observer after DOM update
+      if (observer) {
+        setTimeout(() => {
+          observer.observe(document.body, { childList: true, subtree: false });
+        }, 200);
+      }
     });
+    
+    isInitializing = false;
   }
   
   // Initialize on DOM ready and after dynamic content
@@ -553,29 +572,67 @@
     initModals();
   }
   
-  // Re-init for dynamically loaded content
-  const observer = new MutationObserver(() => {
-    setTimeout(initModals, 100);
+  // Re-init for dynamically loaded content - only watch direct children, not subtree
+  let observer = null;
+  
+  // Debounced init to prevent rapid re-calls
+  let initTimeout = null;
+  function debouncedInit() {
+    if (initTimeout) clearTimeout(initTimeout);
+    initTimeout = setTimeout(initModals, 300);
+  }
+  
+  observer = new MutationObserver((mutations) => {
+    // Only react to new templates being added
+    const hasNewTemplates = mutations.some(m => 
+      Array.from(m.addedNodes).some(n => 
+        n.nodeName === 'TEMPLATE' && n.id?.endsWith('-tpl')
+      )
+    );
+    if (hasNewTemplates) {
+      debouncedInit();
+    }
   });
-  observer.observe(document.body, { childList: true, subtree: true });
+  observer.observe(document.body, { childList: true, subtree: false });
   
   // Event delegation for all clicks
   document.addEventListener('click', function(e) {
     const target = e.target;
     
-    // Open modal button
+    // Open modal button - highest priority
     const openBtn = target.closest('.ul-quick-btn-trigger');
     if (openBtn) {
       e.preventDefault();
       e.stopPropagation();
+      e.stopImmediatePropagation();
       const modalId = openBtn.dataset.modal;
       openModal(modalId);
       return;
     }
     
-    // Close modal
+    // Close button (X) - second priority
+    const closeX = target.closest('.ul-quick-modal-close');
+    if (closeX) {
+      e.preventDefault();
+      e.stopPropagation();
+      const modal = closeX.closest('.ul-quick-modal');
+      if (modal) closeModal(modal.id);
+      return;
+    }
+    
+    // Overlay click - only if clicking directly on overlay (not bubbled from content)
+    const overlay = target.closest('.ul-quick-modal-overlay');
+    if (overlay && target === overlay) {
+      e.preventDefault();
+      e.stopPropagation();
+      const modalId = overlay.dataset.close;
+      closeModal(modalId);
+      return;
+    }
+    
+    // Continue Shopping / other close buttons
     const closeBtn = target.closest('[data-close]');
-    if (closeBtn) {
+    if (closeBtn && !closeBtn.classList.contains('ul-quick-modal-overlay')) {
       e.preventDefault();
       e.stopPropagation();
       const modalId = closeBtn.dataset.close;
@@ -640,6 +697,10 @@
     }
   });
   
+  // Track recently opened modals to prevent immediate close from bubbling
+  let recentlyOpenedModal = null;
+  let openTimestamp = 0;
+  
   function openModal(id) {
     // Don't open modal in Shopify theme editor/preview mode
     if (window.Shopify && window.Shopify.designMode) {
@@ -652,15 +713,46 @@
       console.error('Modal not found:', id);
       return;
     }
-    modal.style.display = 'flex';
-    document.body.style.overflow = 'hidden';
-    const step1 = document.getElementById(id + '-step1');
-    const step2 = document.getElementById(id + '-step2');
-    if (step1) step1.style.display = 'block';
-    if (step2) step2.style.display = 'none';
+    
+    // Prevent re-opening if already open
+    if (modal.style.display === 'flex') return;
+    
+    // Mark as recently opened to prevent event bubbling close
+    recentlyOpenedModal = id;
+    openTimestamp = Date.now();
+    
+    // Use requestAnimationFrame to ensure click event has finished bubbling
+    requestAnimationFrame(() => {
+      modal.style.display = 'flex';
+      document.body.style.overflow = 'hidden';
+      const step1 = document.getElementById(id + '-step1');
+      const step2 = document.getElementById(id + '-step2');
+      if (step1) step1.style.display = 'block';
+      if (step2) step2.style.display = 'none';
+      
+      // Sync variant selection on modal open
+      const uniqueId = modal.dataset.uniqueId;
+      if (uniqueId) {
+        console.log('[Upload Lift] Modal opened, syncing variant for:', uniqueId);
+        updateVariant(uniqueId);
+      }
+      
+      // Clear the recently opened flag after a short delay
+      setTimeout(() => {
+        if (recentlyOpenedModal === id) {
+          recentlyOpenedModal = null;
+        }
+      }, 300);
+    });
   }
   
   function closeModal(id) {
+    // Prevent closing if modal was just opened (event bubbling protection)
+    if (recentlyOpenedModal === id && (Date.now() - openTimestamp) < 200) {
+      console.log('[Upload Lift] Ignoring close - modal just opened');
+      return;
+    }
+    
     const modal = document.getElementById(id);
     if (modal) {
       modal.style.display = 'none';
@@ -722,38 +814,23 @@
       progressFill.style.width = '30%';
       progressText.textContent = 'Uploading file...';
       
-      // Step 2: Upload file - handle storage type
-      let uploadResponse;
-      const storageType = intentData.storageProvider || 
-                         (intentData.isShopify ? 'shopify' : 
-                          intentData.isLocal ? 'local' : 'signed_url');
-      
-      if (storageType === 'local') {
-        // Local storage: POST with FormData
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('key', intentData.key);
-        formData.append('uploadId', intentData.uploadId);
-        formData.append('itemId', intentData.itemId);
-        uploadResponse = await fetch(intentData.uploadUrl, {
-          method: 'POST',
-          body: formData
-        });
-      } else {
-        // R2/S3: PUT with signed URL
-        uploadResponse = await fetch(intentData.uploadUrl, {
-          method: 'PUT',
-          headers: { 'Content-Type': file.type },
-          body: file
-        });
-      }
+      // Step 2: Upload file - always local storage (POST with FormData)
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('key', intentData.key);
+      formData.append('uploadId', intentData.uploadId);
+      formData.append('itemId', intentData.itemId);
+      const uploadResponse = await fetch(intentData.uploadUrl, {
+        method: 'POST',
+        body: formData
+      });
       
       if (!uploadResponse.ok) throw new Error('Upload failed');
       
       progressFill.style.width = '60%';
       progressText.textContent = 'Processing...';
       
-      // Step 3: Complete upload - include items array like theme extension
+      // Step 3: Complete upload - always local storage
       const completeResponse = await fetch(`${apiBase}/api/upload/complete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -763,7 +840,7 @@
           items: [{
             itemId: intentData.itemId,
             location: 'front',
-            storageProvider: intentData.storageProvider || 'local'
+            storageProvider: 'local'
           }]
         })
       });
@@ -852,7 +929,10 @@
   
   function updateVariant(uniqueId) {
     const variantsEl = document.getElementById('ul-variants-' + uniqueId);
-    if (!variantsEl) return;
+    if (!variantsEl) {
+      console.warn('[Upload Lift] Variant data element not found for:', uniqueId);
+      return false;
+    }
     
     try {
       const variantsData = JSON.parse(variantsEl.textContent);
@@ -863,15 +943,35 @@
         i++;
       }
       
+      console.log('[Upload Lift] Selected options:', options);
+      
       const variant = variantsData.find(v => {
         return options.every((opt, idx) => v['option' + (idx + 1)] === opt);
       });
       
+      const variantInput = document.getElementById('ul-variant-' + uniqueId);
+      
       if (variant) {
-        const variantInput = document.getElementById('ul-variant-' + uniqueId);
-        if (variantInput) variantInput.value = variant.id;
+        console.log('[Upload Lift] Matched variant:', variant.id, variant.title);
+        if (variantInput) {
+          variantInput.value = variant.id;
+          return true;
+        }
+      } else {
+        console.warn('[Upload Lift] No variant match found for options:', options);
+        // Fallback: use first available variant
+        if (variantsData.length > 0 && variantInput) {
+          const fallback = variantsData.find(v => v.available) || variantsData[0];
+          console.log('[Upload Lift] Using fallback variant:', fallback.id);
+          variantInput.value = fallback.id;
+          return true;
+        }
       }
-    } catch (e) { /* ignore */ }
+      return false;
+    } catch (e) {
+      console.error('[Upload Lift] Variant update error:', e);
+      return false;
+    }
   }
   
   async function addToCart(uniqueId, modalId) {
@@ -885,13 +985,30 @@
     const uploadIdInput = document.getElementById('ul-upload-id-' + uniqueId);
     const previewNameEl = document.getElementById('ul-preview-name-' + uniqueId);
     
+    // Validate variant ID - ensure it's synced before cart add
+    updateVariant(uniqueId);
+    
     const variantId = variantInput?.value;
-    const quantity = parseInt(qtyInput?.value) || 1;
+    const quantity = parseInt(qtyInput?.value || '1', 10);
     const uploadId = uploadIdInput?.value;
     const previewName = previewNameEl?.textContent || '';
     
+    console.log('[Upload Lift] Add to cart - variantId:', variantId, 'quantity:', quantity, 'uploadId:', uploadId);
+    
+    // Validation checks
     if (!uploadId) {
       alert('Please upload a design first');
+      return;
+    }
+    
+    if (!variantId || variantId === 'undefined' || variantId === 'null') {
+      console.error('[Upload Lift] Invalid variant ID:', variantId);
+      alert('Please select a valid product variant');
+      return;
+    }
+    
+    if (quantity < 1 || quantity > 99) {
+      alert('Please enter a valid quantity (1-99)');
       return;
     }
     
@@ -900,21 +1017,34 @@
     if (btnLoading) btnLoading.style.display = 'inline';
     
     try {
+      const cartPayload = {
+        id: parseInt(variantId, 10),
+        quantity: quantity,
+        properties: {
+          '_ul_upload_id': uploadId,
+          '_ul_design_file': previewName,
+          '_ul_uploaded': 'true'
+        }
+      };
+      
+      console.log('[Upload Lift] Cart payload:', JSON.stringify(cartPayload));
+      
       const response = await fetch('/cart/add.js', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: variantId,
-          quantity: quantity,
-          properties: {
-            '_ul_upload_id': uploadId,
-            '_ul_design_file': previewName,
-            '_ul_uploaded': 'true'
-          }
-        })
+        body: JSON.stringify(cartPayload)
       });
       
-      if (!response.ok) throw new Error('Failed to add to cart');
+      const responseData = await response.json();
+      
+      if (!response.ok) {
+        // Parse Shopify error response
+        const errorMsg = responseData.description || responseData.message || 'Failed to add to cart';
+        console.error('[Upload Lift] Shopify cart error:', responseData);
+        throw new Error(errorMsg);
+      }
+      
+      console.log('[Upload Lift] Added to cart successfully:', responseData);
       
       // Show success
       const step1 = document.getElementById(modalId + '-step1');
@@ -930,8 +1060,8 @@
       }).catch(() => {});
       
     } catch (err) {
-      console.error('Add to cart error:', err);
-      alert('Error adding to cart. Please try again.');
+      console.error('[Upload Lift] Add to cart error:', err);
+      alert('Error: ' + err.message);
     } finally {
       btn.disabled = false;
       if (btnText) btnText.style.display = 'inline';

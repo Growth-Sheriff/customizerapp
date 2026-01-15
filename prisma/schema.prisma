@@ -42,8 +42,8 @@ model Shop {
   accessToken       String   @map("access_token")
   plan              String   @default("free") // free, starter, pro, enterprise
   billingStatus     String   @default("active") @map("billing_status")
-  storageProvider   String   @default("shopify") @map("storage_provider") // shopify, local, r2, s3
-  storageConfig     Json?    @map("storage_config_json")
+  storageProvider   String   @default("local") @map("storage_provider") // local only (R2/S3/Shopify removed)
+  storageConfig     Json?    @map("storage_config_json") // deprecated - kept for migration
   settings          Json?    @map("settings_json")
   
   // Onboarding

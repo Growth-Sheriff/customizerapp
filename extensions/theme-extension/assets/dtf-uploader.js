@@ -727,163 +727,14 @@
     /**
      * Upload file to storage with progress tracking
      * FAZ 1 - DTF-003: Explicit storage type check with switch/case
-     * Supports: R2/S3 (signed URL PUT), Shopify (two-phase), Local (POST)
+     * Upload file to local storage (only storage option)
      */
     async uploadToStorage(productId, file, intentData) {
       const instance = this.instances[productId];
-      const { elements, apiBase, shopDomain } = instance;
-
-      // FAZ 1 - DTF-003: Explicit storage type check
-      const storageType = intentData.storageProvider || 
-                         (intentData.isShopify ? 'shopify' : 
-                          intentData.isLocal ? 'local' : 
-                          intentData.uploadUrl ? 'signed_url' : 'unknown');
-
-      console.log('[UL] uploadToStorage - storageType:', storageType);
-
-      switch (storageType) {
-        case 'shopify':
-          return this.uploadToShopify(productId, file, intentData);
-          
-        case 'local':
-          return this.uploadToLocal(productId, file, intentData);
-          
-        case 'r2':
-        case 's3':
-        case 'signed_url':
-          // R2/S3 - Direct PUT to signed URL
-          const uploadUrl = intentData.uploadUrl || intentData.signedUrl;
-          if (!uploadUrl) {
-            throw new Error('No upload URL provided for signed URL upload');
-          }
-          return this.uploadToSignedUrl(productId, file, intentData, uploadUrl);
-          
-        default:
-          // Fallback: try local if uploadUrl exists, otherwise error
-          if (intentData.uploadUrl) {
-            console.warn('[UL] Unknown storage type, falling back to local upload');
-            return this.uploadToLocal(productId, file, intentData);
-          }
-          throw new Error(`Unknown storage type: ${storageType}`);
-      }
-    },
-
-    /**
-     * FAZ 1 - DTF-003: Extracted signed URL upload method
-     */
-    async uploadToSignedUrl(productId, file, intentData, uploadUrl) {
-      const instance = this.instances[productId];
       const { elements } = instance;
 
-      return new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-
-        xhr.upload.addEventListener('progress', (e) => {
-          if (e.lengthComputable) {
-            const percent = 15 + ((e.loaded / e.total) * 60); // 15% to 75%
-            elements.progressFill.style.width = `${percent}%`;
-            elements.progressText.textContent = `Uploading... ${Math.round((e.loaded / e.total) * 100)}%`;
-          }
-        });
-
-        xhr.addEventListener('load', () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            resolve();
-          } else {
-            reject(new Error(`Upload failed (${xhr.status})`));
-          }
-        });
-
-        xhr.addEventListener('error', () => reject(new Error('Network error during upload')));
-        xhr.addEventListener('abort', () => reject(new Error('Upload cancelled')));
-
-        xhr.open('PUT', uploadUrl);
-        xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
-        xhr.send(file);
-      });
-    },
-
-    /**
-     * Upload to Shopify Files API (two-phase)
-     */
-    async uploadToShopify(productId, file, intentData) {
-      const instance = this.instances[productId];
-      const { elements, apiBase, shopDomain } = instance;
-
-      // Phase 1: Get staged upload URL from Shopify
-      elements.progressText.textContent = 'Preparing Shopify upload...';
-      
-      const stagedResponse = await fetch(`${apiBase}/api/upload/shopify`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'get_staged_url',
-          shopDomain,
-          fileName: file.name,
-          fileSize: file.size,
-          mimeType: file.type || 'application/octet-stream'
-        })
-      });
-
-      if (!stagedResponse.ok) {
-        const err = await stagedResponse.json().catch(() => ({}));
-        throw new Error(err.error || 'Failed to get Shopify upload URL');
-      }
-
-      const stagedData = await stagedResponse.json();
-      
-      // Phase 2: Upload to Shopify's staged URL
-      elements.progressText.textContent = 'Uploading to Shopify...';
-      
-      const formData = new FormData();
-      // Add parameters first
-      if (stagedData.parameters) {
-        for (const param of stagedData.parameters) {
-          formData.append(param.name, param.value);
-        }
-      }
-      // Add file last
-      formData.append('file', file);
-
-      const uploadResponse = await fetch(stagedData.stagedUrl, {
-        method: 'POST',
-        body: formData
-      });
-
-      if (!uploadResponse.ok) {
-        throw new Error(`Shopify upload failed (${uploadResponse.status})`);
-      }
-
-      elements.progressFill.style.width = '70%';
-      elements.progressText.textContent = 'Creating file...';
-
-      // Phase 3: Create file in Shopify
-      const createResponse = await fetch(`${apiBase}/api/upload/shopify`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'create_file',
-          shopDomain,
-          resourceUrl: stagedData.resourceUrl,
-          fileName: file.name,
-          mimeType: file.type || 'application/octet-stream'
-        })
-      });
-
-      if (!createResponse.ok) {
-        const err = await createResponse.json().catch(() => ({}));
-        throw new Error(err.error || 'Failed to create Shopify file');
-      }
-
-      return createResponse.json();
-    },
-
-    /**
-     * Upload to local storage (POST with FormData)
-     */
-    async uploadToLocal(productId, file, intentData) {
-      const instance = this.instances[productId];
-      const { elements } = instance;
+      // Always use local storage - no other options
+      console.log('[UL] uploadToStorage - using local storage');
 
       const formData = new FormData();
       formData.append('file', file);
@@ -896,7 +747,7 @@
 
         xhr.upload.addEventListener('progress', (e) => {
           if (e.lengthComputable) {
-            const percent = 15 + ((e.loaded / e.total) * 60);
+            const percent = 15 + ((e.loaded / e.total) * 60); // 15% to 75%
             elements.progressFill.style.width = `${percent}%`;
             elements.progressText.textContent = `Uploading... ${Math.round((e.loaded / e.total) * 100)}%`;
           }

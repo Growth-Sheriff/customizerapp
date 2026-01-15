@@ -142,18 +142,10 @@ export async function action({ request }: ActionFunctionArgs) {
   const uploadId = nanoid(12);
   const itemId = nanoid(8);
 
-  // Get storage config - merge storageProvider with storageConfig
-  // FALLBACK LOGIC: If R2/S3 selected but credentials invalid → use Shopify
-  const shopStorageConfig = {
-    provider: shop.storageProvider || 'shopify',
-    ...((shop.storageConfig as Record<string, unknown>) || {}),
-  };
+  // LOCAL-ONLY STORAGE - No provider selection needed
+  const storageConfig = getStorageConfig();
   
-  // getStorageConfig now automatically handles fallback via getEffectiveStorageProvider
-  const storageConfig = getStorageConfig(shopStorageConfig as any);
-  
-  // Log effective storage provider for debugging
-  console.log(`[Upload Intent] Shop: ${shopDomain}, Requested: ${shop.storageProvider}, Effective: ${storageConfig.provider}`);
+  console.log(`[Upload Intent] Shop: ${shopDomain}, Storage: local`);
 
   // Build storage key
   const key = buildStorageKey(shopDomain, uploadId, itemId, fileName);
@@ -185,8 +177,8 @@ export async function action({ request }: ActionFunctionArgs) {
       },
     });
 
-    // Generate signed upload URL
-    const { url: uploadUrl, isLocal, isShopify } = await getUploadSignedUrl(storageConfig, key, contentType);
+    // Generate signed upload URL (always local)
+    const { url: uploadUrl, isLocal } = await getUploadSignedUrl(storageConfig, key, contentType);
 
     return corsJson({
       uploadId,
@@ -197,9 +189,8 @@ export async function action({ request }: ActionFunctionArgs) {
       fileSize,
       mimeType: contentType,
       expiresIn: 900, // 15 minutes
-      isLocal: isLocal || false,
-      isShopify: isShopify || false,
-      storageProvider: storageConfig.provider,
+      isLocal: true,
+      storageProvider: "local",
     }, request);
   } catch (error) {
     console.error("[Upload Intent] Error:", error);

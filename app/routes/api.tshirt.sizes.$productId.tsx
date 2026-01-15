@@ -110,7 +110,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
     // Fetch product variants from Shopify
     const response = await fetch(
-      `https://${shopDomain}/admin/api/2025-01/graphql.json`,
+      `https://${shopDomain}/admin/api/2025-10/graphql.json`,
       {
         method: "POST",
         headers: {

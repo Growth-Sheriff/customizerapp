@@ -1,0 +1,165 @@
+{
+  "$schema": "https://funclib.dev/schema/config.json",
+  "version": "4.0",
+  "project": {
+    "name": "customizer-app",
+    "type": "shopify-remix",
+    "framework": "remix",
+    "platform": "shopify"
+  },
+  "languages": {
+    "typescript": {
+      "extensions": [".ts", ".tsx"],
+      "enabled": true
+    },
+    "javascript": {
+      "extensions": [".js", ".jsx"],
+      "enabled": true
+    },
+    "liquid": {
+      "extensions": [".liquid"],
+      "enabled": true,
+      "parser": "embedded-html",
+      "patterns": {
+        "snippetRender": "{% render '([^']+)'",
+        "snippetInclude": "{% include '([^']+)'",
+        "variables": "{{ ([a-zA-Z_][a-zA-Z0-9_.]+) }}",
+        "assigns": "{% assign ([a-zA-Z_][a-zA-Z0-9_]*)",
+        "captures": "{% capture ([a-zA-Z_][a-zA-Z0-9_]*)",
+        "forLoops": "{% for ([a-zA-Z_]+) in ([a-zA-Z_.]+)",
+        "sectionSchema": "{% schema %}([\\s\\S]*?){% endschema %}",
+        "javascript": "{% javascript %}([\\s\\S]*?){% endjavascript %}",
+        "stylesheet": "{% stylesheet %}([\\s\\S]*?){% endstylesheet %}"
+      }
+    },
+    "graphql": {
+      "extensions": [".graphql", ".gql"],
+      "enabled": true,
+      "inlinePatterns": [
+        "gql`([\\s\\S]*?)`",
+        "graphql`([\\s\\S]*?)`",
+        "#graphql([\\s\\S]*?)#"
+      ]
+    },
+    "json": {
+      "extensions": [".json"],
+      "enabled": true
+    },
+    "css": {
+      "extensions": [".css"],
+      "enabled": true
+    },
+    "prisma": {
+      "extensions": [".prisma"],
+      "enabled": true,
+      "patterns": {
+        "models": "model ([A-Z][a-zA-Z]+)",
+        "enums": "enum ([A-Z][a-zA-Z]+)",
+        "relations": "@relation\\(([^)]+)\\)"
+      }
+    }
+  },
+  "shopify": {
+    "themeExtension": {
+      "path": "extensions/theme-extension",
+      "sections": "blocks/*.liquid",
+      "snippets": "snippets/*.liquid",
+      "assets": "assets/*.{js,css}",
+      "locales": "locales/*.json"
+    },
+    "webhooks": {
+      "pattern": "app/routes/webhooks.*.tsx",
+      "mapping": {
+        "orders-create": "webhooks.orders-create.tsx",
+        "orders-paid": "webhooks.orders-paid.tsx",
+        "orders-cancelled": "webhooks.orders-cancelled.tsx",
+        "orders-fulfilled": "webhooks.orders-fulfilled.tsx",
+        "products-update": "webhooks.products-update.tsx",
+        "products-delete": "webhooks.products-delete.tsx",
+        "app-uninstalled": "webhooks.app-uninstalled.tsx"
+      }
+    },
+    "api": {
+      "version": "2025-10",
+      "type": "graphql",
+      "adminEndpoints": "app/routes/api.*.tsx",
+      "storefrontEndpoints": "app/routes/storefront.*.tsx"
+    },
+    "appProxy": {
+      "prefix": "/apps/customizer",
+      "routes": "app/routes/api.*.tsx"
+    }
+  },
+  "remix": {
+    "routes": {
+      "pattern": "app/routes/*.tsx",
+      "extractLoaders": true,
+      "extractActions": true,
+      "trackLinks": true
+    },
+    "hooks": {
+      "pattern": "app/hooks/*.ts",
+      "trackUsage": true
+    },
+    "lib": {
+      "pattern": "app/lib/*.server.ts",
+      "serverOnly": true
+    }
+  },
+  "tracking": {
+    "apiEndpoints": {
+      "enabled": true,
+      "patterns": [
+        "/api/upload/*",
+        "/api/v1/*",
+        "/api/gdpr/*"
+      ]
+    },
+    "crossReferences": {
+      "liquidToJs": true,
+      "routeToApi": true,
+      "webhookToHandler": true,
+      "prismaToUsage": true
+    },
+    "dependencies": {
+      "trackImports": true,
+      "trackExports": true,
+      "detectCircular": true
+    }
+  },
+  "include": [
+    "app/**/*",
+    "extensions/**/*",
+    "theme-snippets/**/*",
+    "workers/**/*",
+    "prisma/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    ".pnpm-store",
+    "build",
+    "dist",
+    ".cache",
+    ".shopify",
+    ".git",
+    "*.md",
+    "docs",
+    "coverage",
+    "tmp",
+    "*.log"
+  ],
+  "symbols": {
+    "extractFromLiquid": true,
+    "liquidVariables": true,
+    "liquidSnippets": true,
+    "graphqlOperations": true,
+    "prismaModels": true,
+    "remixRoutes": true,
+    "webhookHandlers": true
+  },
+  "output": {
+    "format": "json",
+    "includeSourceMaps": false,
+    "prettyPrint": true
+  }
+}
