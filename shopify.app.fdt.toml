@@ -2,7 +2,7 @@
 
 client_id = "f122b497901d3db350a2c20b7ce4bc2d"
 name = "FDT-Upload"
-application_url = "https://fdt.customizerapp.dev"
+application_url = "https://customizerapp.dev"
 embedded = true
 handle = "fast-dtf-transfer"
 
@@ -32,12 +32,12 @@ use_legacy_install_flow = false
 
 [auth]
 redirect_urls = [
-  "https://fdt.customizerapp.dev/auth/callback",
-  "https://fdt.customizerapp.dev/api/auth/callback"
+  "https://customizerapp.dev/auth/callback",
+  "https://customizerapp.dev/api/auth/callback"
 ]
 
 [app_proxy]
-url = "https://fdt.customizerapp.dev"
+url = "https://customizerapp.dev"
 subpath = "customizer"
 prefix = "apps"
 
