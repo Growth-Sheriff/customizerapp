@@ -136,7 +136,7 @@
   }
 
   // Create upload info element
-  function createUploadInfoElement(item, uploadId, designFile) {
+  function createUploadInfoElement(item, uploadId, designFile, thumbnail) {
     const div = document.createElement('div');
     div.className = 'ul-cart-upload-info';
     div.dataset.uploadId = uploadId;
@@ -144,21 +144,26 @@
     const fileName = designFile || 'Custom Design';
     const shortName = fileName.length > 25 ? fileName.substring(0, 22) + '...' : fileName;
     
+    // Use thumbnail if available
+    const iconHtml = thumbnail 
+      ? `<img class="ul-cart-upload-icon" src="${thumbnail}" alt="Design preview" onerror="this.style.display='none'">`
+      : `<div class="ul-cart-upload-icon placeholder">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="16" y1="13" x2="8" y2="13"></line>
+            <line x1="16" y1="17" x2="8" y2="17"></line>
+            <polyline points="10 9 9 9 8 9"></polyline>
+          </svg>
+        </div>`;
+    
     div.innerHTML = `
-      <div class="ul-cart-upload-icon placeholder">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-          <polyline points="14 2 14 8 20 8"></polyline>
-          <line x1="16" y1="13" x2="8" y2="13"></line>
-          <line x1="16" y1="17" x2="8" y2="17"></line>
-          <polyline points="10 9 9 9 8 9"></polyline>
-        </svg>
-      </div>
+      ${iconHtml}
       <div class="ul-cart-upload-details">
         <span class="ul-cart-upload-filename" title="${fileName}">${shortName}</span>
         <div class="ul-cart-upload-status">
-          <span class="dot processing"></span>
-          <span class="status-text">Checking...</span>
+          <span class="dot"></span>
+          <span class="status-text">Design attached</span>
         </div>
       </div>
       <span class="ul-cart-upload-badge">
@@ -266,17 +271,111 @@
       '.cart-notification-product',
       // AJAX carts
       '.cart-drawer-item',
-      '[data-cart-item-key]'
+      '[data-cart-item-key]',
+      // More themes - Prestige, Impulse, etc.
+      '.cart-item-row',
+      '.cart__item',
+      '.cart-products .product',
+      '.cart-product',
+      // Turbo theme
+      '.cart__card',
+      '.cart-template__item',
+      // Empire theme
+      '.cart__row--product',
+      // Warehouse theme  
+      '.line-item--product',
+      // Craft theme
+      '.cart-item__wrapper',
+      // Sense theme
+      '.cart-item--product',
+      // Supply theme
+      '.cart__product-information',
+      // Theme.co themes
+      '.x-cart-item',
+      // Flex theme
+      '.cart-item-container',
+      // Pipeline theme
+      '.cart__product-item',
+      // Narrative theme
+      '.cart-item-block',
+      // Express theme
+      '.cart-drawer__item--product',
+      // Motion theme
+      '.cart__item-row',
+      // Streamline theme
+      '.cart__line-item',
+      // Venue theme
+      '.cart-item__container',
+      // Studio theme
+      '.cart-drawer-item__content',
+      // Colorblock theme
+      '.cart-item--full',
+      // Taste theme
+      '.cart-page__item',
+      // Crave theme
+      '.cart__line-product',
+      // Be Yours theme
+      '.cart-items__item'
     ];
 
     for (const selector of selectors) {
       const items = document.querySelectorAll(selector);
       if (items.length > 0) {
+        console.log('[Upload Lift Cart] Found items with selector:', selector, 'Count:', items.length);
         return items;
       }
     }
     
+    // Fallback: Try to find any element that looks like a cart item
+    const fallbackItems = findCartItemsFallback();
+    if (fallbackItems.length > 0) {
+      console.log('[Upload Lift Cart] Found items via fallback. Count:', fallbackItems.length);
+      return fallbackItems;
+    }
+    
     return [];
+  }
+  
+  // Fallback method to find cart items by analyzing DOM structure
+  function findCartItemsFallback() {
+    // Look for elements with product images inside cart-related containers
+    const cartContainers = document.querySelectorAll(
+      '[class*="cart"], [id*="cart"], [data-section-type="cart"], cart-items, .cart, #cart, #CartContainer'
+    );
+    
+    for (const container of cartContainers) {
+      // Find elements that contain product images and look like line items
+      const potentialItems = container.querySelectorAll(
+        'tr:has(img), li:has(img), div:has(img[src*="cdn.shopify"])'
+      );
+      
+      if (potentialItems.length > 0) {
+        // Filter to only include direct product containers (not nested)
+        const items = Array.from(potentialItems).filter(item => {
+          // Must have a product image
+          const hasProductImage = item.querySelector('img[src*="cdn.shopify"]');
+          // Should not be too nested
+          const depth = getCartContainerDepth(item, container);
+          return hasProductImage && depth < 5;
+        });
+        
+        if (items.length > 0) {
+          return items;
+        }
+      }
+    }
+    
+    return [];
+  }
+  
+  function getCartContainerDepth(element, container) {
+    let depth = 0;
+    let current = element;
+    while (current && current !== container) {
+      depth++;
+      current = current.parentElement;
+    }
+    return depth;
   }
 
   // Find the element to append upload info to within a line item
@@ -291,12 +390,27 @@
       '.product-details',
       '.line-item__content',
       'td.cart__meta',
-      '.cart-item-details'
+      '.cart-item-details',
+      // More themes
+      '.cart-item__info',
+      '.cart-product__info',
+      '.cart__item-details',
+      '.cart-item__content-wrapper',
+      '.product-info',
+      '.item-details',
+      '.cart__product-details',
+      '.line-item-details',
+      '.cart-drawer__item-content',
+      '.cart-item__text',
+      '.cart__item-content',
+      // Fallback to any element with "detail" or "info" in class
+      '[class*="detail"]',
+      '[class*="info"]:not(img):not(svg)'
     ];
 
     for (const selector of selectors) {
       const target = lineItem.querySelector(selector);
-      if (target) return target;
+      if (target && target.offsetParent !== null) return target;
     }
     
     // Fallback: append to line item itself
@@ -318,13 +432,28 @@
   // Main function to process cart
   async function processCart() {
     const cart = await getCartData();
-    if (!cart || !cart.items || cart.items.length === 0) return;
+    if (!cart || !cart.items || cart.items.length === 0) {
+      console.log('[Upload Lift Cart] No cart data or empty cart');
+      return;
+    }
+    
+    console.log('[Upload Lift Cart] Processing cart with', cart.items.length, 'items');
 
     const lineItemElements = findCartLineItems();
     if (lineItemElements.length === 0) {
-      console.log('[Upload Lift Cart] No cart line items found');
+      console.log('[Upload Lift Cart] No cart line items found in DOM');
+      console.log('[Upload Lift Cart] Debugging: Looking for cart containers...');
+      const cartContainers = document.querySelectorAll('[class*="cart"], [id*="cart"]');
+      console.log('[Upload Lift Cart] Found', cartContainers.length, 'cart-related elements');
+      cartContainers.forEach(el => {
+        if (el.children.length > 0 && el.children.length < 50) {
+          console.log('[Upload Lift Cart] Container:', el.tagName, el.className, el.id, 'Children:', el.children.length);
+        }
+      });
       return;
     }
+    
+    console.log('[Upload Lift Cart] Found', lineItemElements.length, 'line item elements');
 
     // Create a map of cart items with upload properties
     const uploadItems = new Map();
@@ -332,11 +461,16 @@
       const uploadId = item.properties?.[CONFIG.propertyKey] || 
                        item.properties?.['_ul_upload_id'];
       const designFile = item.properties?.[CONFIG.designFileKey] ||
-                         item.properties?.['_ul_design_file'];
+                         item.properties?.['_ul_design_file'] ||
+                         item.properties?.['_ul_file_name'];
+      const thumbnail = item.properties?.['_ul_thumbnail'] || 
+                        item.properties?.['_ul_upload_url'];
       
       if (uploadId) {
-        uploadItems.set(item.key, { uploadId, designFile, index });
-        uploadItems.set(index, { uploadId, designFile, key: item.key });
+        uploadItems.set(item.key, { uploadId, designFile, thumbnail, index, variantId: item.variant_id });
+        uploadItems.set(index, { uploadId, designFile, thumbnail, key: item.key, variantId: item.variant_id });
+        uploadItems.set(String(item.variant_id), { uploadId, designFile, thumbnail, key: item.key, index });
+        console.log('[Upload Lift Cart] Found upload item:', uploadId, 'at index', index, 'key:', item.key);
       }
     });
 
@@ -344,28 +478,47 @@
       console.log('[Upload Lift Cart] No upload items in cart');
       return;
     }
+    
+    console.log('[Upload Lift Cart] Found', uploadItems.size / 3, 'items with uploads');
 
     // Process each line item element
     lineItemElements.forEach((lineItem, index) => {
       // Skip if already processed
-      if (lineItem.querySelector('.ul-cart-upload-info')) return;
+      if (lineItem.querySelector('.ul-cart-upload-info')) {
+        console.log('[Upload Lift Cart] Item', index, 'already has upload info, skipping');
+        return;
+      }
 
-      // Try to find matching cart item
+      // Try to find matching cart item by key
       const key = getLineItemKey(lineItem);
       let uploadData = key ? uploadItems.get(key) : null;
+      
+      // Try by variant ID
+      if (!uploadData) {
+        const variantId = lineItem.dataset.variantId || 
+                          lineItem.getAttribute('data-variant-id') ||
+                          lineItem.querySelector('[data-variant-id]')?.dataset.variantId;
+        if (variantId) {
+          uploadData = uploadItems.get(String(variantId));
+        }
+      }
       
       // Fallback to index matching
       if (!uploadData && uploadItems.has(index)) {
         uploadData = uploadItems.get(index);
+        console.log('[Upload Lift Cart] Matched by index:', index);
       }
 
       if (uploadData) {
+        console.log('[Upload Lift Cart] Adding upload info to item', index, 'uploadId:', uploadData.uploadId);
         const target = findAppendTarget(lineItem);
-        const infoEl = createUploadInfoElement(lineItem, uploadData.uploadId, uploadData.designFile);
+        const infoEl = createUploadInfoElement(lineItem, uploadData.uploadId, uploadData.designFile, uploadData.thumbnail);
         target.appendChild(infoEl);
         
         // Fetch and update status
         updateUploadInfo(infoEl, uploadData.uploadId);
+      } else {
+        console.log('[Upload Lift Cart] No upload data for item', index, 'key:', key);
       }
     });
   }
