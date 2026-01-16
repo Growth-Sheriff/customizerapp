@@ -23,6 +23,35 @@
 <script src="{{ 'ul-remote-logger.js' | asset_url }}"></script>
 
 {% comment %}
+  Mobile-First Ordering: Ensure DTF block appears first on mobile
+  This uses CSS order property to reposition within flex/grid parent
+{% endcomment %}
+<style>
+  @media (max-width: 749px) {
+    /* Target the app block wrapper - Shopify wraps blocks in divs with data-shopify attribute */
+    [data-shopify-editor-block] {
+      order: 10; /* Default order for other blocks */
+    }
+    /* DTF Transfer block gets highest priority (lowest order number) */
+    [data-shopify-editor-block]:has(.ul-dtf-main),
+    .ul-dtf-main {
+      order: -1 !important;
+    }
+    /* Ensure parent uses flexbox with column direction */
+    .product__info-container,
+    .product-info,
+    .product__column,
+    .product-single__meta,
+    .product-main,
+    [class*="product"][class*="info"],
+    [class*="product"][class*="main"] {
+      display: flex !important;
+      flex-direction: column !important;
+    }
+  }
+</style>
+
+{% comment %}
   Load Global State Manager (FAZ 4)
   MUST load before other components
 {% endcomment %}

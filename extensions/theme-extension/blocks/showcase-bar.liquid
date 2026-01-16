@@ -5,6 +5,15 @@
 
 {{ 'ul-showcase.css' | asset_url | stylesheet_tag }}
 
+{% comment %} Mobile ordering - showcase bar comes after DTF block {% endcomment %}
+<style>
+  @media (max-width: 749px) {
+    .ul-showcase-section {
+      order: 5 !important;
+    }
+  }
+</style>
+
 {% comment %} Check if we're in theme editor {% endcomment %}
 {% assign is_design_mode = false %}
 {% if request.design_mode %}
