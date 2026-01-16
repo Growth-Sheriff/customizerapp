@@ -451,34 +451,53 @@
       </div>
     </div>
 
-    <!-- STEP 2: Select Size (Dropdown) -->
-    <div class="ul-section" id="ul-size-section-{{ product.id }}">
+    <!-- STEP 2: Select Options (Separate for each option) -->
+    <div class="ul-section" id="ul-options-section-{{ product.id }}">
       <div class="ul-section-header">
         <span class="ul-step-badge" id="ul-step-2-{{ product.id }}">2</span>
-        <span class="ul-section-title">Select Size</span>
-        <span class="ul-section-subtitle" id="ul-size-hint-{{ product.id }}"></span>
+        <span class="ul-section-title">Select Options</span>
       </div>
 
-      <div class="ul-size-dropdown-wrapper">
-        <select class="ul-size-dropdown" id="ul-size-select-{{ product.id }}" name="ul-variant-{{ product.id }}">
-          {% for variant in product.variants %}
-            <option 
-              value="{{ variant.id }}"
-              data-price="{{ variant.price | money_without_trailing_zeros }}"
-              data-price-raw="{{ variant.price }}"
-              data-title="{{ variant.title | escape }}"
-              {% if variant.available == false %}disabled{% endif %}
-              {% if forloop.first and variant.available %}selected{% endif %}
-            >
-              {{ variant.title }} - {{ variant.price | money_without_trailing_zeros }}{% unless variant.available %} (Sold Out){% endunless %}
-            </option>
-          {% endfor %}
-        </select>
-        <svg class="ul-dropdown-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
-          <path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
+      <!-- Render each product option separately -->
+      {% for option in product.options_with_values %}
+        <div class="ul-option-group" data-option-index="{{ forloop.index0 }}">
+          <label class="ul-option-label">{{ option.name }}</label>
+          <div class="ul-option-buttons" id="ul-option-{{ product.id }}-{{ forloop.index0 }}">
+            {% for value in option.values %}
+              {% assign is_selected = false %}
+              {% if option.selected_value == value %}
+                {% assign is_selected = true %}
+              {% elsif forloop.first %}
+                {% assign is_selected = true %}
+              {% endif %}
+              <button 
+                type="button" 
+                class="ul-option-btn{% if is_selected %} active{% endif %}"
+                data-option-index="{{ forloop.parentloop.index0 }}"
+                data-value="{{ value | escape }}"
+                data-product-id="{{ product.id }}"
+              >
+                {{ value }}
+              </button>
+            {% endfor %}
+          </div>
+        </div>
+      {% endfor %}
+
+      <!-- Price Display per Selected Variant -->
+      <div class="ul-selected-variant" id="ul-selected-variant-{{ product.id }}">
+        <span class="ul-variant-name" id="ul-variant-name-{{ product.id }}">{{ current_variant.title }}</span>
+        <span class="ul-variant-price" id="ul-variant-price-{{ product.id }}">{{ current_variant.price | money_without_trailing_zeros }}</span>
       </div>
+
+      <!-- Hidden input for selected variant ID -->
+      <input type="hidden" id="ul-size-select-{{ product.id }}" value="{{ current_variant.id }}" data-price-raw="{{ current_variant.price }}">
     </div>
+
+    <!-- Variant JSON Data for JS -->
+    <script type="application/json" id="ul-variants-json-{{ product.id }}">
+      {{ product.variants | json }}
+    </script>
 
     <!-- STEP 3: Quantity -->
     <div class="ul-section" id="ul-qty-section-{{ product.id }}">

@@ -228,8 +228,22 @@
           elements.tshirtBtn.style.display = 'flex';
         }
 
-        // Initialize selected variant from dropdown (preferred) or radio grid (legacy)
-        if (elements.sizeSelect) {
+        // Initialize selected variant 
+        // v4.3.0: Check for option buttons first (new system)
+        const variantsJsonEl = document.getElementById(`ul-variants-json-${productId}`);
+        const hasOptionButtons = container.querySelector('.ul-option-btn');
+        
+        if (variantsJsonEl && hasOptionButtons) {
+          // New option buttons system - variant will be set by bindOptionButtons
+          console.log('[UL] Using option buttons for variant selection');
+          // Get initial variant from hidden input
+          if (elements.sizeSelect && elements.sizeSelect.value) {
+            state.form.selectedVariantId = elements.sizeSelect.value;
+            state.form.selectedVariantPrice = parseInt(elements.sizeSelect.dataset.priceRaw, 10) || 0;
+            this.updatePriceDisplay(productId);
+          }
+        } else if (elements.sizeSelect && elements.sizeSelect.tagName === 'SELECT') {
+          // Legacy dropdown
           const selectedOption = elements.sizeSelect.options[elements.sizeSelect.selectedIndex];
           if (selectedOption && !selectedOption.disabled) {
             state.form.selectedVariantId = selectedOption.value;
@@ -449,8 +463,14 @@
         this.clearUpload(productId);
       });
 
-      // Size selection - Dropdown (v4.2.0) or legacy grid fallback
-      if (elements.sizeSelect) {
+      // Size selection - Option buttons (v4.3.0), Dropdown fallback, or legacy grid
+      this.bindOptionButtons(productId);
+      
+      if (elements.sizeSelect && !elements.sizeSelect.type) {
+        // Hidden input (new option buttons system) - already handled by bindOptionButtons
+        console.log('[UL] Using option buttons for variant selection');
+      } else if (elements.sizeSelect && elements.sizeSelect.tagName === 'SELECT') {
+        // Legacy dropdown fallback
         elements.sizeSelect.addEventListener('change', (e) => {
           const option = e.target.options[e.target.selectedIndex];
           if (option && option.value) {
@@ -1392,6 +1412,160 @@
 
     formatMoney(amount) {
       return '$' + amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    },
+
+    /**
+     * Bind option button clicks (v4.3.0 - separate option selectors)
+     * Handles Size, Color, Material etc. as separate button groups
+     */
+    bindOptionButtons(productId) {
+      const instance = this.instances[productId];
+      const container = instance.container;
+      
+      // Get variants JSON data
+      const variantsJsonEl = document.getElementById(`ul-variants-json-${productId}`);
+      if (!variantsJsonEl) {
+        console.log('[UL] No variants JSON found - using legacy selector');
+        return;
+      }
+      
+      let variants;
+      try {
+        variants = JSON.parse(variantsJsonEl.textContent);
+      } catch (e) {
+        console.error('[UL] Failed to parse variants JSON:', e);
+        return;
+      }
+      
+      // Store variants for later use
+      instance.variants = variants;
+      
+      // Get all option buttons
+      const optionButtons = container.querySelectorAll('.ul-option-btn');
+      
+      optionButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+          const optionIndex = parseInt(btn.dataset.optionIndex, 10);
+          const value = btn.dataset.value;
+          const btnProductId = btn.dataset.productId;
+          
+          if (btnProductId !== productId) return;
+          
+          // Update active state for this option group
+          const group = btn.closest('.ul-option-buttons');
+          group.querySelectorAll('.ul-option-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          
+          // Find matching variant based on all selected options
+          this.updateSelectedVariant(productId);
+        });
+      });
+      
+      // Initialize with current selection
+      this.updateSelectedVariant(productId);
+    },
+    
+    /**
+     * Update selected variant based on all option button selections
+     */
+    updateSelectedVariant(productId) {
+      const instance = this.instances[productId];
+      if (!instance.variants) return;
+      
+      const container = instance.container;
+      const { elements, state } = instance;
+      
+      // Collect selected options
+      const selectedOptions = [];
+      container.querySelectorAll('.ul-option-group').forEach((group, index) => {
+        const activeBtn = group.querySelector('.ul-option-btn.active');
+        if (activeBtn) {
+          selectedOptions[index] = activeBtn.dataset.value;
+        }
+      });
+      
+      // Find matching variant
+      const variant = instance.variants.find(v => {
+        return selectedOptions.every((opt, idx) => {
+          return v[`option${idx + 1}`] === opt;
+        });
+      });
+      
+      if (variant) {
+        // Update state
+        state.form.selectedVariantId = variant.id;
+        state.form.selectedVariantTitle = variant.title;
+        state.form.selectedVariantPrice = variant.price;
+        
+        // Update hidden input
+        if (elements.sizeSelect) {
+          elements.sizeSelect.value = variant.id;
+          elements.sizeSelect.dataset.priceRaw = variant.price;
+        }
+        
+        // Update variant display
+        const variantNameEl = document.getElementById(`ul-variant-name-${productId}`);
+        const variantPriceEl = document.getElementById(`ul-variant-price-${productId}`);
+        
+        if (variantNameEl) variantNameEl.textContent = variant.title;
+        if (variantPriceEl) variantPriceEl.textContent = this.formatMoney(variant.price / 100);
+        
+        // Mark unavailable options
+        this.updateOptionAvailability(productId, selectedOptions);
+        
+        // Update price display
+        this.updatePriceDisplay(productId);
+        this.validateForm(productId);
+        
+        // FAZ 8: Track selection
+        if (window.ULAnalytics) {
+          window.ULAnalytics.trackDTFSizeSelected({
+            size: variant.title,
+            variantId: variant.id,
+            price: variant.price / 100,
+            productId
+          });
+        }
+        
+        console.log('[UL] Variant selected:', variant.id, variant.title, variant.price);
+      } else {
+        console.warn('[UL] No matching variant found for options:', selectedOptions);
+      }
+    },
+    
+    /**
+     * Update option button availability based on current selection
+     */
+    updateOptionAvailability(productId, currentOptions) {
+      const instance = this.instances[productId];
+      if (!instance.variants) return;
+      
+      const container = instance.container;
+      
+      // For each option group, check which values have available variants
+      container.querySelectorAll('.ul-option-group').forEach((group, groupIndex) => {
+        group.querySelectorAll('.ul-option-btn').forEach(btn => {
+          const value = btn.dataset.value;
+          
+          // Check if any variant with this option value is available
+          const hasAvailableVariant = instance.variants.some(v => {
+            if (v[`option${groupIndex + 1}`] !== value) return false;
+            if (!v.available) return false;
+            
+            // Check other selected options match
+            return currentOptions.every((opt, idx) => {
+              if (idx === groupIndex) return true; // Skip current group
+              return !opt || v[`option${idx + 1}`] === opt;
+            });
+          });
+          
+          if (hasAvailableVariant) {
+            btn.classList.remove('unavailable');
+          } else {
+            btn.classList.add('unavailable');
+          }
+        });
+      });
     },
 
     /**
