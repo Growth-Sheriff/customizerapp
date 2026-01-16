@@ -2,58 +2,43 @@ import '@shopify/ui-extensions/preact';
 import { render } from 'preact';
 
 /**
- * Upload Design Display - Block Extension
- * Shows upload info for all cart lines with _ul_upload_id
+ * Upload Design Display - Static Cart Line Item Extension
+ * Target: purchase.checkout.cart-line-item.render-after
+ * 
+ * This renders AFTER each cart line item, under the line item properties.
+ * Uses shopify.target.value to get the current line item this extension is attached to.
+ * Does NOT require Shopify Plus!
  */
 export default function extension() {
-  console.log('[UL-Checkout] Extension starting...');
-  render(<UploadDisplay />, document.body);
+  console.log('[UL-Checkout] Static line item extension starting...');
+  render(<UploadLineDisplay />, document.body);
 }
 
-function UploadDisplay() {
-  // For block targets, use shopify.lines to get all cart lines
-  const lines = shopify.lines?.value || [];
+function UploadLineDisplay() {
+  // For static cart-line-item targets, shopify.target.value is the current CartLine
+  const line = shopify.target?.value;
   
-  console.log('[UL-Checkout] Block extension mounted');
-  console.log('[UL-Checkout] Lines count:', lines.length);
-  console.log('[UL-Checkout] Lines:', JSON.stringify(lines.map(l => ({
-    id: l.id,
-    title: l.merchandise?.title,
-    attrs: l.attributes?.length
-  }))));
+  console.log('[UL-Checkout] Line item extension mounted');
+  console.log('[UL-Checkout] Target line:', line?.id, line?.merchandise?.title);
   
-  // Filter lines that have upload data
-  const uploadLines = lines.filter(line => {
-    const attrs = line.attributes || [];
-    return attrs.some(a => a.key === '_ul_upload_id');
-  });
-  
-  console.log('[UL-Checkout] Upload lines found:', uploadLines.length);
-  
-  // If no uploads, show debug or nothing
-  if (uploadLines.length === 0) {
-    // Debug mode - show that extension is running
-    return (
-      <s-banner tone="info">
-        <s-text>✅ Upload Extension Active - {lines.length} items in cart (no uploads detected)</s-text>
-      </s-banner>
-    );
+  if (!line) {
+    console.log('[UL-Checkout] No line available');
+    return null;
   }
   
-  // Show upload info for each line with upload
-  return (
-    <s-stack direction="block" gap="base">
-      <s-heading level="3">📎 Uploaded Designs</s-heading>
-      {uploadLines.map(line => (
-        <UploadLineItem key={line.id} line={line} />
-      ))}
-    </s-stack>
-  );
-}
-
-function UploadLineItem({ line }) {
+  // Check if this line has upload data
   const attrs = line.attributes || [];
+  console.log('[UL-Checkout] Line attributes:', JSON.stringify(attrs));
+  
   const uploadId = findAttr(attrs, '_ul_upload_id');
+  
+  // Only render if this line has an upload
+  if (!uploadId) {
+    console.log('[UL-Checkout] No upload on this line item');
+    return null; // Nothing to show - no upload on this item
+  }
+  
+  // Get upload details
   const uploadUrl = findAttr(attrs, '_ul_upload_url');
   const thumbnail = findAttr(attrs, '_ul_thumbnail');
   const fileName = findAttr(attrs, '_ul_file_name') || 'Custom Design';
@@ -61,11 +46,13 @@ function UploadLineItem({ line }) {
   
   const imageUrl = thumbnail || uploadUrl;
   const linkUrl = uploadUrl || thumbnail;
-  const productTitle = line.merchandise?.title || 'Product';
   
+  console.log('[UL-Checkout] Rendering upload info:', { uploadId, fileName, designType });
+  
+  // Render upload info under this line item
   return (
-    <s-card padding="base">
-      <s-stack direction="inline" gap="base" blockAlignment="center">
+    <s-stack direction="block" gap="tight" padding="tight">
+      <s-stack direction="inline" gap="tight" blockAlignment="center">
         {imageUrl && (
           <s-image
             source={imageUrl}
@@ -75,9 +62,11 @@ function UploadLineItem({ line }) {
           />
         )}
         <s-stack direction="block" gap="extraTight">
-          <s-text size="small" emphasis="bold">{productTitle}</s-text>
+          <s-text size="small" emphasis="bold">
+            🎨 {fileName}
+          </s-text>
           <s-text size="extraSmall" appearance="subdued">
-            🎨 {fileName} • {designType.toUpperCase()}
+            Type: {designType.toUpperCase()}
           </s-text>
           {linkUrl && (
             <s-link to={linkUrl} external>
@@ -86,7 +75,7 @@ function UploadLineItem({ line }) {
           )}
         </s-stack>
       </s-stack>
-    </s-card>
+    </s-stack>
   );
 }
 

@@ -9,15 +9,16 @@ handle = "checkout-upload-display"
 type = "ui_extension"
 uid = "75fa9cf3-704b-8be2-29e0-d78cac960accf61b2993"
 
-# Block target - can be placed anywhere in checkout
+# Static target - renders AFTER each cart line item (under line item properties)
+# This does NOT require Shopify Plus - it auto-renders for every line item
 [[extensions.targeting]]
 module = "./src/CheckoutLineItem.jsx"
-target = "purchase.checkout.block.render"
+target = "purchase.checkout.cart-line-item.render-after"
 
-# Also show on Thank You page
+# Also show on Thank You page for each line item
 [[extensions.targeting]]
 module = "./src/CheckoutLineItem.jsx"
-target = "purchase.thank-you.block.render"
+target = "purchase.thank-you.cart-line-item.render-after"
 
 [extensions.capabilities]
 api_access = true
