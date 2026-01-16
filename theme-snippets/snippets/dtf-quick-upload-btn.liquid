@@ -557,7 +557,7 @@
       // Re-connect observer after DOM update
       if (observer) {
         setTimeout(() => {
-          observer.observe(document.body, { childList: true, subtree: false });
+          observer.observe(document.body, { childList: true, subtree: true });
         }, 200);
       }
     });
@@ -572,7 +572,7 @@
     initModals();
   }
   
-  // Re-init for dynamically loaded content - only watch direct children, not subtree
+  // Re-init for dynamically loaded content - watch entire subtree for dynamic sections
   let observer = null;
   
   // Debounced init to prevent rapid re-calls
@@ -583,17 +583,21 @@
   }
   
   observer = new MutationObserver((mutations) => {
-    // Only react to new templates being added
-    const hasNewTemplates = mutations.some(m => 
-      Array.from(m.addedNodes).some(n => 
-        n.nodeName === 'TEMPLATE' && n.id?.endsWith('-tpl')
-      )
+    // Check if any new templates were added anywhere in the DOM
+    const hasNewTemplates = mutations.some(m => {
+      // Direct template addition
+      if (Array.from(m.addedNodes).some(n => n.nodeName === 'TEMPLATE' && n.id?.endsWith('-tpl'))) {
+        return true;
+      }
+      // Template inside added container (sections, etc)
+      return Array.from(m.addedNodes).some(n => n.querySelector && n.querySelector('template[id$="-tpl"]'));
+    }
     );
     if (hasNewTemplates) {
       debouncedInit();
     }
   });
-  observer.observe(document.body, { childList: true, subtree: false });
+  observer.observe(document.body, { childList: true, subtree: true });
   
   // Event delegation for all clicks
   document.addEventListener('click', function(e) {

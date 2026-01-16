@@ -61,7 +61,7 @@ redirect_urls = [
 embedded = false
 
 [app_proxy]
-url = "https://customizerapp.dev/api"
+url = "https://customizerapp.dev"
 subpath = "customizer"
 prefix = "apps"
 
