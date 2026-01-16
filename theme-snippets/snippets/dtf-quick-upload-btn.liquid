@@ -102,7 +102,7 @@
                 <label>{{ option.name }}</label>
                 <select id="ul-option-{{ unique_id }}-{{ forloop.index0 }}" class="ul-variant-select">
                   {% for value in option.values %}
-                    <option value="{{ value }}" {% if option.selected_value == value %}selected{% endif %}>{{ value }}</option>
+                    <option value="{{ value | escape }}" {% if option.selected_value == value %}selected{% endif %}>{{ value }}</option>
                   {% endfor %}
                 </select>
               </div>
@@ -1026,11 +1026,14 @@
       const options = [];
       let i = 0;
       while (document.getElementById('ul-option-' + uniqueId + '-' + i)) {
-        options.push(document.getElementById('ul-option-' + uniqueId + '-' + i).value);
+        // Get the selected option's value - browser auto-decodes HTML entities
+        const selectEl = document.getElementById('ul-option-' + uniqueId + '-' + i);
+        options.push(selectEl.value);
         i++;
       }
       
       console.log('[Upload Lift] Selected options:', options);
+      console.log('[Upload Lift] Available variants:', variantsData.map(v => ({id: v.id, opt1: v.option1, opt2: v.option2})));
       
       let variant = null;
       
@@ -1038,8 +1041,13 @@
       if (options.length === 0) {
         variant = variantsData[0];
       } else {
+        // Find matching variant - compare with decoded values
         variant = variantsData.find(v => {
-          return options.every((opt, idx) => v['option' + (idx + 1)] === opt);
+          return options.every((opt, idx) => {
+            const variantOpt = v['option' + (idx + 1)];
+            // Direct comparison - both should be decoded strings now
+            return variantOpt === opt;
+          });
         });
       }
       
