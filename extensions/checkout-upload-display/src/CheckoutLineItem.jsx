@@ -3,134 +3,96 @@ import { render } from 'preact';
 
 /**
  * Upload Design Display - Checkout Line Item Extension
- * Shows upload info (thumbnail, filename, link) under each cart line item
- * that has _ul_upload_id property
- * 
- * Based on Shopify docs: shopify.target.value contains the cart line
+ * Shows upload info under cart line items with _ul_upload_id
  */
 export default function extension() {
   render(<UploadDisplay />, document.body);
 }
 
 function UploadDisplay() {
-  // shopify.target.value contains the cart line for cart-line-item targets
+  // Always show something to confirm extension is running
+  const target = shopify.extension?.target || 'unknown';
   const cartLine = shopify.target?.value;
   
-  // Debug logging - check browser console
-  console.log('[Upload Display] Extension mounted');
-  console.log('[Upload Display] Target:', shopify.extension?.target);
-  console.log('[Upload Display] Cart line:', cartLine);
+  // Log to console
+  console.log('[UL-Checkout] Running on target:', target);
+  console.log('[UL-Checkout] Cart line:', cartLine);
   
+  // If no cart line, show debug
   if (!cartLine) {
-    console.log('[Upload Display] No cart line available');
-    return <s-text size="extraSmall" appearance="subdued">[Debug: No cart line]</s-text>;
-  }
-  
-  // Get attributes from cart line
-  const attributes = cartLine.attributes || [];
-  console.log('[Upload Display] Attributes:', attributes);
-  console.log('[Upload Display] Merchandise:', cartLine.merchandise?.title);
-  
-  // Find upload-related attributes
-  const uploadId = findAttribute(attributes, '_ul_upload_id');
-  const uploadUrl = findAttribute(attributes, '_ul_upload_url');
-  const thumbnail = findAttribute(attributes, '_ul_thumbnail');
-  const fileName = findAttribute(attributes, '_ul_file_name') || 
-                   findAttribute(attributes, '_ul_design_file') || 
-                   'Custom Design';
-  const designType = findAttribute(attributes, '_ul_design_type') || 'dtf';
-  
-  console.log('[Upload Display] Upload ID:', uploadId);
-  console.log('[Upload Display] All attr keys:', attributes.map(a => a.key));
-  
-  // If no upload ID, show debug info temporarily
-  if (!uploadId) {
-    // During testing, show that extension is running
     return (
       <s-text size="extraSmall" appearance="subdued">
-        [Debug: {attributes.length} attrs, no _ul_upload_id]
+        📦 Extension active (no line data)
       </s-text>
     );
   }
   
-  // Determine URLs
-  const displayUrl = thumbnail || uploadUrl;
-  const linkUrl = uploadUrl || thumbnail;
+  const attributes = cartLine.attributes || [];
+  const productTitle = cartLine.merchandise?.title || 'Product';
   
-  console.log('[Upload Display] Rendering for upload:', uploadId);
+  console.log('[UL-Checkout] Product:', productTitle);
+  console.log('[UL-Checkout] Attributes count:', attributes.length);
+  console.log('[UL-Checkout] Attributes:', JSON.stringify(attributes));
+  
+  // Find upload attributes
+  const uploadId = findAttr(attributes, '_ul_upload_id');
+  const uploadUrl = findAttr(attributes, '_ul_upload_url');
+  const thumbnail = findAttr(attributes, '_ul_thumbnail');
+  const fileName = findAttr(attributes, '_ul_file_name') || 'Custom Design';
+  const designType = findAttr(attributes, '_ul_design_type') || 'DTF';
+  
+  // No upload? Show debug info
+  if (!uploadId) {
+    const attrKeys = attributes.map(a => a.key).join(', ');
+    return (
+      <s-text size="extraSmall" appearance="subdued">
+        🔍 {attributes.length} attrs: {attrKeys || 'none'}
+      </s-text>
+    );
+  }
+  
+  // Has upload - show full display
+  const imageUrl = thumbnail || uploadUrl;
+  const linkUrl = uploadUrl || thumbnail;
   
   return (
     <s-stack direction="block" gap="tight" padding="tight">
       <s-divider />
-      <s-stack direction="inline" gap="base" padding="tight" cornerRadius="base">
-        {/* Thumbnail */}
-        {displayUrl && (
+      <s-stack direction="inline" gap="base" blockAlignment="center">
+        {imageUrl && (
           <s-image
-            src={displayUrl}
-            alt="Design preview"
-            size="thumbnail"
+            source={imageUrl}
+            alt="Design"
+            aspectRatio={1}
             cornerRadius="base"
-            border="base"
+            fit="cover"
           />
         )}
-        
-        {/* Info */}
         <s-stack direction="block" gap="extraTight">
-          <s-stack direction="inline" gap="extraTight" inlineAlignment="start">
-            <s-icon name="file" size="small" />
-            <s-text size="small" emphasis="bold">
-              {truncateFileName(fileName, 25)}
-            </s-text>
-          </s-stack>
-          
-          <s-stack direction="inline" gap="extraTight" inlineAlignment="start">
-            <s-icon name="checkCircle" size="extraSmall" />
-            <s-text size="extraSmall" appearance="subdued">
-              Custom Design Attached
-            </s-text>
-          </s-stack>
-          
-          {/* View Design Link */}
+          <s-text size="small" emphasis="bold">
+            🎨 {truncate(fileName, 20)}
+          </s-text>
+          <s-text size="extraSmall" appearance="subdued">
+            Custom Design • {designType.toUpperCase()}
+          </s-text>
           {linkUrl && (
-            <s-link href={linkUrl} external>
-              <s-stack direction="inline" gap="extraTight" inlineAlignment="start">
-                <s-text size="small" appearance="accent">
-                  View Design
-                </s-text>
-                <s-icon name="external" size="extraSmall" />
-              </s-stack>
+            <s-link to={linkUrl} external>
+              View Design ↗
             </s-link>
           )}
         </s-stack>
-        
-        {/* Badge */}
-        <s-badge tone="info" size="small">
-          {designType.toUpperCase()}
-        </s-badge>
       </s-stack>
     </s-stack>
   );
 }
 
-/**
- * Find attribute value by key
- */
-function findAttribute(attributes, key) {
-  if (!attributes || !Array.isArray(attributes)) return null;
-  const attr = attributes.find(a => a.key === key);
-  return attr?.value || null;
+function findAttr(attrs, key) {
+  if (!attrs || !Array.isArray(attrs)) return null;
+  const found = attrs.find(a => a.key === key);
+  return found?.value || null;
 }
 
-/**
- * Truncate filename for display
- */
-function truncateFileName(name, maxLength) {
-  if (!name) return 'Custom Design';
-  if (name.length <= maxLength) return name;
-  
-  const ext = name.split('.').pop();
-  const baseName = name.substring(0, name.length - ext.length - 1);
-  const truncatedBase = baseName.substring(0, maxLength - ext.length - 4);
-  
-  return `${truncatedBase}...${ext}`;
+function truncate(str, max) {
+  if (!str) return 'Design';
+  return str.length > max ? str.slice(0, max) + '...' : str;
 }
