@@ -231,7 +231,7 @@
         // Initialize selected variant 
         // v4.3.0: Check for option buttons first (new system)
         const variantsJsonEl = document.getElementById(`ul-variants-json-${productId}`);
-        const hasOptionButtons = container.querySelector('.ul-option-btn');
+        const hasOptionButtons = elements.container.querySelector('.ul-option-btn');
         
         if (variantsJsonEl && hasOptionButtons) {
           // New option buttons system - variant will be set by bindOptionButtons
