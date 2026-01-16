@@ -544,23 +544,35 @@
     if (isInitializing) return;
     isInitializing = true;
     
-    document.querySelectorAll('template[id$="-tpl"]').forEach(tpl => {
-      if (tpl.dataset.initialized) return;
-      tpl.dataset.initialized = 'true';
+    // Collect templates first, then process (to avoid mutation during iteration)
+    const templates = Array.from(document.querySelectorAll('template[id$="-tpl"]:not([data-moved])'));
+    
+    if (templates.length === 0) {
+      isInitializing = false;
+      return;
+    }
+    
+    // Disconnect observer before DOM mutations
+    if (observer) observer.disconnect();
+    
+    templates.forEach(tpl => {
+      // Mark as moved immediately
+      tpl.dataset.moved = 'true';
       
-      // Disconnect observer temporarily to prevent loop
-      if (observer) observer.disconnect();
-      
+      // Clone content and append to body container
       const content = tpl.content.cloneNode(true);
       modalContainer.appendChild(content);
       
-      // Re-connect observer after DOM update
-      if (observer) {
-        setTimeout(() => {
-          observer.observe(document.body, { childList: true, subtree: true });
-        }, 200);
-      }
+      // CRITICAL: Remove original template from section to prevent duplicate modals
+      tpl.remove();
     });
+    
+    // Re-connect observer after all DOM updates complete
+    if (observer) {
+      setTimeout(() => {
+        observer.observe(document.body, { childList: true, subtree: true });
+      }, 100);
+    }
     
     isInitializing = false;
   }
