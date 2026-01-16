@@ -739,14 +739,38 @@
       const uniqueId = dropzone.id.replace('ul-dropzone-', '');
       const modal = input.closest('.ul-quick-modal');
       handleUpload(input, uniqueId, modal);
+      return;
     }
     
-    // Variant select change
-    if (e.target.matches('.ul-variant-select')) {
+    // Variant select change - check by class or by ID pattern
+    const isVariantSelect = e.target.matches('.ul-variant-select') || 
+                            (e.target.tagName === 'SELECT' && e.target.id && e.target.id.startsWith('ul-option-'));
+    
+    if (isVariantSelect) {
       const select = e.target;
       const id = select.id;
-      const match = id.match(/ul-option-(.+)-\d+$/);
-      if (match) updateVariant(match[1]);
+      console.log('[Upload Lift] Variant select changed:', id);
+      
+      // Extract uniqueId: ul-option-{uniqueId}-{optionIndex}
+      // uniqueId can contain dashes, so we need to find the last dash followed by a number
+      const lastDashIndex = id.lastIndexOf('-');
+      if (lastDashIndex > 10) { // 'ul-option-' is 10 chars
+        const uniqueId = id.substring(10, lastDashIndex); // Skip 'ul-option-' prefix
+        console.log('[Upload Lift] Extracted uniqueId:', uniqueId);
+        updateVariant(uniqueId);
+      }
+    }
+  });
+  
+  // Also listen for 'input' event as fallback for some browsers/themes
+  document.addEventListener('input', function(e) {
+    if (e.target.tagName === 'SELECT' && e.target.id && e.target.id.startsWith('ul-option-')) {
+      const id = e.target.id;
+      const lastDashIndex = id.lastIndexOf('-');
+      if (lastDashIndex > 10) {
+        const uniqueId = id.substring(10, lastDashIndex);
+        updateVariant(uniqueId);
+      }
     }
   });
   
@@ -1052,16 +1076,22 @@
   
   // Update total price display
   function updateTotalPrice(uniqueId) {
+    console.log('[Upload Lift] updateTotalPrice called for:', uniqueId);
+    
     const variantInput = document.getElementById('ul-variant-' + uniqueId);
     const qtyInput = document.getElementById('ul-qty-' + uniqueId);
     const unitPriceEl = document.getElementById('ul-unit-price-' + uniqueId);
     const multiplyEl = document.getElementById('ul-price-multiply-' + uniqueId);
     const totalPriceEl = document.getElementById('ul-total-price-' + uniqueId);
     
-    if (!variantInput || !qtyInput || !totalPriceEl) return;
+    if (!variantInput || !qtyInput || !totalPriceEl) {
+      console.warn('[Upload Lift] Missing elements - variantInput:', !!variantInput, 'qtyInput:', !!qtyInput, 'totalPriceEl:', !!totalPriceEl);
+      return;
+    }
     
     // Get price from data attribute or fetch from variants
     let unitPrice = parseInt(variantInput.dataset.price, 10);
+    console.log('[Upload Lift] Price from data attr:', unitPrice);
     
     // If no price in data attribute, get from variants JSON
     if (!unitPrice || isNaN(unitPrice)) {
@@ -1073,12 +1103,18 @@
           if (variant) {
             unitPrice = variant.price;
             variantInput.dataset.price = unitPrice;
+            console.log('[Upload Lift] Price from variants JSON:', unitPrice);
           }
-        } catch (e) {}
+        } catch (e) {
+          console.error('[Upload Lift] Error parsing variants:', e);
+        }
       }
     }
     
-    if (!unitPrice || isNaN(unitPrice)) return;
+    if (!unitPrice || isNaN(unitPrice)) {
+      console.warn('[Upload Lift] No valid price found');
+      return;
+    }
     
     const quantity = parseInt(qtyInput.value, 10) || 1;
     const totalPrice = unitPrice * quantity;
