@@ -1,0 +1,24 @@
+# Learn more about configuring your checkout UI extension:
+# https://shopify.dev/docs/api/checkout-ui-extensions/latest/configuration
+
+api_version = "2025-10"
+
+[[extensions]]
+name = "Upload Design Display"
+handle = "checkout-upload-display"
+type = "ui_extension"
+uid = "75fa9cf3-704b-8be2-29e0-d78cac960accf61b2993"
+
+# Render after each cart line item (in Order Summary)
+[[extensions.targeting]]
+module = "./src/CheckoutLineItem.jsx"
+target = "purchase.checkout.cart-line-item.render-after"
+
+# Also show on Thank You page
+[[extensions.targeting]]
+module = "./src/CheckoutLineItem.jsx"
+target = "purchase.thank-you.cart-line-item.render-after"
+
+[extensions.capabilities]
+api_access = true
+network_access = true
