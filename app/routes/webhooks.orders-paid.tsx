@@ -76,7 +76,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
     for (const lineItem of order.line_items || []) {
       const uploadId = lineItem.properties?.find(
-        (p: { name: string }) => p.name === "_upload_lift_id"
+        (p: { name: string }) => p.name === "_ul_upload_id"
       )?.value;
 
       if (uploadId) {
