@@ -1089,34 +1089,61 @@
      */
     updatePriceDisplay(productId) {
       const instance = this.instances[productId];
+      if (!instance) {
+        console.warn('[UL] No instance for updatePriceDisplay:', productId);
+        return;
+      }
+      
       const { elements, state } = instance;
       const { form, config } = state;
 
+      console.log('[UL] updatePriceDisplay called:', {
+        productId,
+        variantId: form.selectedVariantId,
+        variantTitle: form.selectedVariantTitle,
+        variantPrice: form.selectedVariantPrice,
+        quantity: form.quantity
+      });
+
       // Update selected size display
-      elements.selectedSize.textContent = form.selectedVariantTitle || '-';
+      if (elements.selectedSize) {
+        elements.selectedSize.textContent = form.selectedVariantTitle || '-';
+      }
       
-      // Format unit price
-      const unitPrice = form.selectedVariantPrice / 100;
-      elements.unitPrice.textContent = this.formatMoney(unitPrice);
+      // Format unit price - price is in cents from Shopify
+      const unitPrice = (form.selectedVariantPrice || 0) / 100;
+      if (elements.unitPrice) {
+        elements.unitPrice.textContent = this.formatMoney(unitPrice);
+      }
 
       // Update quantity display
-      elements.qtyDisplay.textContent = form.quantity;
+      if (elements.qtyDisplay) {
+        elements.qtyDisplay.textContent = form.quantity || 1;
+      }
 
       // Calculate total (with potential bulk discount)
-      let total = unitPrice * form.quantity;
+      let total = unitPrice * (form.quantity || 1);
       
       // Check for bulk discount
-      if (form.quantity >= config.bulkDiscountThreshold) {
-        const discount = total * (config.bulkDiscountPercent / 100);
-        total = total - discount;
-        elements.bulkHint.style.display = 'flex';
-      } else {
-        elements.bulkHint.style.display = 'none';
+      if (elements.bulkHint) {
+        if (form.quantity >= (config.bulkDiscountThreshold || 999)) {
+          const discount = total * ((config.bulkDiscountPercent || 0) / 100);
+          total = total - discount;
+          elements.bulkHint.style.display = 'flex';
+        } else {
+          elements.bulkHint.style.display = 'none';
+        }
       }
 
       // Update total display
-      elements.totalPrice.textContent = this.formatMoney(total);
-      elements.btnPrice.textContent = `• ${this.formatMoney(total)}`;
+      if (elements.totalPrice) {
+        elements.totalPrice.textContent = this.formatMoney(total);
+      }
+      if (elements.btnPrice) {
+        elements.btnPrice.textContent = `• ${this.formatMoney(total)}`;
+      }
+      
+      console.log('[UL] Price updated - Unit:', this.formatMoney(unitPrice), 'Qty:', form.quantity, 'Total:', this.formatMoney(total));
     },
 
     /**
@@ -1432,6 +1459,7 @@
       let variants;
       try {
         variants = JSON.parse(variantsJsonEl.textContent);
+        console.log('[UL] Loaded', variants.length, 'variants for product', productId);
       } catch (e) {
         console.error('[UL] Failed to parse variants JSON:', e);
         return;
@@ -1442,13 +1470,12 @@
       
       // Get all option dropdowns
       const optionDropdowns = container.querySelectorAll('.ul-option-dropdown');
+      console.log('[UL] Found', optionDropdowns.length, 'option dropdowns');
       
       optionDropdowns.forEach(dropdown => {
         dropdown.addEventListener('change', () => {
-          const dropdownProductId = dropdown.dataset.productId;
-          if (dropdownProductId !== productId) return;
-          
-          // Find matching variant based on all selected options
+          // Always trigger update for this product's dropdowns
+          console.log('[UL] Dropdown changed:', dropdown.id, 'value:', dropdown.value);
           this.updateSelectedVariant(productId);
         });
       });
@@ -1462,7 +1489,10 @@
      */
     updateSelectedVariant(productId) {
       const instance = this.instances[productId];
-      if (!instance.variants) return;
+      if (!instance || !instance.variants) {
+        console.warn('[UL] No variants data for product:', productId);
+        return;
+      }
       
       const container = instance.container;
       const { elements, state } = instance;
@@ -1473,6 +1503,8 @@
         selectedOptions[index] = dropdown.value;
       });
       
+      console.log('[UL] Selected options:', selectedOptions);
+      
       // Find matching variant
       const variant = instance.variants.find(v => {
         return selectedOptions.every((opt, idx) => {
@@ -1481,10 +1513,12 @@
       });
       
       if (variant) {
-        // Update state
+        console.log('[UL] Matched variant:', variant.id, variant.title, 'Price:', variant.price);
+        
+        // Update state with CORRECT price (Shopify returns price in cents)
         state.form.selectedVariantId = variant.id;
         state.form.selectedVariantTitle = variant.title;
-        state.form.selectedVariantPrice = variant.price;
+        state.form.selectedVariantPrice = variant.price; // Already in cents from Shopify
         
         // Update hidden input
         if (elements.sizeSelect) {
@@ -1492,14 +1526,14 @@
           elements.sizeSelect.dataset.priceRaw = variant.price;
         }
         
-        // Update variant display
+        // Update variant display - price is in cents, convert to dollars
         const variantNameEl = document.getElementById(`ul-variant-name-${productId}`);
         const variantPriceEl = document.getElementById(`ul-variant-price-${productId}`);
         
         if (variantNameEl) variantNameEl.textContent = variant.title;
         if (variantPriceEl) variantPriceEl.textContent = this.formatMoney(variant.price / 100);
         
-        // Update price display
+        // Update price display (this handles unit price, quantity, and total)
         this.updatePriceDisplay(productId);
         this.validateForm(productId);
         
@@ -1512,10 +1546,25 @@
             productId
           });
         }
-        
-        console.log('[UL] Variant selected:', variant.id, variant.title, variant.price);
       } else {
         console.warn('[UL] No matching variant found for options:', selectedOptions);
+        // Fallback: use first available variant
+        if (instance.variants.length > 0) {
+          const fallback = instance.variants.find(v => v.available) || instance.variants[0];
+          console.log('[UL] Using fallback variant:', fallback.id, fallback.title);
+          
+          state.form.selectedVariantId = fallback.id;
+          state.form.selectedVariantTitle = fallback.title;
+          state.form.selectedVariantPrice = fallback.price;
+          
+          if (elements.sizeSelect) {
+            elements.sizeSelect.value = fallback.id;
+            elements.sizeSelect.dataset.priceRaw = fallback.price;
+          }
+          
+          this.updatePriceDisplay(productId);
+          this.validateForm(productId);
+        }
       }
     },
 
