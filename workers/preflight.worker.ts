@@ -270,13 +270,10 @@ const preflightWorker = new Worker<PreflightJobData>(
         select: { preflightStatus: true },
       });
 
-      // Get upload to check autoApprove setting
-      const currentUpload = await prisma.upload.findUnique({
-        where: { id: uploadId },
-        select: { metadata: true },
-      });
-      const uploadMetadata = (currentUpload?.metadata as Record<string, any>) || {};
-      const autoApprove = uploadMetadata.autoApprove !== false; // Default to true
+      // Get autoApprove setting from shop settings (not upload metadata)
+      // shop is already fetched at the beginning of this function
+      const shopSettings = (shop.settings as Record<string, any>) || {};
+      const autoApprove = shopSettings.autoApprove !== false; // Default to true
 
       const hasError = allItems.some(i => i.preflightStatus === "error");
       const hasWarning = allItems.some(i => i.preflightStatus === "warning");

@@ -109,18 +109,12 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   try {
-    // Update upload status based on auto-approve setting
-    // If autoApprove is true: status goes to "uploaded" -> "processing" -> "ready"
-    // If autoApprove is false: status goes to "uploaded" -> "processing" -> "pending_approval"
+    // Update upload status to "uploaded" - preflight worker will handle the rest
+    // autoApprove is read from shop.settings by the preflight worker
     await prisma.upload.update({
       where: { id: uploadId },
       data: { 
         status: "uploaded",
-        // Store autoApprove flag in metadata for preflight worker to use
-        metadata: {
-          ...(upload.metadata as Record<string, any> || {}),
-          autoApprove,
-        }
       },
     });
 
