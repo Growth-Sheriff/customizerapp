@@ -3275,13 +3275,18 @@ console.log('[ULTShirtModal] Script loading...');
       
       // Prepare line item properties
       const properties = {
+        // Hidden keys (internal use)
         '_ul_upload_id': designData.uploadId,
-        '_ul_upload_url': designData.originalUrl || designData.thumbnailUrl,
-        '_ul_upload_name': designData.name,
         '_ul_tshirt_color': this.step2.tshirtColorName,
         '_ul_tshirt_size': this.step2.tshirtSize,
         '_ul_locations': this.getEnabledLocations().join(','),
-        '_ul_is_tshirt': 'true'
+        '_ul_is_tshirt': 'true',
+        // Visible keys (shown in checkout)
+        'Uploaded File': designData.originalUrl || designData.thumbnailUrl,
+        'Design Name': designData.name,
+        'T-Shirt Color': this.step2.tshirtColorName,
+        'T-Shirt Size': this.step2.tshirtSize,
+        'Print Locations': this.getEnabledLocations().join(', ')
       };
       
       // Add location settings

@@ -278,7 +278,8 @@
       const isUploadLift = item.properties && (
         item.properties['_ul_upload_id'] || 
         item.properties['_ul_is_tshirt'] ||
-        item.properties['_upload_id']
+        item.properties['_upload_id'] ||
+        item.properties['Uploaded File']
       );
       
       const isTShirt = item.properties && item.properties['_ul_is_tshirt'] === 'true';
@@ -288,9 +289,9 @@
       let meta = `Qty: ${item.quantity}`;
       
       if (isTShirt) {
-        const color = item.properties['_ul_tshirt_color'] || '';
-        const size = item.properties['_ul_tshirt_size'] || '';
-        const locations = item.properties['_ul_locations'] || 'front';
+        const color = item.properties['_ul_tshirt_color'] || item.properties['T-Shirt Color'] || '';
+        const size = item.properties['_ul_tshirt_size'] || item.properties['T-Shirt Size'] || '';
+        const locations = item.properties['_ul_locations'] || item.properties['Print Locations'] || 'front';
         
         if (color || size) {
           meta = `${color}${color && size ? ', ' : ''}${size} • Qty: ${item.quantity}`;

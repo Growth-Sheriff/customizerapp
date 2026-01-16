@@ -1310,16 +1310,18 @@
       try {
         // Build cart item with properties
         const properties = {
+          // Hidden keys (internal use)
           '_ul_upload_id': upload.uploadId,
-          '_ul_upload_url': upload.result.originalUrl,
           '_ul_thumbnail': upload.result.thumbnailUrl,
-          '_ul_design_type': 'dtf',
-          '_ul_file_name': upload.file.name
+          // Visible keys (shown in checkout)
+          'Uploaded File': upload.result.originalUrl,
+          'Design Type': 'DTF Transfer',
+          'File Name': upload.file.name
         };
 
         // Add dimensions if available
         if (upload.result.width && upload.result.height) {
-          properties['_ul_dimensions'] = `${upload.result.width}x${upload.result.height}`;
+          properties['Dimensions'] = `${upload.result.width}x${upload.result.height}`;
         }
 
         // Add extra answers

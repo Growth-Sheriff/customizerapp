@@ -492,8 +492,10 @@
           // Build cart properties
           const size = SHEET_SIZES.find(s => s.id === state.selectedSize);
           const properties = {
+            // Hidden keys (internal use)
             '_ul_upload_id': uploadResult.id,
-            '_ul_upload_url': uploadResult.url,
+            // Visible keys (shown in checkout)
+            'Uploaded File': uploadResult.url,
             'Sheet Size': size?.name || state.selectedSize,
             'Upload Type': 'Custom Design'
           };
@@ -530,8 +532,10 @@
           // Build cart properties
           const size = SHEET_SIZES.find(s => s.id === state.selectedSize);
           const properties = {
+            // Hidden keys (internal use)
             '_ul_upload_id': uploadResult.id,
-            '_ul_upload_url': uploadResult.url,
+            // Visible keys (shown in checkout)
+            'Uploaded File': uploadResult.url,
             'Sheet Size': size?.name || state.selectedSize,
             'Upload Type': 'Custom Design'
           };

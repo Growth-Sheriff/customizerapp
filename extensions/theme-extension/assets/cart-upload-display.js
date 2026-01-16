@@ -462,9 +462,12 @@
                        item.properties?.['_ul_upload_id'];
       const designFile = item.properties?.[CONFIG.designFileKey] ||
                          item.properties?.['_ul_design_file'] ||
-                         item.properties?.['_ul_file_name'];
+                         item.properties?.['_ul_file_name'] ||
+                         item.properties?.['File Name'] ||
+                         item.properties?.['Design Name'];
       const thumbnail = item.properties?.['_ul_thumbnail'] || 
-                        item.properties?.['_ul_upload_url'];
+                        item.properties?.['_ul_upload_url'] ||
+                        item.properties?.['Uploaded File'];
       
       if (uploadId) {
         uploadItems.set(item.key, { uploadId, designFile, thumbnail, index, variantId: item.variant_id });
