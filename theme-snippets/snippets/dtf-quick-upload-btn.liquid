@@ -49,7 +49,7 @@
         <img src="{{ product.featured_image | image_url: width: 80 }}" alt="{{ product.title }}" class="ul-quick-modal-thumb">
         <div>
           <h3>{{ product.title }}</h3>
-          <p class="ul-price">{{ first_variant.price | money }}</p>
+          <p class="ul-price" id="ul-price-{{ unique_id }}">{{ first_variant.price | money }}</p>
         </div>
       </div>
       
@@ -185,9 +185,23 @@
   width: 90%;
   max-width: 420px;
   max-height: 90vh;
-  overflow: auto;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   box-shadow: 0 20px 60px rgba(0,0,0,0.3);
   animation: modalSlideIn 0.3s ease;
+}
+.ul-modal-step {
+  display: flex;
+  flex-direction: column;
+  max-height: 100%;
+  overflow: hidden;
+}
+.ul-quick-modal-body {
+  padding: 20px;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 @keyframes modalSlideIn {
   from { opacity: 0; transform: translateY(20px) scale(0.95); }
@@ -217,6 +231,7 @@
   gap: 16px;
   padding: 20px;
   border-bottom: 1px solid #e5e7eb;
+  flex-shrink: 0;
 }
 .ul-quick-modal-thumb {
   width: 60px;
@@ -234,9 +249,6 @@
   font-size: 15px;
   font-weight: 600;
   color: #667eea;
-}
-.ul-quick-modal-body {
-  padding: 20px;
 }
 .ul-quick-dropzone {
   border: 2px dashed #d1d5db;
@@ -421,6 +433,8 @@
 .ul-quick-modal-footer {
   padding: 16px 20px;
   border-top: 1px solid #e5e7eb;
+  flex-shrink: 0;
+  background: white;
 }
 .ul-quick-btn-primary {
   display: flex;
@@ -961,18 +975,32 @@
       
       console.log('[Upload Lift] Selected options:', options);
       
-      const variant = variantsData.find(v => {
-        return options.every((opt, idx) => v['option' + (idx + 1)] === opt);
-      });
+      let variant = null;
+      
+      // If no options (default variant), use first variant
+      if (options.length === 0) {
+        variant = variantsData[0];
+      } else {
+        variant = variantsData.find(v => {
+          return options.every((opt, idx) => v['option' + (idx + 1)] === opt);
+        });
+      }
       
       const variantInput = document.getElementById('ul-variant-' + uniqueId);
+      const priceEl = document.getElementById('ul-price-' + uniqueId);
       
       if (variant) {
-        console.log('[Upload Lift] Matched variant:', variant.id, variant.title);
+        console.log('[Upload Lift] Matched variant:', variant.id, variant.title, 'Price:', variant.price);
         if (variantInput) {
           variantInput.value = variant.id;
-          return true;
         }
+        // Update price display
+        if (priceEl) {
+          const formattedPrice = formatMoney(variant.price);
+          priceEl.textContent = formattedPrice;
+          console.log('[Upload Lift] Price updated to:', formattedPrice);
+        }
+        return true;
       } else {
         console.warn('[Upload Lift] No variant match found for options:', options);
         // Fallback: use first available variant
@@ -980,6 +1008,9 @@
           const fallback = variantsData.find(v => v.available) || variantsData[0];
           console.log('[Upload Lift] Using fallback variant:', fallback.id);
           variantInput.value = fallback.id;
+          if (priceEl) {
+            priceEl.textContent = formatMoney(fallback.price);
+          }
           return true;
         }
       }
@@ -988,6 +1019,21 @@
       console.error('[Upload Lift] Variant update error:', e);
       return false;
     }
+  }
+  
+  // Format money helper - uses Shopify's money format
+  function formatMoney(cents) {
+    if (typeof cents === 'string') {
+      cents = cents.replace('.', '');
+    }
+    const value = parseInt(cents, 10) / 100;
+    // Try to use Shopify's format, fallback to basic format
+    if (window.Shopify && window.Shopify.formatMoney) {
+      return window.Shopify.formatMoney(cents);
+    }
+    // Fallback: detect currency from existing price or use default
+    const currencySymbol = window.Shopify?.currency?.symbol || '$';
+    return currencySymbol + value.toFixed(2);
   }
   
   async function addToCart(uniqueId, modalId) {
