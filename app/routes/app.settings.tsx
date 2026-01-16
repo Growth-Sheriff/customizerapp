@@ -3,7 +3,7 @@ import { json } from "@remix-run/node";
 import { useLoaderData, useActionData, Form, useNavigation } from "@remix-run/react";
 import {
   Page, Layout, Card, Text, BlockStack, InlineStack,
-  TextField, Button, Banner, FormLayout, Box, Badge
+  TextField, Button, Banner, FormLayout, Box, Badge, Divider
 } from "@shopify/polaris";
 import { useState } from "react";
 import { authenticate } from "~/shopify.server";
