@@ -5,18 +5,31 @@ import { render } from 'preact';
  * Upload Design Display - Checkout Line Item Extension
  * Shows upload info (thumbnail, filename, link) under each cart line item
  * that has _ul_upload_id property
+ * 
+ * Based on Shopify docs: shopify.target.value contains the cart line
  */
-export default async () => {
+export default function extension() {
   render(<UploadDisplay />, document.body);
-};
+}
 
 function UploadDisplay() {
-  // Get the current cart line item from the target
-  const target = shopify.extension.target;
+  // shopify.target.value contains the cart line for cart-line-item targets
   const cartLine = shopify.target?.value;
   
-  // Check if this line item has upload properties
-  const attributes = cartLine?.attributes || [];
+  // Debug logging - check browser console
+  console.log('[Upload Display] Extension mounted');
+  console.log('[Upload Display] Target:', shopify.extension?.target);
+  console.log('[Upload Display] Cart line:', cartLine);
+  
+  if (!cartLine) {
+    console.log('[Upload Display] No cart line available');
+    return <s-text size="extraSmall" appearance="subdued">[Debug: No cart line]</s-text>;
+  }
+  
+  // Get attributes from cart line
+  const attributes = cartLine.attributes || [];
+  console.log('[Upload Display] Attributes:', attributes);
+  console.log('[Upload Display] Merchandise:', cartLine.merchandise?.title);
   
   // Find upload-related attributes
   const uploadId = findAttribute(attributes, '_ul_upload_id');
@@ -27,17 +40,27 @@ function UploadDisplay() {
                    'Custom Design';
   const designType = findAttribute(attributes, '_ul_design_type') || 'dtf';
   
-  // If no upload ID, don't render anything
+  console.log('[Upload Display] Upload ID:', uploadId);
+  console.log('[Upload Display] All attr keys:', attributes.map(a => a.key));
+  
+  // If no upload ID, show debug info temporarily
   if (!uploadId) {
-    return null;
+    // During testing, show that extension is running
+    return (
+      <s-text size="extraSmall" appearance="subdued">
+        [Debug: {attributes.length} attrs, no _ul_upload_id]
+      </s-text>
+    );
   }
   
-  // Determine the display URL (prefer thumbnail, fallback to upload URL)
+  // Determine URLs
   const displayUrl = thumbnail || uploadUrl;
   const linkUrl = uploadUrl || thumbnail;
   
+  console.log('[Upload Display] Rendering for upload:', uploadId);
+  
   return (
-    <s-stack direction="block" gap="tight">
+    <s-stack direction="block" gap="tight" padding="tight">
       <s-divider />
       <s-stack direction="inline" gap="base" padding="tight" cornerRadius="base">
         {/* Thumbnail */}
@@ -55,7 +78,7 @@ function UploadDisplay() {
         <s-stack direction="block" gap="extraTight">
           <s-stack direction="inline" gap="extraTight" inlineAlignment="start">
             <s-icon name="file" size="small" />
-            <s-text size="small" type="emphasis">
+            <s-text size="small" emphasis="bold">
               {truncateFileName(fileName, 25)}
             </s-text>
           </s-stack>
@@ -69,11 +92,7 @@ function UploadDisplay() {
           
           {/* View Design Link */}
           {linkUrl && (
-            <s-link
-              href={linkUrl}
-              target="_blank"
-              external
-            >
+            <s-link href={linkUrl} external>
               <s-stack direction="inline" gap="extraTight" inlineAlignment="start">
                 <s-text size="small" appearance="accent">
                   View Design
