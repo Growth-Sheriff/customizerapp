@@ -289,7 +289,96 @@
   color: var(--ul-error);
 }
 
-/* ===== OPTION GROUPS (Separate selectors for each option) ===== */
+/* ===== OPTION DROPDOWNS (Separate dropdown for each option) ===== */
+.ul-option-dropdown-group {
+  margin-bottom: 16px;
+}
+
+.ul-option-dropdown-group:last-of-type {
+  margin-bottom: 12px;
+}
+
+.ul-option-dropdown-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ul-text);
+  margin-bottom: 8px;
+}
+
+.ul-option-dropdown-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.ul-option-dropdown {
+  width: 100%;
+  padding: 12px 44px 12px 14px;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ul-text);
+  background: var(--ul-bg);
+  border: 2px solid var(--ul-border);
+  border-radius: var(--ul-radius-sm);
+  cursor: pointer;
+  transition: var(--ul-transition);
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+}
+
+.ul-option-dropdown:hover {
+  border-color: var(--ul-primary);
+}
+
+.ul-option-dropdown:focus {
+  outline: none;
+  border-color: var(--ul-primary);
+  box-shadow: 0 0 0 3px var(--ul-primary-light);
+}
+
+.ul-option-dropdown option {
+  padding: 10px;
+  font-size: 14px;
+}
+
+.ul-option-dropdown-arrow {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--ul-text-muted);
+  pointer-events: none;
+  transition: var(--ul-transition);
+}
+
+.ul-option-dropdown:focus + .ul-option-dropdown-arrow {
+  color: var(--ul-primary);
+}
+
+/* Selected variant display */
+.ul-selected-variant-display {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--ul-bg-secondary);
+  border-radius: var(--ul-radius-sm);
+  margin-top: 12px;
+}
+
+.ul-variant-name-display {
+  font-size: 14px;
+  color: var(--ul-text-muted);
+}
+
+.ul-variant-price-display {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ul-primary);
+}
+
+/* ===== OPTION BUTTONS (kept for alternative use) ===== */
 .ul-option-group {
   margin-bottom: 16px;
 }
@@ -349,7 +438,7 @@
   background: var(--ul-bg);
 }
 
-/* Selected variant display */
+/* Selected variant display (legacy) */
 .ul-selected-variant {
   display: flex;
   justify-content: space-between;

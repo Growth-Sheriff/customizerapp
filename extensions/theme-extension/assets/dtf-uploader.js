@@ -1415,8 +1415,8 @@
     },
 
     /**
-     * Bind option button clicks (v4.3.0 - separate option selectors)
-     * Handles Size, Color, Material etc. as separate button groups
+     * Bind option dropdown changes (v4.3.0 - separate dropdowns for each option)
+     * Handles Size, Color, Material etc. as separate dropdowns
      */
     bindOptionButtons(productId) {
       const instance = this.instances[productId];
@@ -1440,21 +1440,13 @@
       // Store variants for later use
       instance.variants = variants;
       
-      // Get all option buttons
-      const optionButtons = container.querySelectorAll('.ul-option-btn');
+      // Get all option dropdowns
+      const optionDropdowns = container.querySelectorAll('.ul-option-dropdown');
       
-      optionButtons.forEach(btn => {
-        btn.addEventListener('click', () => {
-          const optionIndex = parseInt(btn.dataset.optionIndex, 10);
-          const value = btn.dataset.value;
-          const btnProductId = btn.dataset.productId;
-          
-          if (btnProductId !== productId) return;
-          
-          // Update active state for this option group
-          const group = btn.closest('.ul-option-buttons');
-          group.querySelectorAll('.ul-option-btn').forEach(b => b.classList.remove('active'));
-          btn.classList.add('active');
+      optionDropdowns.forEach(dropdown => {
+        dropdown.addEventListener('change', () => {
+          const dropdownProductId = dropdown.dataset.productId;
+          if (dropdownProductId !== productId) return;
           
           // Find matching variant based on all selected options
           this.updateSelectedVariant(productId);
@@ -1466,7 +1458,7 @@
     },
     
     /**
-     * Update selected variant based on all option button selections
+     * Update selected variant based on all option dropdown selections
      */
     updateSelectedVariant(productId) {
       const instance = this.instances[productId];
@@ -1475,13 +1467,10 @@
       const container = instance.container;
       const { elements, state } = instance;
       
-      // Collect selected options
+      // Collect selected options from dropdowns
       const selectedOptions = [];
-      container.querySelectorAll('.ul-option-group').forEach((group, index) => {
-        const activeBtn = group.querySelector('.ul-option-btn.active');
-        if (activeBtn) {
-          selectedOptions[index] = activeBtn.dataset.value;
-        }
+      container.querySelectorAll('.ul-option-dropdown').forEach((dropdown, index) => {
+        selectedOptions[index] = dropdown.value;
       });
       
       // Find matching variant
@@ -1510,9 +1499,6 @@
         if (variantNameEl) variantNameEl.textContent = variant.title;
         if (variantPriceEl) variantPriceEl.textContent = this.formatMoney(variant.price / 100);
         
-        // Mark unavailable options
-        this.updateOptionAvailability(productId, selectedOptions);
-        
         // Update price display
         this.updatePriceDisplay(productId);
         this.validateForm(productId);
@@ -1531,41 +1517,6 @@
       } else {
         console.warn('[UL] No matching variant found for options:', selectedOptions);
       }
-    },
-    
-    /**
-     * Update option button availability based on current selection
-     */
-    updateOptionAvailability(productId, currentOptions) {
-      const instance = this.instances[productId];
-      if (!instance.variants) return;
-      
-      const container = instance.container;
-      
-      // For each option group, check which values have available variants
-      container.querySelectorAll('.ul-option-group').forEach((group, groupIndex) => {
-        group.querySelectorAll('.ul-option-btn').forEach(btn => {
-          const value = btn.dataset.value;
-          
-          // Check if any variant with this option value is available
-          const hasAvailableVariant = instance.variants.some(v => {
-            if (v[`option${groupIndex + 1}`] !== value) return false;
-            if (!v.available) return false;
-            
-            // Check other selected options match
-            return currentOptions.every((opt, idx) => {
-              if (idx === groupIndex) return true; // Skip current group
-              return !opt || v[`option${idx + 1}`] === opt;
-            });
-          });
-          
-          if (hasAvailableVariant) {
-            btn.classList.remove('unavailable');
-          } else {
-            btn.classList.add('unavailable');
-          }
-        });
-      });
     },
 
     /**
