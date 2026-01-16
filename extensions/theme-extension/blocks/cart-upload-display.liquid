@@ -10,7 +10,7 @@
 {% endcomment %}
 
 {% comment %} Load Cart Display Script {% endcomment %}
-{{ 'cart-upload-display.js' | asset_url | script_tag }}
+<script src="{{ 'cart-upload-display.js' | asset_url }}" defer></script>
 
 {% schema %}
 {
