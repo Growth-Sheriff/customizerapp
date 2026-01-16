@@ -23,30 +23,78 @@
 <script src="{{ 'ul-remote-logger.js' | asset_url }}"></script>
 
 {% comment %}
-  Mobile-First Ordering: Ensure DTF block appears first on mobile
-  This uses CSS order property to reposition within flex/grid parent
+  Mobile-First Ordering: App blocks appear right after product-main on mobile
+  Forces all app blocks to display before other sections
 {% endcomment %}
 <style>
   @media (max-width: 749px) {
-    /* Target the app block wrapper - Shopify wraps blocks in divs with data-shopify attribute */
-    [data-shopify-editor-block] {
-      order: 10; /* Default order for other blocks */
+    /* 
+      Strategy: Make product page a flex column and reorder sections
+      App blocks should come immediately after main product section
+    */
+    
+    /* Target main product page wrapper - common Shopify theme patterns */
+    #MainContent,
+    main,
+    .main-content,
+    [role="main"],
+    .shopify-section-group-main,
+    .product-template,
+    #shopify-section-product,
+    #shopify-section-main-product {
+      display: flex !important;
+      flex-direction: column !important;
     }
-    /* DTF Transfer block gets highest priority (lowest order number) */
-    [data-shopify-editor-block]:has(.ul-dtf-main),
-    .ul-dtf-main {
-      order: -1 !important;
+    
+    /* Main product section stays at top */
+    .shopify-section--main-product,
+    .shopify-section[id*="product"],
+    #shopify-section-product,
+    #shopify-section-main-product,
+    .product-section,
+    section.product {
+      order: 1 !important;
     }
-    /* Ensure parent uses flexbox with column direction */
+    
+    /* ALL app blocks come right after main product (order: 2) */
+    .shopify-section[id*="apps"],
+    [class*="shopify-app-block"],
+    [data-shopify-editor-block],
+    .shopify-block,
+    div[id^="shopify-block-"] {
+      order: 2 !important;
+    }
+    
+    /* Other sections come after app blocks (order: 10+) */
+    .shopify-section:not(.shopify-section--main-product):not([id*="product"]):not([id*="apps"]) {
+      order: 10 !important;
+    }
+    
+    /* Specifically push related products, recommendations, reviews to bottom */
+    .shopify-section[id*="related"],
+    .shopify-section[id*="recommend"],
+    .shopify-section[id*="review"],
+    .shopify-section[id*="featured"],
+    .shopify-section[id*="collection"],
+    [class*="related-products"],
+    [class*="product-recommendations"] {
+      order: 20 !important;
+    }
+    
+    /* Within product info area - ensure app blocks inside are also prioritized */
     .product__info-container,
     .product-info,
     .product__column,
     .product-single__meta,
-    .product-main,
-    [class*="product"][class*="info"],
-    [class*="product"][class*="main"] {
+    .product-main {
       display: flex !important;
       flex-direction: column !important;
+    }
+    
+    /* DTF block specifically gets highest priority within app blocks */
+    .ul-dtf-main,
+    [data-shopify-editor-block]:has(.ul-dtf-main) {
+      order: -1 !important;
     }
   }
 </style>
