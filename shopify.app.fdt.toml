@@ -1,4 +1,4 @@
-# Fast DTF Transfer - Shopify App Configuration
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
 client_id = "f122b497901d3db350a2c20b7ce4bc2d"
 name = "FDT-Upload"
@@ -26,8 +26,9 @@ api_version = "2025-10"
   uri = "/webhooks/products-update"
 
 [access_scopes]
-scopes = "read_products,write_products,read_orders,write_orders,read_files,write_files"
-optional_scopes = []
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = "read_files,read_orders,read_products,write_files,write_orders,write_products"
+optional_scopes = [ ]
 use_legacy_install_flow = false
 
 [auth]

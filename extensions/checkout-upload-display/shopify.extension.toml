@@ -9,16 +9,15 @@ handle = "checkout-upload-display"
 type = "ui_extension"
 uid = "75fa9cf3-704b-8be2-29e0-d78cac960accf61b2993"
 
-# Render after each cart line item (in Order Summary)
+# Block target - can be placed anywhere in checkout
 [[extensions.targeting]]
 module = "./src/CheckoutLineItem.jsx"
-target = "purchase.checkout.cart-line-item.render-after"
+target = "purchase.checkout.block.render"
 
 # Also show on Thank You page
 [[extensions.targeting]]
 module = "./src/CheckoutLineItem.jsx"
-target = "purchase.thank-you.cart-line-item.render-after"
+target = "purchase.thank-you.block.render"
 
 [extensions.capabilities]
 api_access = true
-# network_access = true  # Not needed - we only read cart line attributes
