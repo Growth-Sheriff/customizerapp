@@ -121,8 +121,13 @@
         </div>
 
         <!-- Hidden fields -->
-        <input type="hidden" id="ul-variant-{{ unique_id }}" value="{{ first_variant.id }}">
+        <input type="hidden" id="ul-variant-{{ unique_id }}" value="{{ first_variant.id }}" data-price="{{ first_variant.price }}">
         <input type="hidden" id="ul-upload-id-{{ unique_id }}" value="">
+        
+        <!-- Variant data for JS - MUST be inside template to move with modal -->
+        <script type="application/json" id="ul-variants-{{ unique_id }}">
+          {{ product.variants | json }}
+        </script>
       </div>
       
       <div class="ul-quick-modal-footer">
@@ -154,11 +159,6 @@
   </div>
 </div>
 </template>
-
-<!-- Variant data for JS -->
-<script type="application/json" id="ul-variants-{{ unique_id }}">
-  {{ product.variants | json }}
-</script>
 
 <!-- Styles -->
 <style>
