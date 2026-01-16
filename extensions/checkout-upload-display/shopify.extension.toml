@@ -21,4 +21,4 @@ target = "purchase.thank-you.cart-line-item.render-after"
 
 [extensions.capabilities]
 api_access = true
-network_access = true
+# network_access = true  # Not needed - we only read cart line attributes
