@@ -49,7 +49,11 @@
         <img src="{{ product.featured_image | image_url: width: 80 }}" alt="{{ product.title }}" class="ul-quick-modal-thumb">
         <div>
           <h3>{{ product.title }}</h3>
-          <p class="ul-price" id="ul-price-{{ unique_id }}">{{ first_variant.price | money }}</p>
+          <div class="ul-price-wrapper">
+            <span class="ul-unit-price" id="ul-unit-price-{{ unique_id }}">{{ first_variant.price | money }}</span>
+            <span class="ul-price-multiply" id="ul-price-multiply-{{ unique_id }}"></span>
+          </div>
+          <p class="ul-total-price" id="ul-total-price-{{ unique_id }}">{{ first_variant.price | money }}</p>
         </div>
       </div>
       
@@ -244,11 +248,30 @@
   font-size: 16px;
   color: #1f2937;
 }
-.ul-price {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
+.ul-price-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.ul-unit-price {
+  font-size: 13px;
+  color: #6b7280;
+}
+.ul-price-multiply {
+  font-size: 12px;
+  color: #9ca3af;
+}
+.ul-total-price {
+  margin: 2px 0 0 0;
+  font-size: 18px;
+  font-weight: 700;
   color: #667eea;
+  transition: all 0.2s ease;
+}
+.ul-total-price.updating {
+  transform: scale(1.05);
+  color: #764ba2;
 }
 .ul-quick-dropzone {
   border: 2px dashed #d1d5db;
@@ -955,7 +978,17 @@
     let val = parseInt(input.value) || 1;
     val = Math.max(1, Math.min(99, val + delta));
     input.value = val;
+    // Update total price when quantity changes
+    updateTotalPrice(uniqueId);
   }
+  
+  // Listen for manual quantity input changes
+  document.addEventListener('input', function(e) {
+    if (e.target.matches('[id^="ul-qty-"]')) {
+      const uniqueId = e.target.id.replace('ul-qty-', '');
+      updateTotalPrice(uniqueId);
+    }
+  });
   
   function updateVariant(uniqueId) {
     const variantsEl = document.getElementById('ul-variants-' + uniqueId);
@@ -987,19 +1020,16 @@
       }
       
       const variantInput = document.getElementById('ul-variant-' + uniqueId);
-      const priceEl = document.getElementById('ul-price-' + uniqueId);
       
       if (variant) {
         console.log('[Upload Lift] Matched variant:', variant.id, variant.title, 'Price:', variant.price);
         if (variantInput) {
           variantInput.value = variant.id;
+          // Store price in data attribute for calculations
+          variantInput.dataset.price = variant.price;
         }
-        // Update price display
-        if (priceEl) {
-          const formattedPrice = formatMoney(variant.price);
-          priceEl.textContent = formattedPrice;
-          console.log('[Upload Lift] Price updated to:', formattedPrice);
-        }
+        // Update prices
+        updateTotalPrice(uniqueId);
         return true;
       } else {
         console.warn('[Upload Lift] No variant match found for options:', options);
@@ -1008,9 +1038,8 @@
           const fallback = variantsData.find(v => v.available) || variantsData[0];
           console.log('[Upload Lift] Using fallback variant:', fallback.id);
           variantInput.value = fallback.id;
-          if (priceEl) {
-            priceEl.textContent = formatMoney(fallback.price);
-          }
+          variantInput.dataset.price = fallback.price;
+          updateTotalPrice(uniqueId);
           return true;
         }
       }
@@ -1019,6 +1048,67 @@
       console.error('[Upload Lift] Variant update error:', e);
       return false;
     }
+  }
+  
+  // Update total price display
+  function updateTotalPrice(uniqueId) {
+    const variantInput = document.getElementById('ul-variant-' + uniqueId);
+    const qtyInput = document.getElementById('ul-qty-' + uniqueId);
+    const unitPriceEl = document.getElementById('ul-unit-price-' + uniqueId);
+    const multiplyEl = document.getElementById('ul-price-multiply-' + uniqueId);
+    const totalPriceEl = document.getElementById('ul-total-price-' + uniqueId);
+    
+    if (!variantInput || !qtyInput || !totalPriceEl) return;
+    
+    // Get price from data attribute or fetch from variants
+    let unitPrice = parseInt(variantInput.dataset.price, 10);
+    
+    // If no price in data attribute, get from variants JSON
+    if (!unitPrice || isNaN(unitPrice)) {
+      const variantsEl = document.getElementById('ul-variants-' + uniqueId);
+      if (variantsEl) {
+        try {
+          const variantsData = JSON.parse(variantsEl.textContent);
+          const variant = variantsData.find(v => v.id == variantInput.value);
+          if (variant) {
+            unitPrice = variant.price;
+            variantInput.dataset.price = unitPrice;
+          }
+        } catch (e) {}
+      }
+    }
+    
+    if (!unitPrice || isNaN(unitPrice)) return;
+    
+    const quantity = parseInt(qtyInput.value, 10) || 1;
+    const totalPrice = unitPrice * quantity;
+    
+    // Update unit price display
+    if (unitPriceEl) {
+      unitPriceEl.textContent = formatMoney(unitPrice);
+    }
+    
+    // Update multiplier (only show if qty > 1)
+    if (multiplyEl) {
+      if (quantity > 1) {
+        multiplyEl.textContent = '× ' + quantity;
+        multiplyEl.style.display = 'inline';
+      } else {
+        multiplyEl.textContent = '';
+        multiplyEl.style.display = 'none';
+      }
+    }
+    
+    // Animate total price update
+    if (totalPriceEl) {
+      totalPriceEl.classList.add('updating');
+      totalPriceEl.textContent = formatMoney(totalPrice);
+      setTimeout(() => {
+        totalPriceEl.classList.remove('updating');
+      }, 200);
+    }
+    
+    console.log('[Upload Lift] Price updated - Unit:', formatMoney(unitPrice), 'Qty:', quantity, 'Total:', formatMoney(totalPrice));
   }
   
   // Format money helper - uses Shopify's money format
