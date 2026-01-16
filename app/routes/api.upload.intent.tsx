@@ -43,8 +43,30 @@ export async function action({ request }: ActionFunctionArgs) {
   // Parse request body first to get shopDomain
   let body: any;
   try {
-    body = await request.json();
-  } catch {
+    const contentType = request.headers.get("content-type") || "";
+    
+    // App Proxy may send as form data or have empty body
+    if (contentType.includes("application/json")) {
+      body = await request.json();
+    } else if (contentType.includes("form")) {
+      const formData = await request.formData();
+      body = Object.fromEntries(formData);
+    } else {
+      // Try JSON first, fallback to empty
+      const text = await request.text();
+      if (text) {
+        try {
+          body = JSON.parse(text);
+        } catch {
+          console.error("[Upload Intent] Failed to parse body:", text.substring(0, 200));
+          return corsJson({ error: "Invalid JSON body" }, request, { status: 400 });
+        }
+      } else {
+        return corsJson({ error: "Empty request body" }, request, { status: 400 });
+      }
+    }
+  } catch (e) {
+    console.error("[Upload Intent] Body parse error:", e);
     return corsJson({ error: "Invalid JSON body" }, request, { status: 400 });
   }
 
