@@ -1026,14 +1026,17 @@
       const options = [];
       let i = 0;
       while (document.getElementById('ul-option-' + uniqueId + '-' + i)) {
-        // Get the selected option's value - browser auto-decodes HTML entities
         const selectEl = document.getElementById('ul-option-' + uniqueId + '-' + i);
-        options.push(selectEl.value);
+        // CRITICAL FIX: Use selectedOptions[0].textContent instead of .value
+        // This avoids HTML entity encoding issues with special chars like "
+        const selectedOption = selectEl.selectedOptions[0];
+        const optionText = selectedOption ? selectedOption.textContent.trim() : selectEl.value;
+        options.push(optionText);
         i++;
       }
       
-      console.log('[Upload Lift] Selected options:', options);
-      console.log('[Upload Lift] Available variants:', variantsData.map(v => ({id: v.id, opt1: v.option1, opt2: v.option2})));
+      console.log('[Upload Lift] Selected options (from text):', options);
+      console.log('[Upload Lift] Available variants:', variantsData.map(v => ({id: v.id, opt1: v.option1, opt2: v.option2, opt3: v.option3})));
       
       let variant = null;
       
@@ -1041,11 +1044,10 @@
       if (options.length === 0) {
         variant = variantsData[0];
       } else {
-        // Find matching variant - compare with decoded values
+        // Find matching variant - compare option text with variant options
         variant = variantsData.find(v => {
           return options.every((opt, idx) => {
             const variantOpt = v['option' + (idx + 1)];
-            // Direct comparison - both should be decoded strings now
             return variantOpt === opt;
           });
         });
