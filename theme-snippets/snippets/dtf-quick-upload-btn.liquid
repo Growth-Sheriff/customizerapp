@@ -929,18 +929,15 @@
       progressFill.style.width = '80%';
       progressText.textContent = 'Analyzing...';
       
-      // Store upload ID and build public URL
+      // Store upload ID
       const uploadId = intentData.uploadId;
       if (uploadIdInput) uploadIdInput.value = uploadId;
       
-      // Build FULL public URL for the uploaded file (with https://)
-      const baseUrl = window.location.origin; // e.g. https://fast-dtf-transfer.myshopify.com
-      const publicUrl = `${baseUrl}${apiBase}/api/upload/file/${uploadId}`;
-      if (uploadUrlInput) uploadUrlInput.value = publicUrl;
-      
-      // Poll for status (max 10 seconds)
+      // Poll for status and get the signed download URL from API
       let status = 'processing';
       let attempts = 0;
+      let finalDownloadUrl = null;
+      
       while (status === 'processing' && attempts < 10) {
         await new Promise(r => setTimeout(r, 1000));
         try {
@@ -948,6 +945,10 @@
           if (statusResponse.ok) {
             const statusData = await statusResponse.json();
             status = statusData.status;
+            // Get the signed URL from API response (this is the correct format)
+            if (statusData.downloadUrl) {
+              finalDownloadUrl = statusData.downloadUrl;
+            }
             if (statusData.preflight?.dpi && statusData.preflight.dpi < 150 && dpiWarning && dpiText) {
               dpiWarning.style.display = 'flex';
               dpiText.textContent = `Low resolution: ${statusData.preflight.dpi} DPI`;
@@ -956,6 +957,10 @@
         } catch (e) { /* ignore */ }
         attempts++;
       }
+      
+      // Use the signed URL from API, fallback to constructed URL if not available
+      const publicUrl = finalDownloadUrl || `https://customizerapp.dev/api/upload/file/${uploadId}`;
+      if (uploadUrlInput) uploadUrlInput.value = publicUrl;
       
       // Show preview
       progress.style.display = 'none';
