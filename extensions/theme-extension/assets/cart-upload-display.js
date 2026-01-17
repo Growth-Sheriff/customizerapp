@@ -456,7 +456,10 @@
     console.log('[Upload Lift Cart] Found', lineItemElements.length, 'line item elements');
 
     // Create a map of cart items with upload properties
+    // Use item.key as primary identifier (unique per line item)
     const uploadItems = new Map();
+    const uploadItemsByVariant = new Map();
+    
     cart.items.forEach((item, index) => {
       const uploadId = item.properties?.[CONFIG.propertyKey] || 
                        item.properties?.['_ul_upload_id'];
@@ -470,10 +473,15 @@
                         item.properties?.['Uploaded File'];
       
       if (uploadId) {
-        uploadItems.set(item.key, { uploadId, designFile, thumbnail, index, variantId: item.variant_id });
-        uploadItems.set(index, { uploadId, designFile, thumbnail, key: item.key, variantId: item.variant_id });
-        uploadItems.set(String(item.variant_id), { uploadId, designFile, thumbnail, key: item.key, index });
-        console.log('[Upload Lift Cart] Found upload item:', uploadId, 'at index', index, 'key:', item.key);
+        const uploadData = { uploadId, designFile, thumbnail, index, variantId: item.variant_id, key: item.key };
+        // Primary: by item key (most reliable)
+        uploadItems.set(item.key, uploadData);
+        // Secondary: by variant ID (for themes that expose variant_id)
+        // Note: Multiple items can have same variant, so only use if key match fails
+        if (!uploadItemsByVariant.has(String(item.variant_id))) {
+          uploadItemsByVariant.set(String(item.variant_id), uploadData);
+        }
+        console.log('[Upload Lift Cart] Found upload item:', uploadId, 'at index', index, 'key:', item.key, 'variant:', item.variant_id);
       }
     });
 
@@ -482,7 +490,7 @@
       return;
     }
     
-    console.log('[Upload Lift Cart] Found', uploadItems.size / 3, 'items with uploads');
+    console.log('[Upload Lift Cart] Found', uploadItems.size, 'items with uploads');
 
     // Process each line item element
     lineItemElements.forEach((lineItem, index) => {
@@ -492,25 +500,25 @@
         return;
       }
 
-      // Try to find matching cart item by key
+      // Try to find matching cart item by key (most reliable)
       const key = getLineItemKey(lineItem);
       let uploadData = key ? uploadItems.get(key) : null;
       
-      // Try by variant ID
+      // Fallback: Try by variant ID (less reliable but works for some themes)
       if (!uploadData) {
         const variantId = lineItem.dataset.variantId || 
                           lineItem.getAttribute('data-variant-id') ||
                           lineItem.querySelector('[data-variant-id]')?.dataset.variantId;
         if (variantId) {
-          uploadData = uploadItems.get(String(variantId));
+          uploadData = uploadItemsByVariant.get(String(variantId));
+          if (uploadData) {
+            console.log('[Upload Lift Cart] Matched by variant ID:', variantId);
+          }
         }
       }
       
-      // Fallback to index matching
-      if (!uploadData && uploadItems.has(index)) {
-        uploadData = uploadItems.get(index);
-        console.log('[Upload Lift Cart] Matched by index:', index);
-      }
+      // DO NOT fallback to index matching - this causes wrong item matching!
+      // Index-based matching is unreliable because DOM order may differ from cart.items order
 
       if (uploadData) {
         console.log('[Upload Lift Cart] Adding upload info to item', index, 'uploadId:', uploadData.uploadId);
@@ -521,7 +529,8 @@
         // Fetch and update status
         updateUploadInfo(infoEl, uploadData.uploadId);
       } else {
-        console.log('[Upload Lift Cart] No upload data for item', index, 'key:', key);
+        // This is expected for items without uploads
+        console.log('[Upload Lift Cart] No upload data for item', index, '(normal product without upload)');
       }
     });
   }
