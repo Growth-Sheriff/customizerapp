@@ -1,7 +1,13 @@
 /**
- * Upload Lift - Cart Upload Display
+ * Upload Lift - Cart Upload Display (Fixed Version)
  * Shows uploaded design info under cart line items
  * Auto-injects into cart page without theme modification
+ * 
+ * FIXES:
+ * - Multiple uploads with same variant now all match correctly
+ * - Used uploads are tracked to prevent double-assignment
+ * - Multi-signal matching (key, variant+index, product handle, image URL)
+ * - Better fallback logic with confidence scoring
  */
 (function() {
   'use strict';
@@ -12,8 +18,16 @@
     designFileKey: '_ul_design_file',
     pollInterval: 500,
     maxRetries: 20,
-    apiBase: '/apps/customizer'
+    apiBase: '/apps/customizer',
+    debug: true // Set to false in production
   };
+
+  // Debug logger
+  function log(...args) {
+    if (CONFIG.debug) {
+      console.log('[Upload Lift Cart]', ...args);
+    }
+  }
 
   // Styles for the upload info display
   const STYLES = `
@@ -136,7 +150,7 @@
   }
 
   // Create upload info element
-  function createUploadInfoElement(item, uploadId, designFile, thumbnail) {
+  function createUploadInfoElement(uploadId, designFile, thumbnail) {
     const div = document.createElement('div');
     div.className = 'ul-cart-upload-info';
     div.dataset.uploadId = uploadId;
@@ -144,7 +158,6 @@
     const fileName = designFile || 'Custom Design';
     const shortName = fileName.length > 25 ? fileName.substring(0, 22) + '...' : fileName;
     
-    // Use thumbnail if available
     const iconHtml = thumbnail 
       ? `<img class="ul-cart-upload-icon" src="${thumbnail}" alt="Design preview" onerror="this.style.display='none'">`
       : `<div class="ul-cart-upload-icon placeholder">
@@ -193,7 +206,6 @@
       const statusClass = getStatusClass(status.status);
       updateStatusDisplay(element, statusClass, statusText);
       
-      // Update thumbnail if available
       if (status.thumbnailUrl || status.previewUrl) {
         const iconEl = element.querySelector('.ul-cart-upload-icon');
         if (iconEl) {
@@ -246,9 +258,12 @@
     }
   }
 
+  // ============================================
+  // DOM ELEMENT FINDERS
+  // ============================================
+
   // Find cart line item containers
   function findCartLineItems() {
-    // Common selectors for various Shopify themes
     const selectors = [
       // Dawn theme
       'cart-items .cart-item',
@@ -272,7 +287,7 @@
       // AJAX carts
       '.cart-drawer-item',
       '[data-cart-item-key]',
-      // More themes - Prestige, Impulse, etc.
+      // More themes
       '.cart-item-row',
       '.cart__item',
       '.cart-products .product',
@@ -321,40 +336,34 @@
     for (const selector of selectors) {
       const items = document.querySelectorAll(selector);
       if (items.length > 0) {
-        console.log('[Upload Lift Cart] Found items with selector:', selector, 'Count:', items.length);
-        return items;
+        log('Found items with selector:', selector, 'Count:', items.length);
+        return Array.from(items);
       }
     }
     
-    // Fallback: Try to find any element that looks like a cart item
+    // Fallback
     const fallbackItems = findCartItemsFallback();
     if (fallbackItems.length > 0) {
-      console.log('[Upload Lift Cart] Found items via fallback. Count:', fallbackItems.length);
+      log('Found items via fallback. Count:', fallbackItems.length);
       return fallbackItems;
     }
     
     return [];
   }
   
-  // Fallback method to find cart items by analyzing DOM structure
   function findCartItemsFallback() {
-    // Look for elements with product images inside cart-related containers
     const cartContainers = document.querySelectorAll(
       '[class*="cart"], [id*="cart"], [data-section-type="cart"], cart-items, .cart, #cart, #CartContainer'
     );
     
     for (const container of cartContainers) {
-      // Find elements that contain product images and look like line items
       const potentialItems = container.querySelectorAll(
         'tr:has(img), li:has(img), div:has(img[src*="cdn.shopify"])'
       );
       
       if (potentialItems.length > 0) {
-        // Filter to only include direct product containers (not nested)
         const items = Array.from(potentialItems).filter(item => {
-          // Must have a product image
           const hasProductImage = item.querySelector('img[src*="cdn.shopify"]');
-          // Should not be too nested
           const depth = getCartContainerDepth(item, container);
           return hasProductImage && depth < 5;
         });
@@ -378,9 +387,7 @@
     return depth;
   }
 
-  // Find the element to append upload info to within a line item
   function findAppendTarget(lineItem) {
-    // Try to find product details area
     const selectors = [
       '.cart-item__details',
       '.cart__product-information',
@@ -391,7 +398,6 @@
       '.line-item__content',
       'td.cart__meta',
       '.cart-item-details',
-      // More themes
       '.cart-item__info',
       '.cart-product__info',
       '.cart__item-details',
@@ -403,7 +409,6 @@
       '.cart-drawer__item-content',
       '.cart-item__text',
       '.cart__item-content',
-      // Fallback to any element with "detail" or "info" in class
       '[class*="detail"]',
       '[class*="info"]:not(img):not(svg)'
     ];
@@ -413,47 +418,101 @@
       if (target && target.offsetParent !== null) return target;
     }
     
-    // Fallback: append to line item itself
     return lineItem;
   }
 
-  // Get line item key/id from element
-  function getLineItemKey(lineItem) {
-    // Try various data attributes for key
-    const key = lineItem.dataset.lineItemKey || 
-           lineItem.dataset.cartItemKey ||
-           lineItem.dataset.key ||
-           lineItem.dataset.id ||
-           lineItem.getAttribute('data-line-item-key') ||
-           lineItem.getAttribute('data-cart-item-key') ||
-           lineItem.getAttribute('data-key') ||
-           lineItem.getAttribute('data-id') ||
-           lineItem.querySelector('[data-line-item-key]')?.dataset.lineItemKey ||
-           lineItem.querySelector('[data-key]')?.dataset.key ||
-           lineItem.querySelector('[data-cart-item-key]')?.dataset.cartItemKey ||
-           lineItem.querySelector('input[name*="key"]')?.value ||
-           lineItem.querySelector('a[href*="/cart/change?"]')?.href?.match(/id=([^&]+)/)?.[1] ||
-           null;
-    
-    if (key) {
-      console.log('[Upload Lift Cart] Found key for line item:', key);
+  // ============================================
+  // LINE ITEM DATA EXTRACTORS
+  // ============================================
+
+  // Extract all possible identifiers from a DOM line item
+  function extractLineItemIdentifiers(lineItem) {
+    const identifiers = {
+      key: null,
+      variantId: null,
+      productHandle: null,
+      productId: null,
+      imageUrl: null,
+      title: null,
+      quantity: null
+    };
+
+    // 1. Try to get line item key
+    identifiers.key = 
+      lineItem.dataset.lineItemKey || 
+      lineItem.dataset.cartItemKey ||
+      lineItem.dataset.key ||
+      lineItem.dataset.id ||
+      lineItem.getAttribute('data-line-item-key') ||
+      lineItem.getAttribute('data-cart-item-key') ||
+      lineItem.getAttribute('data-key') ||
+      lineItem.getAttribute('data-id') ||
+      lineItem.querySelector('[data-line-item-key]')?.dataset.lineItemKey ||
+      lineItem.querySelector('[data-key]')?.dataset.key ||
+      lineItem.querySelector('[data-cart-item-key]')?.dataset.cartItemKey ||
+      lineItem.querySelector('input[name*="key"]')?.value ||
+      extractKeyFromLinks(lineItem);
+
+    // 2. Try to get variant ID
+    identifiers.variantId = 
+      lineItem.dataset.variantId || 
+      lineItem.dataset.variant ||
+      lineItem.dataset.productVariantId ||
+      lineItem.getAttribute('data-variant-id') ||
+      lineItem.getAttribute('data-variant') ||
+      lineItem.getAttribute('data-product-variant-id') ||
+      lineItem.querySelector('[data-variant-id]')?.dataset.variantId ||
+      lineItem.querySelector('[data-variant]')?.dataset.variant ||
+      lineItem.querySelector('input[name*="id"]')?.value ||
+      extractVariantFromLinks(lineItem);
+
+    // 3. Try to get product handle
+    identifiers.productHandle = 
+      lineItem.dataset.productHandle ||
+      lineItem.dataset.handle ||
+      lineItem.getAttribute('data-product-handle') ||
+      lineItem.getAttribute('data-handle') ||
+      extractHandleFromLinks(lineItem);
+
+    // 4. Try to get product ID
+    identifiers.productId = 
+      lineItem.dataset.productId ||
+      lineItem.dataset.product ||
+      lineItem.getAttribute('data-product-id') ||
+      lineItem.getAttribute('data-product');
+
+    // 5. Get image URL (useful for matching)
+    const img = lineItem.querySelector('img[src*="cdn.shopify"]');
+    if (img) {
+      identifiers.imageUrl = normalizeImageUrl(img.src);
     }
-    return key;
+
+    // 6. Get title
+    const titleEl = lineItem.querySelector(
+      '.cart-item__name, .cart__product-title, .product-title, ' +
+      '.cart-item__title, .line-item__title, [class*="title"], ' +
+      '[class*="name"], h2, h3, h4, a[href*="/products/"]'
+    );
+    if (titleEl) {
+      identifiers.title = normalizeTitle(titleEl.textContent);
+    }
+
+    // 7. Get quantity
+    const qtyInput = lineItem.querySelector('input[name*="quantity"], input[type="number"], .quantity-input');
+    if (qtyInput) {
+      identifiers.quantity = parseInt(qtyInput.value, 10) || null;
+    }
+
+    return identifiers;
   }
 
-  // Get variant ID from line item element
-  function getLineItemVariantId(lineItem) {
-    return lineItem.dataset.variantId || 
-           lineItem.dataset.variant ||
-           lineItem.getAttribute('data-variant-id') ||
-           lineItem.getAttribute('data-variant') ||
-           lineItem.querySelector('[data-variant-id]')?.dataset.variantId ||
-           lineItem.querySelector('[data-variant]')?.dataset.variant ||
-           lineItem.querySelector('input[name*="id"]')?.value ||
-           lineItem.querySelector('a[href*="variant="]')?.href?.match(/variant=(\d+)/)?.[1] ||
-           // Try to extract from product link
-           extractVariantFromLinks(lineItem) ||
-           null;
+  function extractKeyFromLinks(lineItem) {
+    const link = lineItem.querySelector('a[href*="/cart/change?"]');
+    if (link) {
+      const match = link.href.match(/id=([^&]+)/);
+      if (match) return match[1];
+    }
+    return null;
   }
 
   function extractVariantFromLinks(lineItem) {
@@ -465,146 +524,330 @@
     return null;
   }
 
-  // Main function to process cart
-  async function processCart() {
-    const cart = await getCartData();
-    if (!cart || !cart.items || cart.items.length === 0) {
-      console.log('[Upload Lift Cart] No cart data or empty cart');
-      return;
+  function extractHandleFromLinks(lineItem) {
+    const link = lineItem.querySelector('a[href*="/products/"]');
+    if (link) {
+      const match = link.href.match(/\/products\/([^/?#]+)/);
+      if (match) return match[1];
     }
-    
-    console.log('[Upload Lift Cart] Processing cart with', cart.items.length, 'items');
+    return null;
+  }
 
-    const lineItemElements = findCartLineItems();
-    if (lineItemElements.length === 0) {
-      console.log('[Upload Lift Cart] No cart line items found in DOM');
-      console.log('[Upload Lift Cart] Debugging: Looking for cart containers...');
-      const cartContainers = document.querySelectorAll('[class*="cart"], [id*="cart"]');
-      console.log('[Upload Lift Cart] Found', cartContainers.length, 'cart-related elements');
-      cartContainers.forEach(el => {
-        if (el.children.length > 0 && el.children.length < 50) {
-          console.log('[Upload Lift Cart] Container:', el.tagName, el.className, el.id, 'Children:', el.children.length);
-        }
-      });
-      return;
-    }
-    
-    console.log('[Upload Lift Cart] Found', lineItemElements.length, 'line item elements');
+  function normalizeImageUrl(url) {
+    if (!url) return null;
+    // Remove size parameters to get base image URL
+    return url.replace(/_\d+x\d*(@\d+x)?\./, '.').replace(/\?.*$/, '').toLowerCase();
+  }
 
-    // Create a map of cart items with upload properties
-    // Use item.key as primary identifier (unique per line item)
-    const uploadItems = new Map();
-    const uploadItemsByVariant = new Map();
-    
-    cart.items.forEach((item, index) => {
+  function normalizeTitle(title) {
+    if (!title) return null;
+    return title.trim().toLowerCase().replace(/\s+/g, ' ');
+  }
+
+  // ============================================
+  // MATCHING ALGORITHM
+  // ============================================
+
+  /**
+   * Build upload data from cart items
+   * Returns array of upload items with all relevant data
+   */
+  function buildUploadItemsData(cartItems) {
+    const uploadItems = [];
+
+    cartItems.forEach((item, index) => {
       const uploadId = item.properties?.[CONFIG.propertyKey] || 
                        item.properties?.['_ul_upload_id'];
+      
+      if (!uploadId) return; // Skip items without uploads
+
       const designFile = item.properties?.[CONFIG.designFileKey] ||
                          item.properties?.['_ul_design_file'] ||
                          item.properties?.['_ul_file_name'] ||
                          item.properties?.['File Name'] ||
                          item.properties?.['Design Name'];
+      
       const thumbnail = item.properties?.['_ul_thumbnail'] || 
                         item.properties?.['_ul_upload_url'] ||
                         item.properties?.['Uploaded File'];
-      
-      if (uploadId) {
-        const uploadData = { uploadId, designFile, thumbnail, index, variantId: item.variant_id, key: item.key };
-        // Primary: by item key (most reliable)
-        uploadItems.set(item.key, uploadData);
-        // Secondary: by variant ID (for themes that expose variant_id)
-        // Note: Multiple items can have same variant, so only use if key match fails
-        if (!uploadItemsByVariant.has(String(item.variant_id))) {
-          uploadItemsByVariant.set(String(item.variant_id), uploadData);
-        }
-        console.log('[Upload Lift Cart] Found upload item:', uploadId, 'at index', index, 'key:', item.key, 'variant:', item.variant_id);
+
+      uploadItems.push({
+        uploadId,
+        designFile,
+        thumbnail,
+        cartIndex: index,
+        key: item.key,
+        variantId: String(item.variant_id),
+        productId: String(item.product_id),
+        handle: item.handle,
+        title: normalizeTitle(item.title || item.product_title),
+        imageUrl: normalizeImageUrl(item.image),
+        quantity: item.quantity,
+        matched: false // Track if this upload has been matched to a DOM element
+      });
+    });
+
+    return uploadItems;
+  }
+
+  /**
+   * Calculate match score between a DOM line item and a cart upload item
+   * Higher score = more confident match
+   */
+  function calculateMatchScore(domIdentifiers, uploadItem) {
+    let score = 0;
+    const reasons = [];
+
+    // Key match is definitive (100 points)
+    if (domIdentifiers.key && domIdentifiers.key === uploadItem.key) {
+      score += 100;
+      reasons.push('key');
+    }
+
+    // Variant ID match (30 points)
+    if (domIdentifiers.variantId && domIdentifiers.variantId === uploadItem.variantId) {
+      score += 30;
+      reasons.push('variantId');
+    }
+
+    // Product handle match (20 points)
+    if (domIdentifiers.productHandle && domIdentifiers.productHandle === uploadItem.handle) {
+      score += 20;
+      reasons.push('handle');
+    }
+
+    // Product ID match (20 points)
+    if (domIdentifiers.productId && domIdentifiers.productId === uploadItem.productId) {
+      score += 20;
+      reasons.push('productId');
+    }
+
+    // Image URL match (15 points)
+    if (domIdentifiers.imageUrl && uploadItem.imageUrl) {
+      if (domIdentifiers.imageUrl === uploadItem.imageUrl) {
+        score += 15;
+        reasons.push('imageUrl');
+      } else if (domIdentifiers.imageUrl.includes(uploadItem.handle) || 
+                 uploadItem.imageUrl.includes(domIdentifiers.productHandle)) {
+        score += 5;
+        reasons.push('imageUrl-partial');
+      }
+    }
+
+    // Title match (10 points for exact, 5 for partial)
+    if (domIdentifiers.title && uploadItem.title) {
+      if (domIdentifiers.title === uploadItem.title) {
+        score += 10;
+        reasons.push('title-exact');
+      } else if (domIdentifiers.title.includes(uploadItem.title.split(' ')[0]) ||
+                 uploadItem.title.includes(domIdentifiers.title.split(' ')[0])) {
+        score += 5;
+        reasons.push('title-partial');
+      }
+    }
+
+    return { score, reasons };
+  }
+
+  /**
+   * Find best matching upload for a DOM line item
+   * Returns the upload item or null
+   */
+  function findBestMatch(domIdentifiers, uploadItems, domIndex, totalDomItems) {
+    let bestMatch = null;
+    let bestScore = 0;
+    let bestReasons = [];
+
+    for (const uploadItem of uploadItems) {
+      // Skip already matched uploads
+      if (uploadItem.matched) continue;
+
+      const { score, reasons } = calculateMatchScore(domIdentifiers, uploadItem);
+
+      // If key matches exactly, this is definitely the right one
+      if (reasons.includes('key')) {
+        log(`DOM[${domIndex}] DEFINITIVE match by key:`, uploadItem.key);
+        return { upload: uploadItem, reasons };
+      }
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestMatch = uploadItem;
+        bestReasons = reasons;
+      }
+    }
+
+    // Require minimum confidence for non-key matches
+    // At least variant ID or (handle + image) or (handle + title)
+    const minConfidenceScore = 30;
+    
+    if (bestScore >= minConfidenceScore) {
+      log(`DOM[${domIndex}] Best match score=${bestScore} reasons=[${bestReasons.join(',')}]`);
+      return { upload: bestMatch, reasons: bestReasons };
+    }
+
+    // Last resort: If DOM count equals cart upload count, try position matching
+    // But only if we have SOME signal (at least variant or handle)
+    if (bestScore >= 20 && totalDomItems === uploadItems.filter(u => !u.matched).length + 
+        uploadItems.filter(u => u.matched).length) {
+      log(`DOM[${domIndex}] Low confidence match score=${bestScore}, accepting due to count match`);
+      return { upload: bestMatch, reasons: bestReasons };
+    }
+
+    log(`DOM[${domIndex}] No confident match found. Best score was ${bestScore}`);
+    return null;
+  }
+
+  /**
+   * Smart index-based fallback matching
+   * Used when other methods fail but cart/DOM counts match
+   */
+  function performIndexFallback(lineItemElements, uploadItems, cart) {
+    const unmatchedDomIndices = [];
+    const unmatchedUploads = uploadItems.filter(u => !u.matched);
+
+    // Find DOM elements that haven't been matched yet
+    lineItemElements.forEach((el, idx) => {
+      if (!el.querySelector('.ul-cart-upload-info')) {
+        unmatchedDomIndices.push(idx);
       }
     });
 
-    if (uploadItems.size === 0) {
-      console.log('[Upload Lift Cart] No upload items in cart');
+    log('Index fallback: unmatched DOM=', unmatchedDomIndices.length, 'unmatched uploads=', unmatchedUploads.length);
+
+    // Only proceed if counts match
+    if (unmatchedDomIndices.length !== unmatchedUploads.length) {
+      log('Index fallback: count mismatch, skipping');
+      return [];
+    }
+
+    const matches = [];
+
+    // Match by position, but verify with any available signal
+    unmatchedDomIndices.forEach((domIndex, i) => {
+      const uploadItem = unmatchedUploads[i];
+      if (!uploadItem) return;
+
+      const lineItem = lineItemElements[domIndex];
+      const domIdentifiers = extractLineItemIdentifiers(lineItem);
+      
+      // Verify with at least one signal
+      let verified = false;
+      
+      if (domIdentifiers.variantId === uploadItem.variantId) verified = true;
+      if (domIdentifiers.productHandle === uploadItem.handle) verified = true;
+      if (domIdentifiers.title && uploadItem.title && 
+          domIdentifiers.title.includes(uploadItem.title.split(' ')[0])) verified = true;
+
+      if (verified) {
+        log(`Index fallback: DOM[${domIndex}] matched to upload[${uploadItem.cartIndex}] (verified)`);
+        matches.push({ domIndex, upload: uploadItem });
+        uploadItem.matched = true;
+      } else {
+        log(`Index fallback: DOM[${domIndex}] could not be verified, skipping`);
+      }
+    });
+
+    return matches;
+  }
+
+  // ============================================
+  // MAIN PROCESSING
+  // ============================================
+
+  async function processCart() {
+    const cart = await getCartData();
+    if (!cart || !cart.items || cart.items.length === 0) {
+      log('No cart data or empty cart');
       return;
     }
     
-    console.log('[Upload Lift Cart] Found', uploadItems.size, 'items with uploads');
+    log('Processing cart with', cart.items.length, 'items');
 
-    // Process each line item element
-    lineItemElements.forEach((lineItem, index) => {
+    // Build upload items data
+    const uploadItems = buildUploadItemsData(cart.items);
+    
+    if (uploadItems.length === 0) {
+      log('No upload items in cart');
+      return;
+    }
+    
+    log('Found', uploadItems.length, 'items with uploads:', uploadItems.map(u => ({
+      key: u.key,
+      variantId: u.variantId,
+      handle: u.handle,
+      uploadId: u.uploadId
+    })));
+
+    // Find DOM elements
+    const lineItemElements = findCartLineItems();
+    if (lineItemElements.length === 0) {
+      log('No cart line items found in DOM');
+      return;
+    }
+    
+    log('Found', lineItemElements.length, 'line item elements in DOM');
+
+    // Phase 1: Match using identifiers
+    const matchResults = [];
+
+    lineItemElements.forEach((lineItem, domIndex) => {
       // Skip if already processed
       if (lineItem.querySelector('.ul-cart-upload-info')) {
-        console.log('[Upload Lift Cart] Item', index, 'already has upload info, skipping');
+        log(`DOM[${domIndex}] already has upload info, skipping`);
         return;
       }
 
-      // Try to find matching cart item by key (most reliable)
-      const key = getLineItemKey(lineItem);
-      let uploadData = key ? uploadItems.get(key) : null;
-      
-      if (key) {
-        console.log('[Upload Lift Cart] Line item', index, 'has key:', key, 'matched:', !!uploadData);
-      } else {
-        console.log('[Upload Lift Cart] Line item', index, 'has NO key attribute');
-      }
-      
-      // Fallback: Try by variant ID
-      if (!uploadData) {
-        const variantId = getLineItemVariantId(lineItem);
-        if (variantId) {
-          uploadData = uploadItemsByVariant.get(String(variantId));
-          if (uploadData) {
-            console.log('[Upload Lift Cart] Matched by variant ID:', variantId);
-          } else {
-            console.log('[Upload Lift Cart] Line item', index, 'variant:', variantId, '- no upload for this variant');
-          }
-        } else {
-          console.log('[Upload Lift Cart] Line item', index, 'has NO variant ID attribute');
-        }
-      }
-      
-      // Last resort: If DOM count matches cart count and item has upload, use index
-      // This is risky but necessary for themes with no data attributes
-      if (!uploadData && lineItemElements.length === cart.items.length) {
-        const cartItem = cart.items[index];
-        const cartUploadId = cartItem?.properties?.[CONFIG.propertyKey] || 
-                             cartItem?.properties?.['_ul_upload_id'];
-        if (cartUploadId) {
-          // Extra verification: Check if product names/images match
-          const cartProductTitle = cartItem.title || cartItem.product_title || '';
-          const domProductTitle = lineItem.querySelector('[class*="title"], [class*="name"], h2, h3, h4')?.textContent?.trim() || '';
-          
-          // If titles roughly match (at least first word), use index matching
-          const cartFirstWord = cartProductTitle.split(' ')[0]?.toLowerCase();
-          const domFirstWord = domProductTitle.split(' ')[0]?.toLowerCase();
-          
-          if (cartFirstWord && domFirstWord && cartFirstWord === domFirstWord) {
-            uploadData = uploadItems.get(cartItem.key);
-            if (uploadData) {
-              console.log('[Upload Lift Cart] Matched by index (verified by title match):', index, cartProductTitle);
-            }
-          } else {
-            console.log('[Upload Lift Cart] Index match SKIPPED - title mismatch:', cartProductTitle, 'vs', domProductTitle);
-          }
-        }
-      }
+      const domIdentifiers = extractLineItemIdentifiers(lineItem);
+      log(`DOM[${domIndex}] identifiers:`, domIdentifiers);
 
-      if (uploadData) {
-        console.log('[Upload Lift Cart] Adding upload info to item', index, 'uploadId:', uploadData.uploadId);
-        const target = findAppendTarget(lineItem);
-        const infoEl = createUploadInfoElement(lineItem, uploadData.uploadId, uploadData.designFile, uploadData.thumbnail);
-        target.appendChild(infoEl);
-        
-        // Fetch and update status
-        updateUploadInfo(infoEl, uploadData.uploadId);
-      } else {
-        // This is expected for items without uploads
-        console.log('[Upload Lift Cart] No upload data for item', index, '(normal product without upload)');
+      const match = findBestMatch(domIdentifiers, uploadItems, domIndex, lineItemElements.length);
+      
+      if (match) {
+        match.upload.matched = true;
+        matchResults.push({ domIndex, lineItem, upload: match.upload, reasons: match.reasons });
       }
     });
+
+    // Phase 2: Index-based fallback for remaining items
+    const fallbackMatches = performIndexFallback(lineItemElements, uploadItems, cart);
+    fallbackMatches.forEach(({ domIndex, upload }) => {
+      matchResults.push({ 
+        domIndex, 
+        lineItem: lineItemElements[domIndex], 
+        upload, 
+        reasons: ['index-fallback'] 
+      });
+    });
+
+    // Phase 3: Apply matches to DOM
+    log('Applying', matchResults.length, 'matches to DOM');
+    
+    for (const { domIndex, lineItem, upload, reasons } of matchResults) {
+      log(`Applying upload to DOM[${domIndex}]:`, upload.uploadId, 'via', reasons.join(','));
+      
+      const target = findAppendTarget(lineItem);
+      const infoEl = createUploadInfoElement(upload.uploadId, upload.designFile, upload.thumbnail);
+      target.appendChild(infoEl);
+      
+      // Fetch and update status asynchronously
+      updateUploadInfo(infoEl, upload.uploadId);
+    }
+
+    // Log any unmatched uploads
+    const unmatchedUploads = uploadItems.filter(u => !u.matched);
+    if (unmatchedUploads.length > 0) {
+      log('WARNING: Could not match these uploads to DOM elements:', 
+        unmatchedUploads.map(u => ({ uploadId: u.uploadId, key: u.key, variantId: u.variantId }))
+      );
+    }
   }
 
-  // Initialize
+  // ============================================
+  // INITIALIZATION
+  // ============================================
+
   function init() {
-    // Only run on cart-related pages
     const isCartPage = window.location.pathname.includes('/cart') ||
                        document.querySelector('[data-cart-form]') ||
                        document.querySelector('form[action="/cart"]') ||
@@ -614,10 +857,9 @@
 
     if (!isCartPage) return;
 
-    console.log('[Upload Lift Cart] Initializing cart display');
+    log('Initializing cart display');
     injectStyles();
     
-    // Initial process
     let retries = 0;
     const tryProcess = () => {
       const items = findCartLineItems();
@@ -629,7 +871,6 @@
       }
     };
     
-    // Wait for DOM
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', tryProcess);
     } else {
@@ -662,14 +903,11 @@
       subtree: true 
     });
 
-    // Listen for cart updates via custom events
+    // Listen for cart update events
     document.addEventListener('cart:updated', () => setTimeout(processCart, 200));
     document.addEventListener('ajaxCart:updated', () => setTimeout(processCart, 200));
-    
-    // Shopify theme events
     document.addEventListener('cart:refresh', () => setTimeout(processCart, 200));
   }
 
-  // Run
   init();
 })();
