@@ -135,12 +135,15 @@ export async function action({ request }: ActionFunctionArgs) {
     const thumbnailUrl = firstItem?.thumbnailKey || customizations.thumbnailUrl || '';
 
     // Build line item properties
+    // Hidden keys (for internal tracking)
     const properties: Record<string, string> = {
       '_ul_upload_id': upload.id,
-      '_ul_upload_url': uploadUrl,
       '_ul_thumbnail': thumbnailUrl,
-      '_ul_design_type': customizations.type || 'dtf',
     };
+    
+    // Visible keys (shown in checkout)
+    properties['Uploaded File'] = uploadUrl;
+    properties['Design Type'] = (customizations.type || 'dtf').toUpperCase() + ' Transfer';
 
     // Add t-shirt specific properties
     if (customizations.type === 'tshirt') {
@@ -148,16 +151,19 @@ export async function action({ request }: ActionFunctionArgs) {
       
       if (customizations.color) {
         properties['_ul_tshirt_color'] = customizations.color;
+        properties['T-Shirt Color'] = customizations.color;
       }
       
       if (customizations.size) {
         properties['_ul_tshirt_size'] = customizations.size;
+        properties['T-Shirt Size'] = customizations.size;
       }
       
       if (customizations.locations && Array.isArray(customizations.locations)) {
         properties['_ul_locations'] = customizations.locations.join(',');
+        properties['Print Locations'] = customizations.locations.join(', ');
         
-        // Add individual location data
+        // Add individual location data (hidden - internal use)
         for (const location of customizations.locations) {
           const locData = customizations.locationSettings?.[location];
           if (locData) {

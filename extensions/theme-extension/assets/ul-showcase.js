@@ -128,9 +128,13 @@
           id: ulShowcaseData[bid].vid,
           quantity: qty,
           properties: {
-            '_upload_file': ulShowcaseData[bid].file ? ulShowcaseData[bid].file.name : '',
-            '_sheet_size': ulShowcaseData[bid].size,
-            '_unit_price': '$' + ulShowcaseData[bid].price
+            // Hidden (internal)
+            '_ul_upload_id': 'showcase_' + Date.now(),
+            // Visible (checkout)
+            'File Name': ulShowcaseData[bid].file ? ulShowcaseData[bid].file.name : '',
+            'Sheet Size': ulShowcaseData[bid].size,
+            'Unit Price': '$' + ulShowcaseData[bid].price,
+            'Design Type': 'DTF Transfer'
           }
         }]
       })

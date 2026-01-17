@@ -133,9 +133,13 @@
           id: ul3dData[bid].vid,
           quantity: qty,
           properties: {
-            '_upload_file': ul3dData[bid].file ? ul3dData[bid].file.name : '',
-            '_sheet_size': ul3dData[bid].size,
-            '_unit_price': '$' + ul3dData[bid].price
+            // Hidden (internal)
+            '_ul_upload_id': 'carousel_' + Date.now(),
+            // Visible (checkout)
+            'File Name': ul3dData[bid].file ? ul3dData[bid].file.name : '',
+            'Sheet Size': ul3dData[bid].size,
+            'Unit Price': '$' + ul3dData[bid].price,
+            'Design Type': 'DTF Transfer'
           }
         }]
       })
