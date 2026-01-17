@@ -52,14 +52,19 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       let thumbnailUrl = null;
       let previewUrl = null;
 
-      if (item.thumbnailKey) {
+      // Try thumbnailKey first, fallback to storageKey if no thumbnail
+      const thumbnailSource = item.thumbnailKey || item.storageKey;
+      if (thumbnailSource) {
         try {
-          thumbnailUrl = await getDownloadSignedUrl(storageConfig, item.thumbnailKey, 3600);
+          thumbnailUrl = await getDownloadSignedUrl(storageConfig, thumbnailSource, 3600);
         } catch {}
       }
-      if (item.previewKey) {
+      
+      // For preview, use previewKey or storageKey
+      const previewSource = item.previewKey || item.storageKey;
+      if (previewSource) {
         try {
-          previewUrl = await getDownloadSignedUrl(storageConfig, item.previewKey, 3600);
+          previewUrl = await getDownloadSignedUrl(storageConfig, previewSource, 3600);
         } catch {}
       }
 

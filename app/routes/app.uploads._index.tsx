@@ -50,6 +50,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
             location: true,
             preflightStatus: true,
             thumbnailKey: true,
+            storageKey: true,
           },
         },
       },
@@ -69,9 +70,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
       let thumbnailUrl: string | null = null;
       const firstItem = u.items[0];
       
-      if (firstItem?.thumbnailKey) {
+      // Use thumbnailKey if available, fallback to storageKey
+      const thumbnailSource = firstItem?.thumbnailKey || firstItem?.storageKey;
+      if (thumbnailSource) {
         try {
-          thumbnailUrl = await getDownloadSignedUrl(storageConfig, firstItem.thumbnailKey, 3600);
+          thumbnailUrl = await getDownloadSignedUrl(storageConfig, thumbnailSource, 3600);
         } catch (e) {
           console.warn(`[Uploads] Failed to get thumbnail URL for ${u.id}:`, e);
         }
