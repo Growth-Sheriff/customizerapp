@@ -123,6 +123,7 @@
         <!-- Hidden fields -->
         <input type="hidden" id="ul-variant-{{ unique_id }}" value="{{ first_variant.id }}" data-price="{{ first_variant.price }}">
         <input type="hidden" id="ul-upload-id-{{ unique_id }}" value="">
+        <input type="hidden" id="ul-upload-url-{{ unique_id }}" value="">
         
         <!-- Variant data for JS - MUST be inside template to move with modal -->
         <script type="application/json" id="ul-variants-{{ unique_id }}">
@@ -856,6 +857,7 @@
     const addBtn = document.getElementById('ul-addcart-' + uniqueId);
     const hint = document.getElementById('ul-hint-' + uniqueId);
     const uploadIdInput = document.getElementById('ul-upload-id-' + uniqueId);
+    const uploadUrlInput = document.getElementById('ul-upload-url-' + uniqueId);
     const dpiWarning = document.getElementById('ul-dpi-warning-' + uniqueId);
     const dpiText = document.getElementById('ul-dpi-text-' + uniqueId);
     
@@ -927,9 +929,13 @@
       progressFill.style.width = '80%';
       progressText.textContent = 'Analyzing...';
       
-      // Store upload ID
+      // Store upload ID and build public URL
       const uploadId = intentData.uploadId;
       if (uploadIdInput) uploadIdInput.value = uploadId;
+      
+      // Build public URL for the uploaded file
+      const publicUrl = `${apiBase}/api/uploads/${uploadId}/file`;
+      if (uploadUrlInput) uploadUrlInput.value = publicUrl;
       
       // Poll for status (max 10 seconds)
       let status = 'processing';
@@ -1181,6 +1187,7 @@
     const variantInput = document.getElementById('ul-variant-' + uniqueId);
     const qtyInput = document.getElementById('ul-qty-' + uniqueId);
     const uploadIdInput = document.getElementById('ul-upload-id-' + uniqueId);
+    const uploadUrlInput = document.getElementById('ul-upload-url-' + uniqueId);
     const previewNameEl = document.getElementById('ul-preview-name-' + uniqueId);
     
     // Validate variant ID - ensure it's synced before cart add
@@ -1189,6 +1196,7 @@
     const variantId = variantInput?.value;
     const quantity = parseInt(qtyInput?.value || '1', 10);
     const uploadId = uploadIdInput?.value;
+    const uploadUrl = uploadUrlInput?.value || '';
     const previewName = previewNameEl?.textContent || '';
     
     console.log('[Upload Lift] Add to cart - variantId:', variantId, 'quantity:', quantity, 'uploadId:', uploadId);
@@ -1219,9 +1227,12 @@
         id: parseInt(variantId, 10),
         quantity: quantity,
         properties: {
+          // Hidden keys (for internal use)
           '_ul_upload_id': uploadId,
-          '_ul_design_file': previewName,
-          '_ul_uploaded': 'true'
+          // Visible keys (shown in checkout)
+          'Uploaded File': uploadUrl,
+          'File Name': previewName,
+          'Design Type': 'DTF Transfer'
         }
       };
       
