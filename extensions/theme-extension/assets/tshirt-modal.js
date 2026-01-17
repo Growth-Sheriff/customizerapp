@@ -1103,11 +1103,14 @@ console.log('[ULTShirtModal] Script loading...');
       // Create object URL for preview (NO server fetch needed - avoids 401!)
       const thumbnailUrl = URL.createObjectURL(file);
       
-      console.log('[ULTShirtModal] Upload complete:', { uploadId, thumbnailUrl });
+      // Build full public URL with https://
+      const fullUrl = `${window.location.origin}${apiBase}/api/uploads/${uploadId}/file`;
+      
+      console.log('[ULTShirtModal] Upload complete:', { uploadId, thumbnailUrl, fullUrl });
       
       return {
         id: uploadId,
-        url: thumbnailUrl, // Use blob URL for texture loading too
+        url: fullUrl, // Full https:// URL for checkout
         thumbnailUrl
       };
     },

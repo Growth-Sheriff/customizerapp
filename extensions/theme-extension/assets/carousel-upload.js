@@ -628,7 +628,7 @@
       throw new Error('Failed to create upload intent');
     }
 
-    const { uploadId, signedUrl, publicUrl } = await intentResponse.json();
+    const { uploadId, signedUrl } = await intentResponse.json();
 
     // 2. Upload to signed URL
     const uploadResponse = await fetch(signedUrl, {
@@ -652,9 +652,12 @@
       throw new Error('Failed to complete upload');
     }
 
+    // Build full public URL with https://
+    const fullUrl = `${window.location.origin}${apiBase}/api/uploads/${uploadId}/file`;
+
     return {
       id: uploadId,
-      url: publicUrl
+      url: fullUrl
     };
   }
 
