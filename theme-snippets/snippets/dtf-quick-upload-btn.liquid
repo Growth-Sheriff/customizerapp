@@ -973,10 +973,10 @@
         reader.readAsDataURL(file);
       }
       
-      // Update status badge
+      // Update status badge - always show positive message to customer
       if (previewStatus) {
-        previewStatus.textContent = status === 'ready' || status === 'completed' ? 'Ready' : 'Processing';
-        previewStatus.className = 'ul-status-badge ' + (status === 'ready' || status === 'completed' ? 'ready' : 'processing');
+        previewStatus.textContent = 'Ready for print';
+        previewStatus.className = 'ul-status-badge ready';
       }
       
       if (addBtn) addBtn.disabled = false;
