@@ -16,7 +16,7 @@ export const PLAN_LIMITS = {
     monthlyPrice: 9,
     freeOrdersPerMonth: 20,
     extraOrderPrice: 0.05,
-    maxFileSizeMB: 50,
+    maxFileSizeMB: 1024,
     modes: ["classic", "quick", "dtf"],
     features: {
       "3d_designer": false,
@@ -35,7 +35,7 @@ export const PLAN_LIMITS = {
     monthlyPrice: 19,
     freeOrdersPerMonth: 30,
     extraOrderPrice: 0.06,
-    maxFileSizeMB: 150,
+    maxFileSizeMB: 1453,
     modes: ["3d_designer", "classic", "quick", "dtf"],
     features: {
       "3d_designer": true,

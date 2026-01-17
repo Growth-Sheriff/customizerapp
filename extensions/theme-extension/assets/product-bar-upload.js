@@ -20,8 +20,13 @@
   // ========================================
   const CONFIG = {
     apiBase: '/apps/customizer',
-    maxFileSize: 50 * 1024 * 1024, // 50MB
-    allowedTypes: ['image/png', 'image/jpeg', 'image/webp', 'application/pdf', 'image/svg+xml']
+    maxFileSize: 1453 * 1024 * 1024, // 1453MB - Pro plan max (backend validates per plan)
+    allowedTypes: [
+      'image/png', 'image/jpeg', 'image/webp', 'image/svg+xml',
+      'image/tiff', 'image/vnd.adobe.photoshop',
+      'application/pdf', 'application/postscript'
+    ],
+    allowedExtensions: ['png', 'jpg', 'jpeg', 'webp', 'svg', 'tiff', 'tif', 'psd', 'pdf', 'ai', 'eps']
   };
 
   // Sheet sizes with prices
@@ -387,15 +392,16 @@
   }
 
   function handleFile(file, overlay) {
-    // Validate file type
-    if (!CONFIG.allowedTypes.includes(file.type)) {
-      alert('Invalid file type. Please upload PNG, JPG, WebP, PDF, or SVG.');
+    // Validate file type - check both MIME type and extension
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+    if (!CONFIG.allowedTypes.includes(file.type) && !CONFIG.allowedExtensions.includes(ext)) {
+      alert('Invalid file type. Please upload PNG, JPG, WebP, TIFF, PSD, PDF, SVG, AI, or EPS.');
       return;
     }
 
     // Validate file size
     if (file.size > CONFIG.maxFileSize) {
-      alert('File too large. Maximum size is 50MB.');
+      alert('File too large. Maximum size is 1.4GB.');
       return;
     }
 

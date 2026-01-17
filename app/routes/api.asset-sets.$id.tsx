@@ -65,9 +65,18 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     cameraPresets: (schema as any).cameraPresets || [],
     renderPreset: (schema as any).renderPreset || {},
     uploadPolicy: (schema as any).uploadPolicy || {
-      maxFileSizeMB: 25,
+      maxFileSizeMB: 1024,
       minDPI: 150,
-      allowedFormats: ["image/png", "image/jpeg", "application/pdf"],
+      allowedFormats: [
+        "image/png",
+        "image/jpeg",
+        "image/webp",
+        "image/tiff",
+        "image/vnd.adobe.photoshop",
+        "image/svg+xml",
+        "application/pdf",
+        "application/postscript",
+      ],
     },
   }, request);
 }

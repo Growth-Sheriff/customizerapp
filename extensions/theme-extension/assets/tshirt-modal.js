@@ -962,15 +962,22 @@ console.log('[ULTShirtModal] Script loading...');
     },
 
     async uploadFile(file) {
-      // Validate file
-      const allowedTypes = ['image/png', 'image/jpeg', 'image/svg+xml', 'image/webp'];
-      if (!allowedTypes.includes(file.type)) {
-        this.showToast('Please upload a PNG, JPG, SVG, or WEBP file', 'error');
+      // Validate file - Support all professional print formats
+      const allowedTypes = [
+        'image/png', 'image/jpeg', 'image/webp', 'image/svg+xml',
+        'image/tiff', 'image/vnd.adobe.photoshop',
+        'application/pdf', 'application/postscript'
+      ];
+      const allowedExtensions = ['png', 'jpg', 'jpeg', 'webp', 'svg', 'tiff', 'tif', 'psd', 'pdf', 'ai', 'eps'];
+      const ext = file.name.split('.').pop()?.toLowerCase() || '';
+      
+      if (!allowedTypes.includes(file.type) && !allowedExtensions.includes(ext)) {
+        this.showToast('Please upload PNG, JPG, WEBP, SVG, TIFF, PSD, PDF, AI, or EPS', 'error');
         return;
       }
       
-      if (file.size > 50 * 1024 * 1024) {
-        this.showToast('File size must be less than 50MB', 'error');
+      if (file.size > 1453 * 1024 * 1024) {
+        this.showToast('File size must be less than 1.4GB', 'error');
         return;
       }
       
