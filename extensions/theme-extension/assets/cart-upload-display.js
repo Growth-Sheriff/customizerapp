@@ -211,8 +211,8 @@
 
   function getStatusText(status) {
     const texts = {
-      'pending': 'Processing...',
-      'processing': 'Analyzing...',
+      'pending': 'Ready for print',
+      'processing': 'Ready for print',
       'ready': 'Ready for print',
       'completed': 'Ready for print',
       'approved': 'Approved',

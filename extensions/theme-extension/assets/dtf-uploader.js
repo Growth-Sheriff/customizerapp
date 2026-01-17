@@ -671,7 +671,7 @@
         const uploadResult = await this.uploadToStorage(productId, file, intentData);
 
         elements.progressFill.style.width = '80%';
-        elements.progressText.textContent = 'Processing...';
+        elements.progressText.textContent = 'Finalizing...';
 
         // Step 3: Complete upload
         // For Shopify uploads, include the fileUrl so backend can update storageKey
@@ -699,7 +699,7 @@
 
         // Step 4: Poll for processing status
         state.upload.status = 'processing';
-        elements.progressText.textContent = 'Analyzing file...';
+        elements.progressText.textContent = 'Almost done...';
         await this.pollUploadStatus(productId, intentData.uploadId);
 
       } catch (error) {
