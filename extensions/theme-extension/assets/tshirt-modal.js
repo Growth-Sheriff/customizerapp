@@ -1104,7 +1104,7 @@ console.log('[ULTShirtModal] Script loading...');
       const thumbnailUrl = URL.createObjectURL(file);
       
       // Build full public URL with https://
-      const fullUrl = `${window.location.origin}${apiBase}/api/uploads/${uploadId}/file`;
+      const fullUrl = `${window.location.origin}${apiBase}/api/upload/file/${uploadId}`;
       
       console.log('[ULTShirtModal] Upload complete:', { uploadId, thumbnailUrl, fullUrl });
       

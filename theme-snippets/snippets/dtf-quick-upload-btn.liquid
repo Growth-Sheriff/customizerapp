@@ -935,7 +935,7 @@
       
       // Build FULL public URL for the uploaded file (with https://)
       const baseUrl = window.location.origin; // e.g. https://fast-dtf-transfer.myshopify.com
-      const publicUrl = `${baseUrl}${apiBase}/api/uploads/${uploadId}/file`;
+      const publicUrl = `${baseUrl}${apiBase}/api/upload/file/${uploadId}`;
       if (uploadUrlInput) uploadUrlInput.value = publicUrl;
       
       // Poll for status (max 10 seconds)

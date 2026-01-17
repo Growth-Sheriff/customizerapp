@@ -653,7 +653,7 @@
     }
 
     // Build full public URL with https://
-    const fullUrl = `${window.location.origin}${apiBase}/api/uploads/${uploadId}/file`;
+    const fullUrl = `${window.location.origin}${apiBase}/api/upload/file/${uploadId}`;
 
     return {
       id: uploadId,

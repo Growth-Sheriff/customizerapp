@@ -4,7 +4,7 @@ import { readLocalFile } from "~/lib/storage.server";
 import mime from "mime-types";
 
 /**
- * GET /api/uploads/:id/file
+ * GET /api/upload/file/:id
  * 
  * Public endpoint to serve uploaded files by upload ID
  * Used by storefront checkout to display uploaded file links
