@@ -1,11 +1,19 @@
 import crypto from "crypto";
 
+// Helper to normalize HOST to include https://
+const normalizeHost = (host: string): string => {
+  if (host.startsWith("https://") || host.startsWith("http://")) {
+    return host;
+  }
+  return `https://${host}`;
+};
+
 // Shopify API configuration
 export const shopifyConfig = {
   apiKey: process.env.SHOPIFY_API_KEY || "",
   apiSecret: process.env.SHOPIFY_API_SECRET || "",
   scopes: process.env.SHOPIFY_SCOPES || "read_products,write_products,read_orders,write_orders",
-  hostName: process.env.HOST || "https://customizerapp.dev",
+  hostName: normalizeHost(process.env.HOST || "customizerapp.dev"),
   apiVersion: "2025-10",
 };
 

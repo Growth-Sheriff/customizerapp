@@ -134,7 +134,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   // Build download URLs for local storage with signed tokens (WI-004)
   // OR use Shopify URLs directly if storageKey is an external URL
-  const host = process.env.HOST || "https://customizerapp.dev";
+  const hostEnv = process.env.HOST || "customizerapp.dev";
+  const host = hostEnv.startsWith("https://") ? hostEnv : `https://${hostEnv}`;
   const firstItem = upload.items[0];
   
   // FAZ 2 - API-002: Extended token expiry to 1 hour for T-Shirt modal long sessions
