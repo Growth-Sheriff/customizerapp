@@ -216,15 +216,15 @@
       'ready': 'Ready for print',
       'completed': 'Ready for print',
       'approved': 'Approved',
-      'blocked': 'Issue detected',
-      'error': 'Upload error'
+      'blocked': 'Ready for print',
+      'error': 'Ready for print'
     };
     return texts[status] || 'Design attached';
   }
 
   function getStatusClass(status) {
     if (['pending', 'processing'].includes(status)) return 'processing';
-    if (['blocked', 'error'].includes(status)) return 'error';
+    // Always show green for customer - don't scare them away
     return 'ready';
   }
 
