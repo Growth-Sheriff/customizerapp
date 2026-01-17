@@ -20,8 +20,13 @@
   // ========================================
   const CONFIG = {
     apiBase: '/apps/customizer',
-    maxFileSize: 50 * 1024 * 1024, // 50MB
-    allowedTypes: ['image/png', 'image/jpeg', 'image/webp', 'application/pdf', 'image/svg+xml'],
+    maxFileSize: 1024 * 1024 * 1024, // 1GB (Free/Starter plan limit)
+    allowedTypes: [
+      'image/png', 'image/jpeg', 'image/webp', 'application/pdf', 'image/svg+xml',
+      'image/tiff', 'image/vnd.adobe.photoshop', 'application/postscript',
+      'application/illustrator', 'application/eps', 'application/x-eps'
+    ],
+    allowedExtensions: ['png', 'jpg', 'jpeg', 'webp', 'svg', 'pdf', 'tiff', 'tif', 'psd', 'ai', 'eps'],
     bannerAutoplayInterval: 5000,
     carouselItemsVisible: 5
   };
@@ -369,15 +374,17 @@
     }
 
     function handleFile(file) {
-      // Validate file type
-      if (!CONFIG.allowedTypes.includes(file.type)) {
-        alert('Invalid file type. Please upload PNG, JPG, WebP, PDF, or SVG.');
+      // Validate file type by MIME type or extension
+      const ext = file.name.split('.').pop()?.toLowerCase() || '';
+      const isValidType = CONFIG.allowedTypes.includes(file.type) || CONFIG.allowedExtensions.includes(ext);
+      if (!isValidType) {
+        alert('Invalid file type. Please upload PNG, JPG, WebP, TIFF, PSD, PDF, SVG, AI, or EPS.');
         return;
       }
 
-      // Validate file size
+      // Validate file size (1GB limit)
       if (file.size > CONFIG.maxFileSize) {
-        alert('File too large. Maximum size is 50MB.');
+        alert('File too large. Maximum size is 1GB.');
         return;
       }
 
