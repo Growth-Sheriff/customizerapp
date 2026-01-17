@@ -161,7 +161,7 @@ export async function action({ request }: ActionFunctionArgs) {
         directionalIntensity: 1,
       },
       uploadPolicy: {
-        maxFileSizeMB: 500,
+        maxFileSizeMB: 1024, // 1GB default
         minDPI: 150,
         allowedFormats: [
           "image/png", "image/jpeg", "image/webp", "image/tiff",

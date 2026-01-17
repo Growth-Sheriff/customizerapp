@@ -106,7 +106,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       ],
       cameraPresets: (schema as any).cameraPresets || {},
       uploadPolicy: (schema as any).uploadPolicy || {
-        maxFileSizeMB: 500,
+        maxFileSizeMB: 1024, // 1GB default
         minDPI: 150,
         allowedFormats: [
           "image/png", "image/jpeg", "image/webp", "image/tiff",
@@ -135,7 +135,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     requireUpload: settings.requireUpload ?? true,
     showDpiWarning: settings.showDpiWarning ?? true,
     minDpi: settings.minDpi ?? 150,
-    maxFileSizeMB: settings.maxFileSizeMB ?? 500,
+    maxFileSizeMB: settings.maxFileSizeMB ?? 1024, // 1GB default
     allowedFormats: settings.allowedFormats || [
       "png", "jpg", "jpeg", "webp", "tiff", "tif", "psd", "svg", "pdf", "ai", "eps"
     ],

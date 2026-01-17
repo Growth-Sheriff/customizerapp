@@ -85,7 +85,7 @@
       // Config (from merchant settings)
       config: {
         tshirtEnabled: true,
-        maxFileSizeMB: 500,
+        maxFileSizeMB: 1024, // 1GB default
         minDPI: 150,
         allowedTypes: [
           'image/png', 'image/jpeg', 'image/webp', 'image/tiff',
@@ -559,7 +559,7 @@
         // Update config from settings
         if (config.settings) {
           this.update('config', {
-            maxFileSizeMB: config.settings.maxFileSizeMB || 500,
+            maxFileSizeMB: config.settings.maxFileSizeMB || 1024,
             minDPI: config.settings.minDpi || 150,
             autoApprove: config.settings.autoApprove ?? true,
           });

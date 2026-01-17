@@ -475,7 +475,7 @@
      */
     validateFile(file, config = {}) {
       const {
-        maxSize = 500 * 1024 * 1024, // 500MB - Updated for new limits
+        maxSize = 1453 * 1024 * 1024, // 1453MB - Pro plan max (backend validates per plan)
         allowedTypes = [
           'image/png', 'image/jpeg', 'image/webp', 'image/tiff',
           'image/vnd.adobe.photoshop', 'application/x-photoshop', 'image/x-psd',

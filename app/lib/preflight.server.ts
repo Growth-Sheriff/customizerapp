@@ -34,27 +34,31 @@ export interface PreflightConfig {
 
 export const PLAN_CONFIGS: Record<string, PreflightConfig> = {
   free: {
-    maxFileSizeMB: 100,
-    minDPI: 150,
-    requiredDPI: 300,
-    maxPages: 1,
-    allowedFormats: ["image/png", "image/jpeg", "image/webp", "image/tiff"],
-    requireTransparency: false,
-  },
-  starter: {
-    maxFileSizeMB: 500,
+    maxFileSizeMB: 1024, // 1GB - all plans support large files
     minDPI: 150,
     requiredDPI: 300,
     maxPages: 1,
     allowedFormats: [
       "image/png", "image/jpeg", "image/webp", "image/tiff",
       "image/vnd.adobe.photoshop", "application/x-photoshop",
-      "application/pdf"
+      "application/pdf", "application/postscript", "image/svg+xml"
+    ],
+    requireTransparency: false,
+  },
+  starter: {
+    maxFileSizeMB: 1024, // 1GB
+    minDPI: 150,
+    requiredDPI: 300,
+    maxPages: 1,
+    allowedFormats: [
+      "image/png", "image/jpeg", "image/webp", "image/tiff",
+      "image/vnd.adobe.photoshop", "application/x-photoshop",
+      "application/pdf", "application/postscript", "image/svg+xml"
     ],
     requireTransparency: false,
   },
   pro: {
-    maxFileSizeMB: 750,
+    maxFileSizeMB: 1453, // Pro gets 1453MB
     minDPI: 150,
     requiredDPI: 300,
     maxPages: 5,
@@ -66,7 +70,7 @@ export const PLAN_CONFIGS: Record<string, PreflightConfig> = {
     requireTransparency: false,
   },
   enterprise: {
-    maxFileSizeMB: 750,
+    maxFileSizeMB: 1453, // Enterprise gets 1453MB
     minDPI: 150,
     requiredDPI: 300,
     maxPages: 10,

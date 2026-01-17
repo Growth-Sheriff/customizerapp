@@ -51,9 +51,9 @@
     // 🟡 Vektör
     'svg', 'pdf', 'ai', 'eps'
   ];
-  const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB - Standard limit
+  const MAX_FILE_SIZE = 1453 * 1024 * 1024; // 1453MB - Pro plan max (backend validates per plan)
   const POLL_INTERVAL = 1000; // 1 second
-  const MAX_POLLS = 60; // 60 seconds max wait
+  const MAX_POLLS = 120; // 120 seconds max wait for large files
   
   // FAZ 3 - EDGE-001: Tab-specific session ID for multi-tab isolation
   const TAB_SESSION_ID = `ul_tab_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -118,7 +118,7 @@
             uploadEnabled: true,
             tshirtEnabled: false,
             allowedFileTypes: ALLOWED_EXTENSIONS,
-            maxFileSizeMB: 500,
+            maxFileSizeMB: 1024, // 1GB default, backend validates per plan
             minDPI: 150,
             extraQuestions: [],
             bulkDiscountThreshold: 10,
@@ -593,7 +593,7 @@
           window.ULErrorHandler.show(err.code, err.params, {
             onRetry: () => elements.fileInput.click()
           });
-          this.showError(productId, window.ULErrorHandler.getError(err.code).message.replace('{maxSize}', err.params.maxSize || '500MB').replace('{allowedTypes}', err.params.allowedTypes || ALLOWED_EXTENSIONS.join(', ').toUpperCase()));
+          this.showError(productId, window.ULErrorHandler.getError(err.code).message.replace('{maxSize}', err.params.maxSize || '1.4GB').replace('{allowedTypes}', err.params.allowedTypes || ALLOWED_EXTENSIONS.join(', ').toUpperCase()));
           return;
         }
       } else {
@@ -605,7 +605,7 @@
         }
 
         if (file.size > MAX_FILE_SIZE) {
-          this.showError(productId, 'File too large. Maximum size is 500MB.');
+          this.showError(productId, 'File too large. Maximum size is 1.4GB.');
           return;
         }
       }

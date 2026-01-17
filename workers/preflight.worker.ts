@@ -197,67 +197,41 @@ const preflightWorker = new Worker<PreflightJobData>(
 
       await job.updateProgress(30);
 
-      // Convert if needed (PDF, AI, EPS, TIFF, PSD)
+      // Convert if needed for ANALYSIS ONLY (PDF, AI, EPS, TIFF, PSD)
+      // IMPORTANT: Original file is ALWAYS preserved for merchant download
+      // Conversion is ONLY used for:
+      // 1. Generating thumbnail preview
+      // 2. Running DPI/dimension checks
+      // The converted file is NOT uploaded - it's temporary
       let processedPath = originalPath;
-      let convertedKey: string | null = null;
       
       // Get S3 client for remote storage (reuse for uploads)
       const client = storageProvider !== "local" ? getStorageClient(storageProvider) : null;
 
       if (detectedType === "application/pdf") {
-        console.log(`[Preflight] Converting PDF to PNG`);
+        console.log(`[Preflight] Converting PDF to PNG for analysis (original preserved)`);
         const pngPath = path.join(tempDir, "converted.png");
         await convertPdfToPng(originalPath, pngPath, 300);
         processedPath = pngPath;
-
-        // Upload converted file
-        convertedKey = storageKey.replace(/\.[^.]+$/, "_converted.png");
-        if (storageProvider === "local") {
-          await uploadLocalFile(convertedKey, pngPath);
-        } else if (client) {
-          await uploadFile(client, convertedKey, pngPath, "image/png");
-        }
+        // NO upload of converted file - original PDF is preserved for merchant
       } else if (detectedType === "application/postscript") {
-        console.log(`[Preflight] Converting AI/EPS to PNG`);
+        console.log(`[Preflight] Converting AI/EPS to PNG for analysis (original preserved)`);
         const pngPath = path.join(tempDir, "converted.png");
         await convertEpsToPng(originalPath, pngPath, 300);
         processedPath = pngPath;
-
-        // Upload converted file
-        convertedKey = storageKey.replace(/\.[^.]+$/, "_converted.png");
-        if (storageProvider === "local") {
-          await uploadLocalFile(convertedKey, pngPath);
-        } else if (client) {
-          await uploadFile(client, convertedKey, pngPath, "image/png");
-        }
+        // NO upload of converted file - original AI/EPS is preserved for merchant
       } else if (detectedType === "image/tiff") {
-        // 🆕 TIFF Conversion - ImageMagick handles all TIFF variants
-        console.log(`[Preflight] Converting TIFF to PNG`);
+        console.log(`[Preflight] Converting TIFF to PNG for analysis (original preserved)`);
         const pngPath = path.join(tempDir, "converted.png");
         await convertTiffToPng(originalPath, pngPath);
         processedPath = pngPath;
-
-        // Upload converted file
-        convertedKey = storageKey.replace(/\.[^.]+$/, "_converted.png");
-        if (storageProvider === "local") {
-          await uploadLocalFile(convertedKey, pngPath);
-        } else if (client) {
-          await uploadFile(client, convertedKey, pngPath, "image/png");
-        }
+        // NO upload of converted file - original TIFF is preserved for merchant
       } else if (detectedType === "image/vnd.adobe.photoshop" || detectedType === "application/x-photoshop") {
-        // 🆕 PSD Conversion - ImageMagick with layer flattening
-        console.log(`[Preflight] Converting PSD to PNG`);
+        console.log(`[Preflight] Converting PSD to PNG for analysis (original preserved)`);
         const pngPath = path.join(tempDir, "converted.png");
         await convertPsdToPng(originalPath, pngPath);
         processedPath = pngPath;
-
-        // Upload converted file
-        convertedKey = storageKey.replace(/\.[^.]+$/, "_converted.png");
-        if (storageProvider === "local") {
-          await uploadLocalFile(convertedKey, pngPath);
-        } else if (client) {
-          await uploadFile(client, convertedKey, pngPath, "image/png");
-        }
+        // NO upload of converted file - original PSD is preserved for merchant
       }
 
       await job.updateProgress(50);
@@ -284,13 +258,14 @@ const preflightWorker = new Worker<PreflightJobData>(
       await job.updateProgress(90);
 
       // Update database
+      // IMPORTANT: previewKey = storageKey (original file) - merchant always gets original
       await prisma.uploadItem.update({
         where: { id: itemId },
         data: {
           preflightStatus: result.overall,
           preflightResult: result as any,
           thumbnailKey,
-          previewKey: convertedKey || storageKey,
+          previewKey: storageKey, // Always use original file for merchant download
         },
       });
 

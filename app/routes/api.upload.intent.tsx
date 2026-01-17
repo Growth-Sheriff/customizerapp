@@ -7,12 +7,12 @@ import { checkUploadAllowed } from "~/lib/billing.server";
 import { handleCorsOptions, corsJson } from "~/lib/cors.server";
 import prisma from "~/lib/prisma.server";
 
-// Plan limits - Updated for 500MB standard, 750MB pro
+// Plan limits - Updated for 1GB standard, 1453MB pro
 const PLAN_LIMITS = {
-  free: { maxSizeMB: 100, uploadsPerMonth: 100 },      // Free: 100MB
-  starter: { maxSizeMB: 500, uploadsPerMonth: 1000 },   // Starter: 500MB
-  pro: { maxSizeMB: 750, uploadsPerMonth: -1 },         // Pro: 750MB unlimited
-  enterprise: { maxSizeMB: 750, uploadsPerMonth: -1 },  // Enterprise: 750MB unlimited
+  free: { maxSizeMB: 1024, uploadsPerMonth: 100 },       // Free: 1GB (1024MB)
+  starter: { maxSizeMB: 1024, uploadsPerMonth: 1000 },   // Starter: 1GB (1024MB)
+  pro: { maxSizeMB: 1453, uploadsPerMonth: -1 },         // Pro: 1453MB unlimited
+  enterprise: { maxSizeMB: 1453, uploadsPerMonth: -1 },  // Enterprise: 1453MB unlimited
 };
 
 // GET handler - returns API info
