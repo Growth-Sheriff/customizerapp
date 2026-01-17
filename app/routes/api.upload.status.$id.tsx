@@ -134,7 +134,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   // Build download URLs for local storage with signed tokens (WI-004)
   // OR use Shopify URLs directly if storageKey is an external URL
-  const hostEnv = process.env.HOST || "customizerapp.dev";
+  // FIX: Use SHOPIFY_APP_URL (has correct domain) instead of HOST (0.0.0.0 for binding)
+  const hostEnv = process.env.SHOPIFY_APP_URL || process.env.HOST || "https://customizerapp.dev";
   const host = hostEnv.startsWith("https://") ? hostEnv : `https://${hostEnv}`;
   const firstItem = upload.items[0];
   
