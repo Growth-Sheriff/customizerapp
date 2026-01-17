@@ -58,7 +58,7 @@
     "step_quantity": "Menge",
     "step_options": "Zusätzliche Optionen",
     "dropzone_text": "Design hier ablegen",
-    "dropzone_hint": "oder klicken zum Durchsuchen • PNG, JPG, SVG, PDF, AI, EPS • Max 50MB",
+    "dropzone_hint": "oder klicken zum Durchsuchen • PNG, JPG, WEBP, TIFF, PSD, PDF, AI, EPS • Max 1GB",
     "uploading": "Hochladen...",
     "processing": "Verarbeitung...",
     "ready": "Druckbereit",
@@ -111,8 +111,8 @@
     "continue_shopping": "Weiter einkaufen"
   },
   "errors": {
-    "file_too_large": "Datei ist zu groß. Maximale Größe ist 50MB.",
-    "invalid_file_type": "Ungültiger Dateityp. Bitte laden Sie PNG, JPG, SVG, PDF, AI oder EPS hoch.",
+    "file_too_large": "Datei ist zu groß. Maximale Größe ist 1GB.",
+    "invalid_file_type": "Ungültiger Dateityp. Bitte laden Sie PNG, JPG, WEBP, TIFF, PSD, PDF, AI oder EPS hoch.",
     "upload_failed": "Hochladen fehlgeschlagen. Bitte versuchen Sie es erneut.",
     "network_error": "Netzwerkfehler. Überprüfen Sie Ihre Verbindung.",
     "low_resolution": "Warnung niedrige Auflösung: {{dpi}} DPI (empfohlen: 150+ DPI)",

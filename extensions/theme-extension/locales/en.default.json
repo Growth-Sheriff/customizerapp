@@ -58,7 +58,7 @@
     "step_quantity": "Quantity",
     "step_options": "Additional Options",
     "dropzone_text": "Drag & drop your design here",
-    "dropzone_hint": "or click to browse • PNG, JPG, SVG, PDF, AI, EPS • Max 50MB",
+    "dropzone_hint": "or click to browse • PNG, JPG, WEBP, TIFF, PSD, PDF, AI, EPS • Max 1GB",
     "uploading": "Uploading...",
     "processing": "Processing...",
     "ready": "Ready for print",
@@ -111,8 +111,8 @@
     "continue_shopping": "Continue Shopping"
   },
   "errors": {
-    "file_too_large": "File is too large. Maximum size is 50MB.",
-    "invalid_file_type": "Invalid file type. Please upload PNG, JPG, SVG, PDF, AI, or EPS.",
+    "file_too_large": "File is too large. Maximum size is 1GB.",
+    "invalid_file_type": "Invalid file type. Please upload PNG, JPG, WEBP, TIFF, PSD, PDF, AI, or EPS.",
     "upload_failed": "Upload failed. Please try again.",
     "network_error": "Network error. Please check your connection.",
     "low_resolution": "Low resolution warning: {{dpi}} DPI (recommended: 150+ DPI)",

@@ -58,7 +58,7 @@
     "step_quantity": "Adet",
     "step_options": "Ek Seçenekler",
     "dropzone_text": "Tasarımınızı buraya sürükleyip bırakın",
-    "dropzone_hint": "veya dosya seçmek için tıklayın • PNG, JPG, SVG, PDF, AI, EPS • Max 50MB",
+    "dropzone_hint": "veya dosya seçmek için tıklayın • PNG, JPG, WEBP, TIFF, PSD, PDF, AI, EPS • Max 1GB",
     "uploading": "Yükleniyor...",
     "processing": "İşleniyor...",
     "ready": "Baskıya hazır",
@@ -111,8 +111,8 @@
     "continue_shopping": "Alışverişe Devam Et"
   },
   "errors": {
-    "file_too_large": "Dosya çok büyük. Maksimum boyut 50MB.",
-    "invalid_file_type": "Geçersiz dosya türü. Lütfen PNG, JPG, SVG, PDF, AI veya EPS yükleyin.",
+    "file_too_large": "Dosya çok büyük. Maksimum boyut 1GB.",
+    "invalid_file_type": "Geçersiz dosya türü. Lütfen PNG, JPG, WEBP, TIFF, PSD, PDF, AI veya EPS yükleyin.",
     "upload_failed": "Yükleme başarısız. Lütfen tekrar deneyin.",
     "network_error": "Ağ hatası. Bağlantınızı kontrol edin.",
     "low_resolution": "Düşük çözünürlük uyarısı: {{dpi}} DPI (önerilen: 150+ DPI)",
