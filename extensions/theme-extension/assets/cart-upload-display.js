@@ -441,7 +441,7 @@
         matchCount++;
       } else {
         // This is normal for products without uploads
-        log(`DOM[${domIndex}] key:`, domKey, '- no upload (normal product)`);
+        log(`DOM[${domIndex}] key: ${domKey} - no upload (normal product)`);
       }
     });
 
