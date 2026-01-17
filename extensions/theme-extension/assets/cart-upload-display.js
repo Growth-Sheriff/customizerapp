@@ -419,14 +419,50 @@
 
   // Get line item key/id from element
   function getLineItemKey(lineItem) {
-    return lineItem.dataset.lineItemKey || 
+    // Try various data attributes for key
+    const key = lineItem.dataset.lineItemKey || 
            lineItem.dataset.cartItemKey ||
            lineItem.dataset.key ||
            lineItem.dataset.id ||
            lineItem.getAttribute('data-line-item-key') ||
            lineItem.getAttribute('data-cart-item-key') ||
+           lineItem.getAttribute('data-key') ||
+           lineItem.getAttribute('data-id') ||
            lineItem.querySelector('[data-line-item-key]')?.dataset.lineItemKey ||
+           lineItem.querySelector('[data-key]')?.dataset.key ||
+           lineItem.querySelector('[data-cart-item-key]')?.dataset.cartItemKey ||
+           lineItem.querySelector('input[name*="key"]')?.value ||
+           lineItem.querySelector('a[href*="/cart/change?"]')?.href?.match(/id=([^&]+)/)?.[1] ||
            null;
+    
+    if (key) {
+      console.log('[Upload Lift Cart] Found key for line item:', key);
+    }
+    return key;
+  }
+
+  // Get variant ID from line item element
+  function getLineItemVariantId(lineItem) {
+    return lineItem.dataset.variantId || 
+           lineItem.dataset.variant ||
+           lineItem.getAttribute('data-variant-id') ||
+           lineItem.getAttribute('data-variant') ||
+           lineItem.querySelector('[data-variant-id]')?.dataset.variantId ||
+           lineItem.querySelector('[data-variant]')?.dataset.variant ||
+           lineItem.querySelector('input[name*="id"]')?.value ||
+           lineItem.querySelector('a[href*="variant="]')?.href?.match(/variant=(\d+)/)?.[1] ||
+           // Try to extract from product link
+           extractVariantFromLinks(lineItem) ||
+           null;
+  }
+
+  function extractVariantFromLinks(lineItem) {
+    const links = lineItem.querySelectorAll('a[href*="/products/"]');
+    for (const link of links) {
+      const match = link.href.match(/variant=(\d+)/);
+      if (match) return match[1];
+    }
+    return null;
   }
 
   // Main function to process cart
@@ -504,21 +540,52 @@
       const key = getLineItemKey(lineItem);
       let uploadData = key ? uploadItems.get(key) : null;
       
-      // Fallback: Try by variant ID (less reliable but works for some themes)
+      if (key) {
+        console.log('[Upload Lift Cart] Line item', index, 'has key:', key, 'matched:', !!uploadData);
+      } else {
+        console.log('[Upload Lift Cart] Line item', index, 'has NO key attribute');
+      }
+      
+      // Fallback: Try by variant ID
       if (!uploadData) {
-        const variantId = lineItem.dataset.variantId || 
-                          lineItem.getAttribute('data-variant-id') ||
-                          lineItem.querySelector('[data-variant-id]')?.dataset.variantId;
+        const variantId = getLineItemVariantId(lineItem);
         if (variantId) {
           uploadData = uploadItemsByVariant.get(String(variantId));
           if (uploadData) {
             console.log('[Upload Lift Cart] Matched by variant ID:', variantId);
+          } else {
+            console.log('[Upload Lift Cart] Line item', index, 'variant:', variantId, '- no upload for this variant');
           }
+        } else {
+          console.log('[Upload Lift Cart] Line item', index, 'has NO variant ID attribute');
         }
       }
       
-      // DO NOT fallback to index matching - this causes wrong item matching!
-      // Index-based matching is unreliable because DOM order may differ from cart.items order
+      // Last resort: If DOM count matches cart count and item has upload, use index
+      // This is risky but necessary for themes with no data attributes
+      if (!uploadData && lineItemElements.length === cart.items.length) {
+        const cartItem = cart.items[index];
+        const cartUploadId = cartItem?.properties?.[CONFIG.propertyKey] || 
+                             cartItem?.properties?.['_ul_upload_id'];
+        if (cartUploadId) {
+          // Extra verification: Check if product names/images match
+          const cartProductTitle = cartItem.title || cartItem.product_title || '';
+          const domProductTitle = lineItem.querySelector('[class*="title"], [class*="name"], h2, h3, h4')?.textContent?.trim() || '';
+          
+          // If titles roughly match (at least first word), use index matching
+          const cartFirstWord = cartProductTitle.split(' ')[0]?.toLowerCase();
+          const domFirstWord = domProductTitle.split(' ')[0]?.toLowerCase();
+          
+          if (cartFirstWord && domFirstWord && cartFirstWord === domFirstWord) {
+            uploadData = uploadItems.get(cartItem.key);
+            if (uploadData) {
+              console.log('[Upload Lift Cart] Matched by index (verified by title match):', index, cartProductTitle);
+            }
+          } else {
+            console.log('[Upload Lift Cart] Index match SKIPPED - title mismatch:', cartProductTitle, 'vs', domProductTitle);
+          }
+        }
+      }
 
       if (uploadData) {
         console.log('[Upload Lift Cart] Adding upload info to item', index, 'uploadId:', uploadData.uploadId);
