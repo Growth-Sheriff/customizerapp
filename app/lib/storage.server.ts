@@ -119,7 +119,13 @@ export async function getUploadSignedUrl(
   _contentType: string,
   _expiresIn: number = 900
 ): Promise<{ url: string; key: string; isLocal: boolean }> {
-  const host = process.env.HOST || "https://customizerapp.dev";
+  // Use SHOPIFY_APP_URL (always has https://) or fallback to HOST with protocol handling
+  let host = process.env.SHOPIFY_APP_URL || process.env.HOST || "https://customizerapp.dev";
+  
+  // Ensure host has https:// prefix
+  if (!host.startsWith("http://") && !host.startsWith("https://")) {
+    host = `https://${host}`;
+  }
   
   return {
     url: `${host}/api/upload/local`,
@@ -136,7 +142,14 @@ export async function getDownloadSignedUrl(
   key: string,
   expiresIn: number = 3600 // 1 hour
 ): Promise<string> {
-  const host = process.env.HOST || "https://customizerapp.dev";
+  // Use SHOPIFY_APP_URL (always has https://) or fallback to HOST with protocol handling
+  let host = process.env.SHOPIFY_APP_URL || process.env.HOST || "https://customizerapp.dev";
+  
+  // Ensure host has https:// prefix
+  if (!host.startsWith("http://") && !host.startsWith("https://")) {
+    host = `https://${host}`;
+  }
+  
   const expiresAt = Date.now() + expiresIn * 1000;
   const token = generateLocalFileToken(key, expiresAt);
   return `${host}/api/files/${encodeURIComponent(key)}?token=${token}`;
