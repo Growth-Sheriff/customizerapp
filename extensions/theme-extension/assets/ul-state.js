@@ -85,9 +85,13 @@
       // Config (from merchant settings)
       config: {
         tshirtEnabled: true,
-        maxFileSizeMB: 50,
+        maxFileSizeMB: 500,
         minDPI: 150,
-        allowedTypes: ['image/png', 'image/jpeg', 'image/svg+xml', 'image/webp'],
+        allowedTypes: [
+          'image/png', 'image/jpeg', 'image/webp', 'image/tiff',
+          'image/vnd.adobe.photoshop', 'application/x-photoshop',
+          'image/svg+xml', 'application/pdf', 'application/postscript'
+        ],
         extraQuestions: [],
         pricing: {
           locationPrices: { front: 0, back: 5, left_sleeve: 3, right_sleeve: 3 },
@@ -555,7 +559,7 @@
         // Update config from settings
         if (config.settings) {
           this.update('config', {
-            maxFileSizeMB: config.settings.maxFileSizeMB || 25,
+            maxFileSizeMB: config.settings.maxFileSizeMB || 500,
             minDPI: config.settings.minDpi || 150,
             autoApprove: config.settings.autoApprove ?? true,
           });

@@ -3,6 +3,12 @@ customizerapp.dev {
 
     encode gzip
 
+    # 🆕 Request body limit for 750MB uploads (Pro plan max)
+    # Plus buffer for multipart overhead
+    request_body {
+        max_size 800MB
+    }
+
     # Remove X-Frame-Options for Shopify embedded app
     header -X-Frame-Options
 

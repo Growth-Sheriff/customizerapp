@@ -475,9 +475,13 @@
      */
     validateFile(file, config = {}) {
       const {
-        maxSize = 50 * 1024 * 1024, // 50MB
-        allowedTypes = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml', 'application/pdf'],
-        allowedExtensions = ['png', 'jpg', 'jpeg', 'webp', 'svg', 'pdf', 'ai', 'eps'],
+        maxSize = 500 * 1024 * 1024, // 500MB - Updated for new limits
+        allowedTypes = [
+          'image/png', 'image/jpeg', 'image/webp', 'image/tiff',
+          'image/vnd.adobe.photoshop', 'application/x-photoshop', 'image/x-psd',
+          'image/svg+xml', 'application/pdf', 'application/postscript'
+        ],
+        allowedExtensions = ['png', 'jpg', 'jpeg', 'webp', 'tiff', 'tif', 'psd', 'svg', 'pdf', 'ai', 'eps'],
         minDpi = 150
       } = config;
       

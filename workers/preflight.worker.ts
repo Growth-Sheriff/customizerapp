@@ -9,6 +9,8 @@ import {
   runPreflightChecks,
   convertPdfToPng,
   convertEpsToPng,
+  convertTiffToPng,
+  convertPsdToPng,
   generateThumbnail,
   detectFileType,
   PLAN_CONFIGS,
@@ -195,7 +197,7 @@ const preflightWorker = new Worker<PreflightJobData>(
 
       await job.updateProgress(30);
 
-      // Convert if needed (PDF, AI, EPS)
+      // Convert if needed (PDF, AI, EPS, TIFF, PSD)
       let processedPath = originalPath;
       let convertedKey: string | null = null;
       
@@ -219,6 +221,34 @@ const preflightWorker = new Worker<PreflightJobData>(
         console.log(`[Preflight] Converting AI/EPS to PNG`);
         const pngPath = path.join(tempDir, "converted.png");
         await convertEpsToPng(originalPath, pngPath, 300);
+        processedPath = pngPath;
+
+        // Upload converted file
+        convertedKey = storageKey.replace(/\.[^.]+$/, "_converted.png");
+        if (storageProvider === "local") {
+          await uploadLocalFile(convertedKey, pngPath);
+        } else if (client) {
+          await uploadFile(client, convertedKey, pngPath, "image/png");
+        }
+      } else if (detectedType === "image/tiff") {
+        // 🆕 TIFF Conversion - ImageMagick handles all TIFF variants
+        console.log(`[Preflight] Converting TIFF to PNG`);
+        const pngPath = path.join(tempDir, "converted.png");
+        await convertTiffToPng(originalPath, pngPath);
+        processedPath = pngPath;
+
+        // Upload converted file
+        convertedKey = storageKey.replace(/\.[^.]+$/, "_converted.png");
+        if (storageProvider === "local") {
+          await uploadLocalFile(convertedKey, pngPath);
+        } else if (client) {
+          await uploadFile(client, convertedKey, pngPath, "image/png");
+        }
+      } else if (detectedType === "image/vnd.adobe.photoshop" || detectedType === "application/x-photoshop") {
+        // 🆕 PSD Conversion - ImageMagick with layer flattening
+        console.log(`[Preflight] Converting PSD to PNG`);
+        const pngPath = path.join(tempDir, "converted.png");
+        await convertPsdToPng(originalPath, pngPath);
         processedPath = pngPath;
 
         // Upload converted file

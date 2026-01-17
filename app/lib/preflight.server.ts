@@ -34,35 +34,47 @@ export interface PreflightConfig {
 
 export const PLAN_CONFIGS: Record<string, PreflightConfig> = {
   free: {
-    maxFileSizeMB: 25,
+    maxFileSizeMB: 100,
     minDPI: 150,
     requiredDPI: 300,
     maxPages: 1,
-    allowedFormats: ["image/png", "image/jpeg", "image/webp"],
+    allowedFormats: ["image/png", "image/jpeg", "image/webp", "image/tiff"],
     requireTransparency: false,
   },
   starter: {
-    maxFileSizeMB: 50,
+    maxFileSizeMB: 500,
     minDPI: 150,
     requiredDPI: 300,
     maxPages: 1,
-    allowedFormats: ["image/png", "image/jpeg", "image/webp", "application/pdf"],
+    allowedFormats: [
+      "image/png", "image/jpeg", "image/webp", "image/tiff",
+      "image/vnd.adobe.photoshop", "application/x-photoshop",
+      "application/pdf"
+    ],
     requireTransparency: false,
   },
   pro: {
-    maxFileSizeMB: 150,
+    maxFileSizeMB: 750,
     minDPI: 150,
     requiredDPI: 300,
     maxPages: 5,
-    allowedFormats: ["image/png", "image/jpeg", "image/webp", "application/pdf", "application/postscript", "image/svg+xml"],
+    allowedFormats: [
+      "image/png", "image/jpeg", "image/webp", "image/tiff",
+      "image/vnd.adobe.photoshop", "application/x-photoshop",
+      "application/pdf", "application/postscript", "image/svg+xml"
+    ],
     requireTransparency: false,
   },
   enterprise: {
-    maxFileSizeMB: 150,
+    maxFileSizeMB: 750,
     minDPI: 150,
     requiredDPI: 300,
     maxPages: 10,
-    allowedFormats: ["image/png", "image/jpeg", "image/webp", "application/pdf", "application/postscript", "image/svg+xml"],
+    allowedFormats: [
+      "image/png", "image/jpeg", "image/webp", "image/tiff",
+      "image/vnd.adobe.photoshop", "application/x-photoshop",
+      "application/pdf", "application/postscript", "image/svg+xml"
+    ],
     requireTransparency: false,
   },
 };
@@ -72,8 +84,11 @@ const MAGIC_BYTES: Record<string, Buffer> = {
   "image/png": Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
   "image/jpeg": Buffer.from([0xff, 0xd8, 0xff]),
   "image/webp": Buffer.from([0x52, 0x49, 0x46, 0x46]), // RIFF header
+  "image/tiff": Buffer.from([0x49, 0x49, 0x2a, 0x00]), // Little-endian TIFF (II)
+  "image/tiff-be": Buffer.from([0x4d, 0x4d, 0x00, 0x2a]), // Big-endian TIFF (MM)
   "application/pdf": Buffer.from([0x25, 0x50, 0x44, 0x46]), // %PDF
   "image/svg+xml": Buffer.from([0x3c, 0x3f, 0x78, 0x6d, 0x6c]), // <?xml or <svg
+  "image/vnd.adobe.photoshop": Buffer.from([0x38, 0x42, 0x50, 0x53]), // 8BPS - PSD signature
 };
 
 // Detect file type from magic bytes
@@ -85,6 +100,10 @@ export async function detectFileType(filePath: string): Promise<string | null> {
 
   for (const [mimeType, magic] of Object.entries(MAGIC_BYTES)) {
     if (buffer.subarray(0, magic.length).equals(magic)) {
+      // Normalize TIFF big-endian to standard TIFF MIME type
+      if (mimeType === "image/tiff-be") {
+        return "image/tiff";
+      }
       return mimeType;
     }
   }
@@ -211,6 +230,35 @@ export async function convertEpsToPng(inputPath: string, outputPath: string, dpi
   }
 }
 
+// Convert TIFF to PNG using ImageMagick
+// ImageMagick handles all TIFF variants (LZW, ZIP, uncompressed, CMYK, etc.)
+export async function convertTiffToPng(inputPath: string, outputPath: string): Promise<void> {
+  // Use [0] to get first page/layer, -colorspace sRGB to convert CMYK if needed
+  const cmd = `convert "${inputPath}[0]" -colorspace sRGB -flatten -quality 100 "${outputPath}"`;
+
+  try {
+    await execAsync(cmd, { timeout: 60000 }); // 60s timeout for large TIFF files
+  } catch (error) {
+    console.error("[Preflight] TIFF conversion failed:", error);
+    throw new Error("TIFF conversion failed");
+  }
+}
+
+// Convert PSD to PNG using ImageMagick
+// ImageMagick's PSD support handles layers, CMYK, 16-bit depth, etc.
+export async function convertPsdToPng(inputPath: string, outputPath: string): Promise<void> {
+  // [0] gets the flattened composite, -flatten merges transparency
+  // -colorspace sRGB handles CMYK to RGB conversion
+  const cmd = `convert "${inputPath}[0]" -colorspace sRGB -flatten -quality 100 "${outputPath}"`;
+
+  try {
+    await execAsync(cmd, { timeout: 120000 }); // 120s timeout for large PSD files
+  } catch (error) {
+    console.error("[Preflight] PSD conversion failed:", error);
+    throw new Error("PSD conversion failed");
+  }
+}
+
 // Generate WebP thumbnail
 export async function generateThumbnail(inputPath: string, outputPath: string, maxSize: number = 400): Promise<void> {
   const cmd = `convert "${inputPath}[0]" -thumbnail ${maxSize}x${maxSize}\\> -quality 85 "${outputPath}"`;
@@ -254,7 +302,19 @@ export async function runPreflightChecks(
 
   // 2. Format check (magic bytes)
   const detectedType = await detectFileType(filePath);
-  if (!detectedType || !config.allowedFormats.includes(detectedType)) {
+  
+  // Check if detected type or its alternatives are allowed
+  // PSD can have multiple MIME types, check all variants
+  const psdTypes = ["image/vnd.adobe.photoshop", "application/x-photoshop", "image/x-psd"];
+  const isPsd = psdTypes.includes(detectedType || "");
+  const isPsdAllowed = psdTypes.some(t => config.allowedFormats.includes(t));
+  
+  const isFormatAllowed = detectedType && (
+    config.allowedFormats.includes(detectedType) ||
+    (isPsd && isPsdAllowed)
+  );
+  
+  if (!detectedType || !isFormatAllowed) {
     checks.push({
       name: "format",
       status: "error",

@@ -7,12 +7,12 @@ import { checkUploadAllowed } from "~/lib/billing.server";
 import { handleCorsOptions, corsJson } from "~/lib/cors.server";
 import prisma from "~/lib/prisma.server";
 
-// Plan limits
+// Plan limits - Updated for 500MB standard, 750MB pro
 const PLAN_LIMITS = {
-  free: { maxSizeMB: 25, uploadsPerMonth: 100 },
-  starter: { maxSizeMB: 50, uploadsPerMonth: 1000 },
-  pro: { maxSizeMB: 150, uploadsPerMonth: -1 }, // unlimited
-  enterprise: { maxSizeMB: 150, uploadsPerMonth: -1 },
+  free: { maxSizeMB: 100, uploadsPerMonth: 100 },      // Free: 100MB
+  starter: { maxSizeMB: 500, uploadsPerMonth: 1000 },   // Starter: 500MB
+  pro: { maxSizeMB: 750, uploadsPerMonth: -1 },         // Pro: 750MB unlimited
+  enterprise: { maxSizeMB: 750, uploadsPerMonth: -1 },  // Enterprise: 750MB unlimited
 };
 
 // GET handler - returns API info
@@ -114,14 +114,47 @@ export async function action({ request }: ActionFunctionArgs) {
     }, request, { status: 403 });
   }
 
-  // Validate content type
+  // Validate content type - Support all major image formats
   const allowedTypes = [
+    // 🟢 Raster - Temel
     "image/png", "image/jpeg", "image/webp",
-    "application/pdf", "application/postscript", // AI/EPS
+    "image/tiff",  // TIFF support
+    // 🟢 Profesyonel Raster
+    "image/vnd.adobe.photoshop",  // PSD
+    "application/x-photoshop",     // PSD alternative
+    "image/x-psd",                 // PSD alternative
+    "application/photoshop",       // PSD alternative
+    "application/psd",             // PSD alternative
+    // 🟡 Vektör
     "image/svg+xml",
+    "application/pdf",
+    "application/postscript",      // AI/EPS
+    "application/illustrator",     // AI
+    // 🟠 Fallback for unknown MIME types (check extension)
+    "application/octet-stream",
   ];
+  
+  // Allowed file extensions for octet-stream fallback
+  const allowedExtensions = [
+    "png", "jpg", "jpeg", "webp", "tiff", "tif",  // Raster
+    "psd",                                          // Photoshop
+    "svg", "pdf", "ai", "eps"                       // Vector
+  ];
+  
+  // Check MIME type first
   if (!allowedTypes.includes(contentType)) {
     return corsJson({ error: "Unsupported file type" }, request, { status: 400 });
+  }
+  
+  // For octet-stream, validate by extension
+  if (contentType === "application/octet-stream") {
+    const ext = fileName.split(".").pop()?.toLowerCase() || "";
+    if (!allowedExtensions.includes(ext)) {
+      return corsJson({ 
+        error: `Unsupported file extension: .${ext}. Allowed: ${allowedExtensions.join(", ")}`,
+        code: "INVALID_EXTENSION"
+      }, request, { status: 400 });
+    }
   }
 
   // Check plan limits

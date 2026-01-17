@@ -30,13 +30,28 @@
 
   // ===== CONSTANTS =====
   const ALLOWED_TYPES = [
-    'image/png', 'image/jpeg', 'image/jpg', 'image/webp', 
-    'image/svg+xml', 'application/pdf',
-    'application/postscript', // AI, EPS
+    // 🟢 Raster - Temel
+    'image/png', 'image/jpeg', 'image/jpg', 'image/webp',
+    'image/tiff', // TIFF support
+    // 🟢 Profesyonel Raster  
+    'image/vnd.adobe.photoshop', // PSD
+    'application/x-photoshop',   // PSD alternative MIME
+    'image/x-psd',               // PSD alternative MIME
+    // 🟡 Vektör
+    'image/svg+xml',
+    'application/pdf',
+    'application/postscript',    // AI, EPS
     'application/illustrator'
   ];
-  const ALLOWED_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp', 'svg', 'pdf', 'ai', 'eps'];
-  const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+  const ALLOWED_EXTENSIONS = [
+    // 🟢 Raster - Temel
+    'png', 'jpg', 'jpeg', 'webp', 'tiff', 'tif',
+    // 🟢 Profesyonel Raster
+    'psd',
+    // 🟡 Vektör
+    'svg', 'pdf', 'ai', 'eps'
+  ];
+  const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB - Standard limit
   const POLL_INTERVAL = 1000; // 1 second
   const MAX_POLLS = 60; // 60 seconds max wait
   
@@ -103,7 +118,7 @@
             uploadEnabled: true,
             tshirtEnabled: false,
             allowedFileTypes: ALLOWED_EXTENSIONS,
-            maxFileSizeMB: 50,
+            maxFileSizeMB: 500,
             minDPI: 150,
             extraQuestions: [],
             bulkDiscountThreshold: 10,
@@ -578,7 +593,7 @@
           window.ULErrorHandler.show(err.code, err.params, {
             onRetry: () => elements.fileInput.click()
           });
-          this.showError(productId, window.ULErrorHandler.getError(err.code).message.replace('{maxSize}', err.params.maxSize || '50MB').replace('{allowedTypes}', err.params.allowedTypes || ALLOWED_EXTENSIONS.join(', ').toUpperCase()));
+          this.showError(productId, window.ULErrorHandler.getError(err.code).message.replace('{maxSize}', err.params.maxSize || '500MB').replace('{allowedTypes}', err.params.allowedTypes || ALLOWED_EXTENSIONS.join(', ').toUpperCase()));
           return;
         }
       } else {
@@ -590,7 +605,7 @@
         }
 
         if (file.size > MAX_FILE_SIZE) {
-          this.showError(productId, 'File too large. Maximum size is 50MB.');
+          this.showError(productId, 'File too large. Maximum size is 500MB.');
           return;
         }
       }
