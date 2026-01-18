@@ -274,19 +274,30 @@
 }
 
 .ul-file-remove {
-  background: none;
+  background: var(--ul-error-light, #fee2e2);
   border: none;
-  color: var(--ul-text-muted);
+  color: var(--ul-error, #dc2626);
   cursor: pointer;
   padding: 8px;
   border-radius: 50%;
   transition: var(--ul-transition);
   flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ul-file-remove svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
 }
 
 .ul-file-remove:hover {
-  background: var(--ul-error-light);
-  color: var(--ul-error);
+  background: var(--ul-error, #dc2626);
+  color: white;
 }
 
 /* ===== OPTION DROPDOWNS (Separate dropdown for each option) ===== */
