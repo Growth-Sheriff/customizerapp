@@ -139,8 +139,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const host = hostEnv.startsWith("https://") ? hostEnv : `https://${hostEnv}`;
   const firstItem = upload.items[0];
   
-  // FAZ 2 - API-002: Extended token expiry to 1 hour for T-Shirt modal long sessions
-  const expiresAt = Date.now() + 60 * 60 * 1000; // 1 hour (was 15 minutes)
+  // FAZ 2 - API-002: Extended token expiry to 30 DAYS for Shopify admin order viewing
+  // Previous: 1 hour was too short - orders stay in admin for weeks/months
+  const expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000; // 30 days
   let downloadUrl: string | null = null;
   let thumbnailUrl: string | null = null;
   

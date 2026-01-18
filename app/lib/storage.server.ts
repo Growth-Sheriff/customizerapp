@@ -140,7 +140,7 @@ export async function getUploadSignedUrl(
 export async function getDownloadSignedUrl(
   _config: StorageConfig,
   key: string,
-  expiresIn: number = 3600 // 1 hour
+  expiresIn: number = 30 * 24 * 3600 // 30 days (was 1 hour) - for Shopify admin orders
 ): Promise<string> {
   // Use SHOPIFY_APP_URL (always has https://) or fallback to HOST with protocol handling
   let host = process.env.SHOPIFY_APP_URL || process.env.HOST || "https://customizerapp.dev";
