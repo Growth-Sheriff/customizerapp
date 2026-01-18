@@ -67,12 +67,21 @@ export async function action({ request }: ActionFunctionArgs) {
         });
 
         if (upload) {
-          // Create order link
-          await prisma.orderLink.create({
-            data: {
+          // Create or update order link (upsert for idempotency - Shopify may retry webhooks)
+          await prisma.orderLink.upsert({
+            where: {
+              orderId_uploadId: {
+                orderId: String(order.id),
+                uploadId: uploadLiftId,
+              },
+            },
+            create: {
               shopId: shop.id,
               orderId: String(order.id),
               uploadId: uploadLiftId,
+              lineItemId: String(lineItem.id),
+            },
+            update: {
               lineItemId: String(lineItem.id),
             },
           });
