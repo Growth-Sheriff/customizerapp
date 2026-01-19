@@ -648,6 +648,9 @@
         });
       }
 
+      // Store upload start time for duration display
+      instance.uploadStartTime = Date.now();
+
       // Show progress UI
       elements.dropzone.style.display = 'none';
       elements.progress.classList.add('active');
@@ -1135,7 +1138,7 @@
       // Set filename
       elements.filename.textContent = file.name;
 
-      // Set metadata
+      // Set metadata with upload duration
       const meta = [];
       if (result.width && result.height) {
         meta.push(`${result.width} × ${result.height} px`);
@@ -1144,6 +1147,13 @@
         meta.push(`${result.dpi} DPI`);
       }
       meta.push(this.formatFileSize(file.size));
+      
+      // Add upload duration if available
+      if (instance.uploadStartTime) {
+        const duration = ((Date.now() - instance.uploadStartTime) / 1000).toFixed(1);
+        meta.push(`uploaded in ${duration}s`);
+      }
+      
       elements.filemeta.textContent = meta.join(' • ');
 
       // FAZ 7: Check for low DPI warning
