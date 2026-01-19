@@ -982,6 +982,19 @@
       if (addBtn) addBtn.disabled = false;
       if (hint) hint.style.display = 'none';
       
+      // Visitor tracking: dispatch upload complete event
+      try {
+        window.dispatchEvent(new CustomEvent('ul:upload:complete', {
+          detail: {
+            uploadId: uploadId,
+            productId: productId,
+            fileName: file.name,
+            fileSize: file.size,
+            source: 'quick-upload-btn'
+          }
+        }));
+      } catch (e) { /* Visitor tracking optional */ }
+      
     } catch (error) {
       console.error('Upload error:', error);
       progress.style.display = 'none';
@@ -1260,6 +1273,19 @@
       }
       
       console.log('[Upload Lift] Added to cart successfully:', responseData);
+      
+      // Visitor tracking: dispatch cart add event
+      try {
+        window.dispatchEvent(new CustomEvent('ul:cart:add', {
+          detail: {
+            uploadId: uploadId,
+            variantId: variantId,
+            quantity: quantity,
+            productId: responseData.product_id,
+            source: 'quick-upload-btn'
+          }
+        }));
+      } catch (e) { /* Visitor tracking optional */ }
       
       // Show success
       const step1 = document.getElementById(modalId + '-step1');
