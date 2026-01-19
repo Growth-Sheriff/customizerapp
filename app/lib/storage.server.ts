@@ -74,6 +74,8 @@ export interface UploadUrlResult {
 
 /**
  * Get storage config from shop settings or environment
+ * NOTE: We read process.env directly here to ensure we get the latest values
+ * after dotenv has loaded the .env file
  */
 export function getStorageConfig(shopConfig?: { 
   storageProvider?: string; 
@@ -86,14 +88,19 @@ export function getStorageConfig(shopConfig?: {
   
   const shopStorageConfig = shopConfig?.storageConfig || {};
   
+  // Read env vars directly to ensure we get values after dotenv loads
+  const envBunnyZone = process.env.BUNNY_STORAGE_ZONE || "customizerappdev";
+  const envBunnyApiKey = process.env.BUNNY_API_KEY || "";
+  const envBunnyCdnUrl = process.env.BUNNY_CDN_URL || "https://customizerappdev.b-cdn.net";
+  
   return {
     provider,
     // Local
     localPath: LOCAL_STORAGE_BASE,
-    // Bunny (shop config overrides env)
-    bunnyZone: shopStorageConfig.bunnyZone || BUNNY_STORAGE_ZONE,
-    bunnyApiKey: shopStorageConfig.bunnyApiKey || BUNNY_API_KEY,
-    bunnyCdnUrl: shopStorageConfig.bunnyCdnUrl || BUNNY_CDN_URL,
+    // Bunny (shop config overrides env) - read env directly
+    bunnyZone: shopStorageConfig.bunnyZone || envBunnyZone,
+    bunnyApiKey: shopStorageConfig.bunnyApiKey || envBunnyApiKey,
+    bunnyCdnUrl: shopStorageConfig.bunnyCdnUrl || envBunnyCdnUrl,
     // R2 (shop config overrides env)
     r2AccountId: shopStorageConfig.r2AccountId || R2_ACCOUNT_ID,
     r2AccessKeyId: shopStorageConfig.r2AccessKeyId || R2_ACCESS_KEY_ID,
