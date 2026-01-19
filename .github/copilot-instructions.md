@@ -210,6 +210,8 @@ LOCATION → UPLOAD → POSITION → CONFIRM
 | Backend file streaming | Direct-to-storage only |
 | Skip approval step | UX requirement |
 | Bare DB queries | Tenant isolation |
+| **DELETE uploads/ folder** | Contains production files, NEVER delete |
+| **DELETE /tmp/thumbnails/** | Thumbnails used by merchant panel |
 
 ### ✅ REQUIRED
 | Rule | Implementation |
@@ -220,6 +222,40 @@ LOCATION → UPLOAD → POSITION → CONFIRM
 | Tenant isolation | shop_id in all queries |
 | Direct-to-storage | Signed URLs |
 | Step-locked UX | 4-step flow |
+
+---
+
+## 📁 Server Storage Rules
+
+### KORUMA ALTINDA - ASLA SİLİNMEYECEK KLASÖRLER
+
+| Klasör | Neden | İçerik |
+|--------|-------|--------|
+| `/var/www/fast-dtf-transfer/uploads/` | ❌ **ASLA SİLME** | Eski local uploads, fallback storage |
+| `Bunny CDN` | ❌ **ASLA SİLME** | Müşteri dosyaları |
+
+### SİLİNEBİLİR - Temp Dosyalar
+
+| Klasör | Silinebilir | Koşul |
+|--------|-------------|-------|
+| `/tmp/preflight-*` | ✅ Evet | Job tamamlandıktan sonra |
+| `/tmp/magick-*` | ✅ Evet | ImageMagick temp files |
+
+### Thumbnail Stratejisi
+
+Thumbnail'lar **Bunny CDN'de** saklanmalı (temp'de değil):
+```
+Bunny CDN/
+├── uploads/           # Orijinal dosyalar
+│   └── {shopId}/{uploadId}/original.psd
+└── thumbnails/        # Thumbnail'lar (YENİ)
+    └── {shopId}/{uploadId}/thumb.webp
+```
+
+**Neden Bunny'de?**
+- Merchant panel'de gösterilecek
+- Sipariş detaylarında görünecek
+- Temp silince kaybolmasın
 
 ---
 
