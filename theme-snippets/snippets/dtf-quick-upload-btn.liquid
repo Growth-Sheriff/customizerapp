@@ -75,7 +75,15 @@
           <div class="ul-progress-bar">
             <div class="ul-progress-fill" id="ul-progress-fill-{{ unique_id }}"></div>
           </div>
-          <p id="ul-progress-text-{{ unique_id }}">Uploading...</p>
+          <div class="ul-progress-info">
+            <p id="ul-progress-text-{{ unique_id }}">Uploading...</p>
+            <button type="button" class="ul-cancel-btn" id="ul-cancel-{{ unique_id }}" data-cancel="{{ unique_id }}">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+              </svg>
+              Cancel
+            </button>
+          </div>
         </div>
         
         <!-- Preview (after upload) -->
@@ -324,6 +332,36 @@
   margin: 0;
   font-size: 13px;
   color: #6b7280;
+  flex: 1;
+}
+.ul-progress-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.ul-cancel-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px solid #ef4444;
+  color: #ef4444;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+.ul-cancel-btn:hover {
+  background: #ef4444;
+  color: white;
+}
+.ul-cancel-btn svg {
+  width: 14px;
+  height: 14px;
 }
 .ul-quick-preview {
   display: flex;
@@ -561,6 +599,9 @@
   window.ULQuickUploadInit = true;
   console.log('[UL Quick Upload] Initializing...');
   
+  // Track active XHR requests for cancel support
+  const activeUploads = {};
+  
   // Hide all modals function (for theme editor events)
   function hideAllModals() {
     document.querySelectorAll('.ul-quick-modal').forEach(function(modal) {
@@ -754,6 +795,14 @@
       changeQty(uniqueId, delta);
       return;
     }
+    
+    // Cancel upload button
+    const cancelBtn = target.closest('[data-cancel]');
+    if (cancelBtn) {
+      const uniqueId = cancelBtn.dataset.cancel;
+      cancelUpload(uniqueId);
+      return;
+    }
   });
   
   // File input change
@@ -943,6 +992,9 @@
         uploadResponse = await new Promise((resolve, reject) => {
           const xhr = new XMLHttpRequest();
           
+          // Store XHR for cancel support
+          activeUploads[uniqueId] = xhr;
+          
           xhr.upload.onprogress = (e) => {
             if (e.lengthComputable) {
               const percent = Math.round((e.loaded / e.total) * 100);
@@ -987,6 +1039,9 @@
           formData.append('uploadId', uploadId);
           formData.append('itemId', itemId);
           
+          // Store XHR for cancel support
+          activeUploads[uniqueId] = xhr;
+          
           xhr.upload.onprogress = (e) => {
             if (e.lengthComputable) {
               const percent = Math.round((e.loaded / e.total) * 100);
@@ -1020,6 +1075,9 @@
       }
       
       if (!uploadResponse.ok) throw new Error('Upload failed');
+      
+      // Clear active upload reference
+      delete activeUploads[uniqueId];
       
       progressFill.style.width = '60%';
       progressText.textContent = 'Processing...';
@@ -1128,6 +1186,31 @@
       dropzone.style.display = 'block';
       alert('Upload failed: ' + error.message);
     }
+  }
+  
+  function cancelUpload(uniqueId) {
+    console.log('[UL Quick Upload] Cancelling upload for:', uniqueId);
+    
+    // Abort active XHR if exists
+    if (activeUploads[uniqueId]) {
+      activeUploads[uniqueId].abort();
+      delete activeUploads[uniqueId];
+    }
+    
+    // Reset UI
+    const dropzone = document.getElementById('ul-dropzone-' + uniqueId);
+    const progress = document.getElementById('ul-progress-' + uniqueId);
+    const progressFill = document.getElementById('ul-progress-fill-' + uniqueId);
+    const progressText = document.getElementById('ul-progress-text-' + uniqueId);
+    const fileInput = document.getElementById('ul-file-' + uniqueId);
+    
+    if (progress) progress.style.display = 'none';
+    if (dropzone) dropzone.style.display = 'block';
+    if (progressFill) progressFill.style.width = '0%';
+    if (progressText) progressText.textContent = 'Upload cancelled';
+    if (fileInput) fileInput.value = '';
+    
+    console.log('[UL Quick Upload] Upload cancelled successfully');
   }
   
   function clearUpload(uniqueId, modalId) {
