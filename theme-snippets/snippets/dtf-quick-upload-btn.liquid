@@ -84,6 +84,7 @@
           <div class="ul-preview-info">
             <span id="ul-preview-name-{{ unique_id }}"></span>
             <span id="ul-preview-status-{{ unique_id }}" class="ul-status-badge"></span>
+            <span id="ul-preview-duration-{{ unique_id }}" class="ul-upload-duration" style="display:none;"></span>
           </div>
           <button type="button" data-clear="{{ unique_id }}" data-modal="{{ modal_id }}">&times;</button>
         </div>
@@ -362,6 +363,12 @@
 .ul-status-badge.ready { background: #d1fae5; color: #065f46; }
 .ul-status-badge.warning { background: #fef3c7; color: #92400e; }
 .ul-status-badge.error { background: #fee2e2; color: #991b1b; }
+.ul-upload-duration {
+  display: block;
+  font-size: 11px;
+  color: #059669;
+  margin-top: 2px;
+}
 .ul-quick-preview > button {
   width: 24px;
   height: 24px;
@@ -1063,6 +1070,9 @@
       const finalUrl = finalDownloadUrl || publicUrl || `https://customizerapp.dev/api/upload/file/${uploadId}`;
       if (uploadUrlInput) uploadUrlInput.value = finalUrl;
       
+      // Calculate upload duration
+      const uploadDuration = ((Date.now() - startTime) / 1000).toFixed(1);
+      
       // Show preview
       progress.style.display = 'none';
       preview.style.display = 'flex';
@@ -1078,6 +1088,13 @@
       if (previewStatus) {
         previewStatus.textContent = 'Ready for print';
         previewStatus.className = 'ul-status-badge ready';
+      }
+      
+      // Show upload duration
+      const previewDuration = document.getElementById('ul-preview-duration-' + uniqueId);
+      if (previewDuration) {
+        previewDuration.textContent = `Uploaded in ${uploadDuration}s`;
+        previewDuration.style.display = 'block';
       }
       
       if (addBtn) addBtn.disabled = false;

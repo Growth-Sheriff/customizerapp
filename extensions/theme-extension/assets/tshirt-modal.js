@@ -1000,18 +1000,29 @@ console.log('[ULTShirtModal] Script loading...');
       if (this.el.uploadProgress) this.el.uploadProgress.style.display = 'block';
       this.updateUploadProgress(0);
       
+      // Progress text element
+      const progressText = this.el.uploadProgress?.querySelector('.ul-progress-text');
+      
+      // Progress callback for detailed tracking
+      const progressCallback = (progress) => {
+        if (progressText) {
+          progressText.textContent = progress.text;
+        }
+      };
+      
       try {
-        // Use the same upload flow as DTF uploader
-        const uploadResult = await this.performUpload(file);
+        // Use the same upload flow as DTF uploader with progress callback
+        const uploadResult = await this.performUpload(file, progressCallback);
         
-        // Success
+        // Success - include upload duration
         this.step1.newUpload = {
           status: 'complete',
           uploadId: uploadResult.id,
           thumbnailUrl: uploadResult.thumbnailUrl || uploadResult.url,
           originalUrl: uploadResult.url,
           name: file.name,
-          progress: 100
+          progress: 100,
+          uploadDuration: uploadResult.uploadDuration
         };
         
         // Show preview
@@ -1025,12 +1036,19 @@ console.log('[ULTShirtModal] Script loading...');
           this.el.newUploadName.textContent = file.name;
         }
         
+        // Show upload duration
+        const durationEl = this.el.newUploadPreview?.querySelector('.ul-upload-duration');
+        if (durationEl && uploadResult.uploadDuration) {
+          durationEl.textContent = `Uploaded in ${uploadResult.uploadDuration}s`;
+          durationEl.style.display = 'block';
+        }
+        
         // Hide progress
         if (this.el.uploadProgress) this.el.uploadProgress.style.display = 'none';
         this.el.uploadZone?.classList.remove('uploading');
         
         this.updateNavButtons();
-        this.showToast('Design uploaded successfully!', 'success');
+        this.showToast(`Design uploaded in ${uploadResult.uploadDuration}s!`, 'success');
         
       } catch (error) {
         console.error('[ULTShirtModal] Upload error:', error);
@@ -1041,9 +1059,12 @@ console.log('[ULTShirtModal] Script loading...');
       }
     },
 
-    async performUpload(file) {
+    async performUpload(file, progressCallback) {
       // API base from customizerapp.dev
       const apiBase = '/apps/customizer';
+      
+      // Track upload start time
+      const uploadStartTime = Date.now();
       
       // FAZ 0 - TSM-003: Robust shopDomain detection with validation
       const shopDomain = this.getShopDomain();
@@ -1056,6 +1077,10 @@ console.log('[ULTShirtModal] Script loading...');
       console.log('[ULTShirtModal] performUpload - shopDomain:', shopDomain);
       
       // Step 1: Get signed URL from API (matching dtf-uploader format)
+      if (progressCallback) {
+        progressCallback({ phase: 'intent', percent: 0, text: 'Preparing...' });
+      }
+      
       const intentRes = await fetch(`${apiBase}/api/upload/intent`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1075,39 +1100,77 @@ console.log('[ULTShirtModal] Script loading...');
       }
       
       const intentData = await intentRes.json();
-      const { uploadId, itemId, uploadUrl, storageProvider, uploadMethod, uploadHeaders, publicUrl } = intentData;
+      const { uploadId, itemId, uploadUrl, storageProvider, uploadMethod, uploadHeaders, publicUrl, key } = intentData;
       
       console.log('[ULTShirtModal] Intent response:', { uploadId, itemId, storageProvider });
       
-      // Step 2: Upload file directly to storage (provider-aware)
-      let uploadRes;
-      if (storageProvider === 'bunny' || storageProvider === 'r2') {
-        // Direct PUT to CDN storage
-        const headers = { 'Content-Type': file.type || 'application/octet-stream' };
-        if (uploadHeaders) {
-          Object.assign(headers, uploadHeaders);
-        }
-        uploadRes = await fetch(uploadUrl, {
-          method: 'PUT',
-          headers,
-          body: file
-        });
-      } else {
-        // Local storage - POST with FormData
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('key', intentData.key);
-        formData.append('uploadId', uploadId);
-        formData.append('itemId', itemId);
-        uploadRes = await fetch(uploadUrl, {
-          method: 'POST',
-          body: formData
-        });
+      // Step 2: Upload file with XHR for progress tracking
+      if (progressCallback) {
+        progressCallback({ phase: 'upload', percent: 0, text: '0% • Starting...' });
       }
       
-      if (!uploadRes.ok) throw new Error('Upload failed');
+      await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        
+        // Track progress
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) {
+            const percent = Math.round((e.loaded / e.total) * 100);
+            const elapsed = (Date.now() - uploadStartTime) / 1000;
+            const speed = e.loaded / elapsed / 1024 / 1024; // MB/s
+            const remaining = elapsed > 0 ? ((e.total - e.loaded) / (e.loaded / elapsed)) : 0;
+            
+            let speedText = speed >= 1 ? `${speed.toFixed(1)} MB/s` : `${(speed * 1024).toFixed(0)} KB/s`;
+            let remainingText = remaining < 60 ? `${Math.ceil(remaining)}s` : `${Math.ceil(remaining / 60)}m`;
+            
+            // Update internal progress bar
+            this.updateUploadProgress(percent);
+            
+            if (progressCallback) {
+              progressCallback({ 
+                phase: 'upload', 
+                percent, 
+                text: `${percent}% • ${speedText} • ${remainingText} left`
+              });
+            }
+          }
+        };
+        
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve();
+          } else {
+            reject(new Error('Upload failed'));
+          }
+        };
+        
+        xhr.onerror = () => reject(new Error('Network error during upload'));
+        
+        // Open and set headers based on provider
+        if (storageProvider === 'bunny' || storageProvider === 'r2') {
+          xhr.open('PUT', uploadUrl);
+          xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+          if (uploadHeaders) {
+            Object.entries(uploadHeaders).forEach(([k, v]) => xhr.setRequestHeader(k, v));
+          }
+          xhr.send(file);
+        } else {
+          // Local storage - POST with FormData
+          const formData = new FormData();
+          formData.append('file', file);
+          formData.append('key', key);
+          formData.append('uploadId', uploadId);
+          formData.append('itemId', itemId);
+          xhr.open('POST', uploadUrl);
+          xhr.send(formData);
+        }
+      });
       
       // Step 3: Mark complete (matching dtf-uploader format)
+      if (progressCallback) {
+        progressCallback({ phase: 'complete', percent: 100, text: 'Finalizing...' });
+      }
+      
       const completeRes = await fetch(`${apiBase}/api/upload/complete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1128,18 +1191,22 @@ console.log('[ULTShirtModal] Script loading...');
         throw new Error(err.error || 'Failed to complete upload');
       }
       
+      // Calculate upload duration
+      const uploadDuration = ((Date.now() - uploadStartTime) / 1000).toFixed(1);
+      
       // Create object URL for preview (NO server fetch needed - avoids 401!)
       const thumbnailUrl = URL.createObjectURL(file);
       
       // Build full public URL with https://
       const fullUrl = `${window.location.origin}${apiBase}/api/upload/file/${uploadId}`;
       
-      console.log('[ULTShirtModal] Upload complete:', { uploadId, thumbnailUrl, fullUrl });
+      console.log('[ULTShirtModal] Upload complete:', { uploadId, thumbnailUrl, fullUrl, uploadDuration });
       
       return {
         id: uploadId,
         url: fullUrl, // Full https:// URL for checkout
-        thumbnailUrl
+        thumbnailUrl,
+        uploadDuration
       };
     },
 

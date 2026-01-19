@@ -215,11 +215,27 @@
           if (!state.uploadedFile || !state.currentProduct) return;
           
           addToCartBtn.disabled = true;
-          addToCartBtn.innerHTML = '<svg class="ul-spinner" width="18" height="18" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" fill="none" stroke-dasharray="60" stroke-linecap="round"><animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite"/></circle></svg> Adding...';
+          if (checkoutBtn) checkoutBtn.disabled = true;
+          
+          // Progress callback for button text
+          const progressCallback = (progress) => {
+            addToCartBtn.innerHTML = `<svg class="ul-spinner" width="18" height="18" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" fill="none" stroke-dasharray="60" stroke-linecap="round"><animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite"/></circle></svg> ${progress.text}`;
+          };
+          
+          addToCartBtn.innerHTML = '<svg class="ul-spinner" width="18" height="18" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" fill="none" stroke-dasharray="60" stroke-linecap="round"><animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite"/></circle></svg> Uploading...';
           
           try {
-            // Upload file first
-            const uploadResult = await uploadFile(state.uploadedFile);
+            // Upload file with progress tracking
+            const uploadResult = await uploadFile(state.uploadedFile, progressCallback);
+            
+            // Update preview with upload duration
+            const preview = overlay.querySelector('.ul-modal-upload-preview');
+            if (preview) {
+              const fileSize = preview.querySelector('.ul-file-size');
+              if (fileSize) {
+                fileSize.textContent = `${formatFileSize(state.uploadedFile.size)} • Uploaded in ${uploadResult.uploadDuration}s`;
+              }
+            }
             
             // Build cart properties
             const size = SHEET_SIZES.find(s => s.id === state.selectedSize);
@@ -232,6 +248,8 @@
               'Upload Type': 'Custom Design'
             };
 
+            addToCartBtn.innerHTML = '<svg class="ul-spinner" width="18" height="18" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" fill="none" stroke-dasharray="60" stroke-linecap="round"><animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite"/></circle></svg> Adding to cart...';
+            
             // Add to cart
             await addToCartApi(state.currentProduct.variantId, state.quantity, properties);
             
@@ -246,6 +264,7 @@
           } catch (error) {
             console.error('[UL Product Bar] Error:', error);
             addToCartBtn.disabled = false;
+            if (checkoutBtn) checkoutBtn.disabled = false;
             addToCartBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg> Try Again';
             alert('Failed to add to cart. Please try again.');
           }
@@ -258,11 +277,18 @@
           if (!state.uploadedFile || !state.currentProduct) return;
           
           checkoutBtn.disabled = true;
-          checkoutBtn.innerHTML = '<svg class="ul-spinner" width="18" height="18" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" fill="none" stroke-dasharray="60" stroke-linecap="round"><animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite"/></circle></svg> Processing...';
+          if (addToCartBtn) addToCartBtn.disabled = true;
+          
+          // Progress callback for button text
+          const progressCallback = (progress) => {
+            checkoutBtn.innerHTML = `<svg class="ul-spinner" width="18" height="18" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" fill="none" stroke-dasharray="60" stroke-linecap="round"><animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite"/></circle></svg> ${progress.text}`;
+          };
+          
+          checkoutBtn.innerHTML = '<svg class="ul-spinner" width="18" height="18" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" fill="none" stroke-dasharray="60" stroke-linecap="round"><animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite"/></circle></svg> Uploading...';
           
           try {
-            // Upload file first
-            const uploadResult = await uploadFile(state.uploadedFile);
+            // Upload file with progress tracking
+            const uploadResult = await uploadFile(state.uploadedFile, progressCallback);
             
             // Build cart properties
             const size = SHEET_SIZES.find(s => s.id === state.selectedSize);
@@ -275,6 +301,8 @@
               'Upload Type': 'Custom Design'
             };
 
+            checkoutBtn.innerHTML = '<svg class="ul-spinner" width="18" height="18" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" fill="none" stroke-dasharray="60" stroke-linecap="round"><animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite"/></circle></svg> Adding to cart...';
+            
             // Add to cart
             await addToCartApi(state.currentProduct.variantId, state.quantity, properties);
             
@@ -283,6 +311,7 @@
           } catch (error) {
             console.error('[UL Product Bar] Error:', error);
             checkoutBtn.disabled = false;
+            if (addToCartBtn) addToCartBtn.disabled = false;
             checkoutBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> Try Again';
             alert('Failed to proceed to checkout. Please try again.');
           }
@@ -627,14 +656,19 @@
   }
 
   // ========================================
-  // File Upload API
+  // File Upload API with Progress Tracking
   // ========================================
-  async function uploadFile(file) {
+  async function uploadFile(file, progressCallback) {
     const section = document.querySelector('.ul-product-bar');
     const apiBase = section?.dataset.apiBase || CONFIG.apiBase;
     const shopDomain = window.Shopify?.shop || getShopFromUrl();
 
+    // Track upload start time
+    const uploadStartTime = Date.now();
+
     // 1. Create upload intent
+    if (progressCallback) progressCallback({ phase: 'intent', percent: 5, text: 'Getting upload URL...' });
+    
     const intentResponse = await fetch(`${apiBase}/api/upload/intent`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -654,37 +688,69 @@
     const intentData = await intentResponse.json();
     const { uploadId, itemId, uploadUrl, storageProvider, uploadHeaders, publicUrl, key } = intentData;
 
-    // 2. Upload to storage (provider-aware)
-    let uploadResponse;
-    if (storageProvider === 'bunny' || storageProvider === 'r2') {
-      // Direct PUT to CDN storage
-      const headers = { 'Content-Type': file.type || 'application/octet-stream' };
-      if (uploadHeaders) {
-        Object.assign(headers, uploadHeaders);
+    // 2. Upload to storage with XHR for progress tracking
+    if (progressCallback) progressCallback({ phase: 'upload', percent: 10, text: 'Uploading... 0%' });
+    
+    const xhrStartTime = Date.now();
+    
+    const uploadResponse = await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable && progressCallback) {
+          const percent = Math.round((e.loaded / e.total) * 100);
+          const elapsed = (Date.now() - xhrStartTime) / 1000;
+          const speed = elapsed > 0 ? e.loaded / elapsed : 0;
+          const remaining = speed > 0 ? (e.total - e.loaded) / speed : 0;
+          
+          const speedMB = (speed / (1024 * 1024)).toFixed(1);
+          const remainingSec = Math.ceil(remaining);
+          
+          let text;
+          if (remainingSec > 60) {
+            text = `Uploading... ${percent}% • ${speedMB} MB/s • ~${Math.ceil(remainingSec/60)}m remaining`;
+          } else if (remainingSec > 0) {
+            text = `Uploading... ${percent}% • ${speedMB} MB/s • ~${remainingSec}s remaining`;
+          } else {
+            text = `Uploading... ${percent}%`;
+          }
+          
+          // Progress bar: 10% to 80% range for upload phase
+          progressCallback({ phase: 'upload', percent: 10 + (percent * 0.7), text });
+        }
+      };
+      
+      xhr.onload = () => resolve({ ok: xhr.status >= 200 && xhr.status < 300, status: xhr.status });
+      xhr.onerror = () => reject(new Error('Network error during upload'));
+      xhr.ontimeout = () => reject(new Error('Upload timeout'));
+      
+      if (storageProvider === 'bunny' || storageProvider === 'r2') {
+        // Direct PUT to CDN storage
+        xhr.open('PUT', uploadUrl);
+        xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+        if (uploadHeaders) {
+          Object.entries(uploadHeaders).forEach(([k, v]) => xhr.setRequestHeader(k, v));
+        }
+        xhr.send(file);
+      } else {
+        // Local storage - POST with FormData
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('key', key);
+        formData.append('uploadId', uploadId);
+        formData.append('itemId', itemId);
+        xhr.open('POST', uploadUrl);
+        xhr.send(formData);
       }
-      uploadResponse = await fetch(uploadUrl, {
-        method: 'PUT',
-        headers,
-        body: file
-      });
-    } else {
-      // Local storage - POST with FormData
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('key', key);
-      formData.append('uploadId', uploadId);
-      formData.append('itemId', itemId);
-      uploadResponse = await fetch(uploadUrl, {
-        method: 'POST',
-        body: formData
-      });
-    }
+    });
 
     if (!uploadResponse.ok) {
       throw new Error('Failed to upload file');
     }
 
     // 3. Complete upload
+    if (progressCallback) progressCallback({ phase: 'complete', percent: 85, text: 'Finalizing...' });
+    
     const completeResponse = await fetch(`${apiBase}/api/upload/complete`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -704,12 +770,18 @@
       throw new Error('Failed to complete upload');
     }
 
+    // Calculate total upload duration
+    const uploadDuration = ((Date.now() - uploadStartTime) / 1000).toFixed(1);
+    
+    if (progressCallback) progressCallback({ phase: 'done', percent: 100, text: `Uploaded in ${uploadDuration}s` });
+
     // Build full public URL with https://
     const fullUrl = publicUrl || `${window.location.origin}${apiBase}/api/upload/file/${uploadId}`;
 
     return {
       id: uploadId,
-      url: fullUrl
+      url: fullUrl,
+      uploadDuration: uploadDuration
     };
   }
 
