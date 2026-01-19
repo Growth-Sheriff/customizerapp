@@ -1,7 +1,7 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { handleCorsOptions, corsJson } from "~/lib/cors.server";
 import { rateLimitGuard, getIdentifier } from "~/lib/rateLimit.server";
-import { generateLocalFileToken } from "~/lib/storage.server";
+import { generateLocalFileToken, getStorageConfig, isBunnyUrl, isR2Url, getThumbnailUrl } from "~/lib/storage.server";
 import prisma from "~/lib/prisma.server";
 
 // Shopify File Query - Get file URL by ID
@@ -139,6 +139,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const host = hostEnv.startsWith("https://") ? hostEnv : `https://${hostEnv}`;
   const firstItem = upload.items[0];
   
+  // Get storage config for this shop
+  const storageConfig = getStorageConfig({
+    storageProvider: shop.storageProvider,
+    storageConfig: shop.storageConfig as Record<string, string> | null,
+  });
+
   // FAZ 2 - API-002: Extended token expiry to 30 DAYS for Shopify admin order viewing
   // Previous: 1 hour was too short - orders stay in admin for weeks/months
   const expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000; // 30 days
@@ -151,6 +157,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     return key.startsWith('http://') || key.startsWith('https://');
   };
   
+  // Check if storageKey is a Bunny key (bunny:path/to/file)
+  const isBunnyKey = (key: string | null | undefined): boolean => {
+    if (!key) return false;
+    return key.startsWith('bunny:') || isBunnyUrl(key);
+  };
+  
   // Check if storageKey is a Shopify fileId (shopify:gid://...)
   const isShopifyFileId = (key: string | null | undefined): boolean => {
     if (!key) return false;
@@ -159,8 +171,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   
   if (firstItem?.storageKey) {
     if (isExternalUrl(firstItem.storageKey)) {
-      // Shopify or external storage - use URL directly
+      // Already a full URL - use directly
       downloadUrl = firstItem.storageKey;
+    } else if (isBunnyKey(firstItem.storageKey)) {
+      // Bunny storage - build CDN URL
+      const bunnyKey = firstItem.storageKey.replace('bunny:', '');
+      const cdnUrl = storageConfig.bunnyCdnUrl || process.env.BUNNY_CDN_URL || 'https://customizerappdev.b-cdn.net';
+      downloadUrl = `${cdnUrl}/${bunnyKey}`;
     } else if (isShopifyFileId(firstItem.storageKey)) {
       // Shopify fileId - resolve to URL via API
       const fileId = firstItem.storageKey.replace('shopify:', '');
@@ -185,17 +202,29 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     }
   }
   
-  // Thumbnail URL logic
+  // Thumbnail URL logic - use Bunny Optimizer for CDN files
   if (firstItem?.thumbnailKey) {
     if (isExternalUrl(firstItem.thumbnailKey)) {
-      thumbnailUrl = firstItem.thumbnailKey;
+      // If Bunny URL, add optimizer params
+      if (isBunnyUrl(firstItem.thumbnailKey)) {
+        thumbnailUrl = getThumbnailUrl(storageConfig, firstItem.thumbnailKey, 200);
+      } else {
+        thumbnailUrl = firstItem.thumbnailKey;
+      }
+    } else if (isBunnyKey(firstItem.thumbnailKey)) {
+      // Bunny key - use optimizer
+      thumbnailUrl = getThumbnailUrl(storageConfig, firstItem.thumbnailKey, 200);
     } else if (isShopifyFileId(firstItem.thumbnailKey)) {
       const fileId = firstItem.thumbnailKey.replace('shopify:', '');
       thumbnailUrl = await resolveShopifyFileUrl(fileId, shop.shopDomain, shop.accessToken);
     } else {
+      // Local storage
       const token = generateLocalFileToken(firstItem.thumbnailKey, expiresAt);
       thumbnailUrl = `${host}/api/files/${encodeURIComponent(firstItem.thumbnailKey)}?token=${encodeURIComponent(token)}`;
     }
+  } else if (downloadUrl && isBunnyUrl(downloadUrl)) {
+    // No thumbnail but download is Bunny - use optimizer
+    thumbnailUrl = getThumbnailUrl(storageConfig, downloadUrl, 200);
   } else if (downloadUrl) {
     // Fallback to original file if no thumbnail
     thumbnailUrl = downloadUrl;
