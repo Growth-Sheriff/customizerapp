@@ -1,403 +1,566 @@
 /**
  * Analytics Server Utilities
- * Advanced analytics, AI insights, and revenue attribution
+ * Comprehensive analytics with proper shop ID handling
  * 
  * @module analytics.server
- * @version 1.0.0
- * 
- * ⚠️ IMPORTANT: This module is ADDITIVE ONLY
- * - Does NOT modify existing upload/cart/webhook flows
- * - All analytics functions are READ-ONLY on existing data
- * - New writes only to new nullable fields
- * 
- * NOTE: Uses raw SQL for new fields until Prisma migration is applied
+ * @version 2.0.0
  */
 
 import prisma from "./prisma.server";
-import { Decimal } from "@prisma/client/runtime/library";
 
 // ═══════════════════════════════════════════════════════════════════════════
-// TYPES
+// HELPER: Get Shop ID from domain
 // ═══════════════════════════════════════════════════════════════════════════
 
-export interface TimeRange {
-  start: Date;
-  end: Date;
+export async function getShopIdFromDomain(shopDomain: string): Promise<string | null> {
+  const shop = await prisma.shop.findUnique({
+    where: { shopDomain },
+    select: { id: true },
+  });
+  return shop?.id || null;
 }
 
-export interface RevenueMetrics {
-  totalRevenue: number;
-  totalOrders: number;
-  avgOrderValue: number;
-  revenueBySource: SourceRevenue[];
-  revenueByDay: DailyRevenue[];
+// ═══════════════════════════════════════════════════════════════════════════
+// VISITOR ANALYTICS
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface VisitorStats {
+  totalVisitors: number;
+  newVisitors: number;
+  returningVisitors: number;
+  totalSessions: number;
+  avgSessionsPerVisitor: number;
+  visitorsWithUploads: number;
+  visitorsWithOrders: number;
+  uploadConversionRate: number;
+  orderConversionRate: number;
 }
 
-export interface SourceRevenue {
-  source: string;
-  revenue: number;
-  orders: number;
-  avgOrderValue: number;
-  conversionRate: number;
-}
-
-export interface DailyRevenue {
-  date: string;
-  revenue: number;
-  orders: number;
-}
-
-export interface TimeToConvert {
-  avgUploadToCart: number; // seconds
-  avgCartToOrder: number; // seconds
-  avgTotalTime: number; // seconds
-  medianUploadToCart: number;
-  medianCartToOrder: number;
-  distribution: ConvertTimeDistribution[];
-}
-
-export interface ConvertTimeDistribution {
-  bucket: string; // "0-1m", "1-5m", "5-30m", "30m-1h", "1h-24h", "24h+"
+export interface VisitorGeo {
+  country: string;
   count: number;
   percentage: number;
 }
 
-export interface CohortData {
-  cohortDate: string; // Week start date
-  totalUsers: number;
-  week0: number; // Same week retention
-  week1: number;
-  week2: number;
-  week3: number;
-  week4: number;
-  totalRevenue: number;
+export interface VisitorDevice {
+  type: string;
+  count: number;
+  percentage: number;
 }
 
-export interface DevicePerformance {
-  deviceType: string;
+export interface VisitorBrowser {
+  name: string;
+  count: number;
+  percentage: number;
+}
+
+export interface DailyVisitors {
+  date: string;
+  visitors: number;
+  sessions: number;
+  newVisitors: number;
+}
+
+export interface TopVisitor {
+  id: string;
+  country: string | null;
+  deviceType: string | null;
+  browser: string | null;
+  totalSessions: number;
+  totalUploads: number;
+  totalOrders: number;
+  firstSeenAt: Date;
+  lastSeenAt: Date;
+}
+
+export async function getVisitorStats(
+  shopId: string,
+  startDate: Date,
+  endDate: Date
+): Promise<VisitorStats> {
+  const [
+    totalVisitors,
+    newVisitors,
+    totalSessions,
+    visitorsWithUploads,
+    visitorsWithOrders,
+  ] = await Promise.all([
+    prisma.visitor.count({ where: { shopId } }),
+    prisma.visitor.count({
+      where: { shopId, firstSeenAt: { gte: startDate, lte: endDate } },
+    }),
+    prisma.visitorSession.count({
+      where: { shopId, startedAt: { gte: startDate, lte: endDate } },
+    }),
+    prisma.visitor.count({
+      where: { shopId, totalUploads: { gt: 0 } },
+    }),
+    prisma.visitor.count({
+      where: { shopId, totalOrders: { gt: 0 } },
+    }),
+  ]);
+
+  const returningVisitors = await prisma.visitor.count({
+    where: { shopId, totalSessions: { gt: 1 } },
+  });
+
+  const avgSessionsPerVisitor = totalVisitors > 0 ? totalSessions / totalVisitors : 0;
+  const uploadConversionRate = totalVisitors > 0 ? (visitorsWithUploads / totalVisitors) * 100 : 0;
+  const orderConversionRate = totalVisitors > 0 ? (visitorsWithOrders / totalVisitors) * 100 : 0;
+
+  return {
+    totalVisitors,
+    newVisitors,
+    returningVisitors,
+    totalSessions,
+    avgSessionsPerVisitor,
+    visitorsWithUploads,
+    visitorsWithOrders,
+    uploadConversionRate,
+    orderConversionRate,
+  };
+}
+
+export async function getVisitorsByCountry(shopId: string): Promise<VisitorGeo[]> {
+  const results = await prisma.visitor.groupBy({
+    by: ["country"],
+    where: { shopId, country: { not: null } },
+    _count: { id: true },
+    orderBy: { _count: { id: "desc" } },
+    take: 15,
+  });
+
+  const total = results.reduce((sum, r) => sum + r._count.id, 0);
+
+  return results.map((r) => ({
+    country: r.country || "Unknown",
+    count: r._count.id,
+    percentage: total > 0 ? (r._count.id / total) * 100 : 0,
+  }));
+}
+
+export async function getVisitorsByDevice(shopId: string): Promise<VisitorDevice[]> {
+  const results = await prisma.visitor.groupBy({
+    by: ["deviceType"],
+    where: { shopId },
+    _count: { id: true },
+    orderBy: { _count: { id: "desc" } },
+  });
+
+  const total = results.reduce((sum, r) => sum + r._count.id, 0);
+
+  return results.map((r) => ({
+    type: r.deviceType || "Unknown",
+    count: r._count.id,
+    percentage: total > 0 ? (r._count.id / total) * 100 : 0,
+  }));
+}
+
+export async function getVisitorsByBrowser(shopId: string): Promise<VisitorBrowser[]> {
+  const results = await prisma.visitor.groupBy({
+    by: ["browser"],
+    where: { shopId, browser: { not: null } },
+    _count: { id: true },
+    orderBy: { _count: { id: "desc" } },
+    take: 10,
+  });
+
+  const total = results.reduce((sum, r) => sum + r._count.id, 0);
+
+  return results.map((r) => ({
+    name: r.browser || "Unknown",
+    count: r._count.id,
+    percentage: total > 0 ? (r._count.id / total) * 100 : 0,
+  }));
+}
+
+export async function getDailyVisitors(
+  shopId: string,
+  startDate: Date,
+  endDate: Date
+): Promise<DailyVisitors[]> {
+  // Get sessions grouped by day
+  const sessions = await prisma.visitorSession.findMany({
+    where: { shopId, startedAt: { gte: startDate, lte: endDate } },
+    select: { startedAt: true, visitorId: true },
+  });
+
+  const visitors = await prisma.visitor.findMany({
+    where: { shopId, firstSeenAt: { gte: startDate, lte: endDate } },
+    select: { firstSeenAt: true },
+  });
+
+  // Group by day
+  const dayMap = new Map<string, { visitors: Set<string>; sessions: number; newVisitors: number }>();
+
+  sessions.forEach((s) => {
+    const day = s.startedAt.toISOString().split("T")[0];
+    if (!dayMap.has(day)) {
+      dayMap.set(day, { visitors: new Set(), sessions: 0, newVisitors: 0 });
+    }
+    const data = dayMap.get(day)!;
+    data.visitors.add(s.visitorId);
+    data.sessions++;
+  });
+
+  visitors.forEach((v) => {
+    const day = v.firstSeenAt.toISOString().split("T")[0];
+    if (dayMap.has(day)) {
+      dayMap.get(day)!.newVisitors++;
+    }
+  });
+
+  return Array.from(dayMap.entries())
+    .map(([date, data]) => ({
+      date,
+      visitors: data.visitors.size,
+      sessions: data.sessions,
+      newVisitors: data.newVisitors,
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+export async function getTopVisitors(shopId: string, limit = 20): Promise<TopVisitor[]> {
+  const visitors = await prisma.visitor.findMany({
+    where: { shopId },
+    orderBy: [{ totalOrders: "desc" }, { totalUploads: "desc" }, { totalSessions: "desc" }],
+    take: limit,
+    select: {
+      id: true,
+      country: true,
+      deviceType: true,
+      browser: true,
+      totalSessions: true,
+      totalUploads: true,
+      totalOrders: true,
+      firstSeenAt: true,
+      lastSeenAt: true,
+    },
+  });
+
+  return visitors;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ATTRIBUTION ANALYTICS
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface AttributionStats {
+  totalSessions: number;
+  sessionsWithUTM: number;
+  utmPercentage: number;
+  topSource: string;
+  topMedium: string;
+  paidClicks: number;
+}
+
+export interface SourceBreakdown {
+  source: string;
   sessions: number;
   uploads: number;
-  uploadSuccessRate: number;
-  avgUploadTime: number;
   orders: number;
   conversionRate: number;
 }
 
-export interface GeoStats {
-  country: string;
+export interface MediumBreakdown {
+  medium: string;
   sessions: number;
   uploads: number;
-  orders: number;
-  revenue: number;
-  avgOrderValue: number;
+  percentage: number;
 }
 
-export interface AIInsight {
-  id: string;
-  type: "positive" | "negative" | "neutral" | "suggestion";
-  title: string;
-  description: string;
-  metric?: string;
-  change?: number; // percentage
-  priority: "high" | "medium" | "low";
+export interface CampaignBreakdown {
+  campaign: string;
+  sessions: number;
+  uploads: number;
+  source: string | null;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// REVENUE ATTRIBUTION
-// Uses OrderLink table which already exists
-// ═══════════════════════════════════════════════════════════════════════════
+export interface ClickIdStats {
+  gclid: number;
+  fbclid: number;
+  msclkid: number;
+  ttclid: number;
+  total: number;
+}
 
-/**
- * Get revenue metrics by source with attribution
- * Uses existing OrderLink + VisitorSession data
- */
-export async function getRevenueMetrics(
+export interface ReferrerBreakdown {
+  type: string;
+  sessions: number;
+  percentage: number;
+}
+
+export async function getAttributionStats(
   shopId: string,
-  range: TimeRange
-): Promise<RevenueMetrics> {
-  // Use OrderLink table which already exists
-  const orderLinks = await prisma.orderLink.findMany({
-    where: {
-      shopId,
-      createdAt: { gte: range.start, lte: range.end },
-    },
-    include: {
-      upload: {
-        select: {
-          id: true,
-          sessionId: true,
-        },
+  startDate: Date,
+  endDate: Date
+): Promise<AttributionStats> {
+  const [totalSessions, sessionsWithUTM] = await Promise.all([
+    prisma.visitorSession.count({
+      where: { shopId, startedAt: { gte: startDate, lte: endDate } },
+    }),
+    prisma.visitorSession.count({
+      where: {
+        shopId,
+        startedAt: { gte: startDate, lte: endDate },
+        utmSource: { not: null },
       },
-    },
-  });
+    }),
+  ]);
 
-  // Get unique session IDs
-  const sessionIds = [...new Set(orderLinks
-    .map(ol => ol.upload?.sessionId)
-    .filter(Boolean))] as string[];
-
-  // Get sessions with UTM data
-  const sessions = await prisma.visitorSession.findMany({
-    where: {
-      id: { in: sessionIds },
-    },
-    select: {
-      id: true,
-      utmSource: true,
-      utmMedium: true,
-      referrerType: true,
-    },
-  });
-
-  const sessionMap = new Map(sessions.map(s => [s.id, s]));
-
-  // For now, count orders without actual revenue (needs order API integration)
-  const totalOrders = orderLinks.length;
-  const totalRevenue = 0; // Would need Shopify Order API to get actual values
-  const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
-
-  // Group by source
-  const sourceMap = new Map<string, { revenue: number; orders: number }>();
-  
-  orderLinks.forEach((ol) => {
-    const session = ol.upload?.sessionId ? sessionMap.get(ol.upload.sessionId) : null;
-    const source = session?.utmSource || session?.referrerType || "direct";
-    const existing = sourceMap.get(source) || { revenue: 0, orders: 0 };
-    sourceMap.set(source, {
-      revenue: existing.revenue,
-      orders: existing.orders + 1,
-    });
-  });
-
-  // Get session counts by source for conversion rate
-  const sessionsBySource = await prisma.visitorSession.groupBy({
+  // Top source
+  const topSourceResult = await prisma.visitorSession.groupBy({
     by: ["utmSource"],
-    where: {
-      shopId,
-      startedAt: { gte: range.start, lte: range.end },
-    },
+    where: { shopId, startedAt: { gte: startDate, lte: endDate }, utmSource: { not: null } },
     _count: { id: true },
+    orderBy: { _count: { id: "desc" } },
+    take: 1,
   });
 
-  const sessionCountMap = new Map(
-    sessionsBySource.map((s) => [s.utmSource || "direct", s._count.id])
-  );
-
-  const revenueBySource: SourceRevenue[] = Array.from(sourceMap.entries()).map(
-    ([source, data]) => ({
-      source,
-      revenue: data.revenue,
-      orders: data.orders,
-      avgOrderValue: data.orders > 0 ? data.revenue / data.orders : 0,
-      conversionRate: sessionCountMap.get(source)
-        ? (data.orders / sessionCountMap.get(source)!) * 100
-        : 0,
-    })
-  );
-
-  // Daily orders
-  const dailyMap = new Map<string, { revenue: number; orders: number }>();
-  
-  orderLinks.forEach((ol) => {
-    const day = ol.createdAt.toISOString().split("T")[0];
-    const existing = dailyMap.get(day) || { revenue: 0, orders: 0 };
-    dailyMap.set(day, {
-      revenue: existing.revenue,
-      orders: existing.orders + 1,
-    });
+  // Top medium
+  const topMediumResult = await prisma.visitorSession.groupBy({
+    by: ["utmMedium"],
+    where: { shopId, startedAt: { gte: startDate, lte: endDate }, utmMedium: { not: null } },
+    _count: { id: true },
+    orderBy: { _count: { id: "desc" } },
+    take: 1,
   });
 
-  const revenueByDay: DailyRevenue[] = Array.from(dailyMap.entries())
-    .map(([date, data]) => ({
-      date,
-      revenue: data.revenue,
-      orders: data.orders,
-    }))
-    .sort((a, b) => a.date.localeCompare(b.date));
-
-  return {
-    totalRevenue,
-    totalOrders,
-    avgOrderValue,
-    revenueBySource: revenueBySource.sort((a, b) => b.orders - a.orders),
-    revenueByDay,
-  };
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// TIME TO CONVERT
-// Uses upload createdAt -> OrderLink createdAt as proxy
-// ═══════════════════════════════════════════════════════════════════════════
-
-/**
- * Calculate time-to-convert metrics
- * Uses upload creation -> order link creation as conversion time
- */
-export async function getTimeToConvert(
-  shopId: string,
-  range: TimeRange
-): Promise<TimeToConvert> {
-  // Get order links with their uploads
-  const orderLinks = await prisma.orderLink.findMany({
+  // Paid clicks
+  const paidClicks = await prisma.visitorSession.count({
     where: {
       shopId,
-      createdAt: { gte: range.start, lte: range.end },
+      startedAt: { gte: startDate, lte: endDate },
+      OR: [
+        { gclid: { not: null } },
+        { fbclid: { not: null } },
+        { msclkid: { not: null } },
+        { ttclid: { not: null } },
+      ],
     },
-    include: {
-      upload: {
-        select: {
-          createdAt: true,
-        },
-      },
-    },
   });
-
-  const totalTimes: number[] = [];
-
-  orderLinks.forEach((ol) => {
-    if (ol.upload?.createdAt) {
-      const total = (ol.createdAt.getTime() - ol.upload.createdAt.getTime()) / 1000;
-      if (total > 0) {
-        totalTimes.push(total);
-      }
-    }
-  });
-
-  // Calculate averages and medians
-  const avg = (arr: number[]) =>
-    arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
-  
-  const median = (arr: number[]) => {
-    if (arr.length === 0) return 0;
-    const sorted = [...arr].sort((a, b) => a - b);
-    const mid = Math.floor(sorted.length / 2);
-    return sorted.length % 2 !== 0
-      ? sorted[mid]
-      : (sorted[mid - 1] + sorted[mid]) / 2;
-  };
-
-  // Distribution buckets
-  const buckets: Record<string, number> = {
-    "0-1m": 0,
-    "1-5m": 0,
-    "5-30m": 0,
-    "30m-1h": 0,
-    "1h-24h": 0,
-    "24h+": 0,
-  };
-
-  totalTimes.forEach((t) => {
-    if (t < 60) buckets["0-1m"]++;
-    else if (t < 300) buckets["1-5m"]++;
-    else if (t < 1800) buckets["5-30m"]++;
-    else if (t < 3600) buckets["30m-1h"]++;
-    else if (t < 86400) buckets["1h-24h"]++;
-    else buckets["24h+"]++;
-  });
-
-  const total = totalTimes.length;
-  const distribution: ConvertTimeDistribution[] = Object.entries(buckets).map(
-    ([bucket, count]) => ({
-      bucket,
-      count,
-      percentage: total > 0 ? Math.round((count / total) * 100) : 0,
-    })
-  );
-
-  // Split roughly in half for upload->cart and cart->order estimates
-  const avgTotal = avg(totalTimes);
-  const medianTotal = median(totalTimes);
 
   return {
-    avgUploadToCart: Math.round(avgTotal * 0.3), // Estimate 30% of time
-    avgCartToOrder: Math.round(avgTotal * 0.7), // Estimate 70% of time
-    avgTotalTime: Math.round(avgTotal),
-    medianUploadToCart: Math.round(medianTotal * 0.3),
-    medianCartToOrder: Math.round(medianTotal * 0.7),
-    distribution,
+    totalSessions,
+    sessionsWithUTM,
+    utmPercentage: totalSessions > 0 ? (sessionsWithUTM / totalSessions) * 100 : 0,
+    topSource: topSourceResult[0]?.utmSource || "N/A",
+    topMedium: topMediumResult[0]?.utmMedium || "N/A",
+    paidClicks,
   };
 }
 
+export async function getSourceBreakdown(
+  shopId: string,
+  startDate: Date,
+  endDate: Date
+): Promise<SourceBreakdown[]> {
+  const sessions = await prisma.visitorSession.groupBy({
+    by: ["utmSource"],
+    where: { shopId, startedAt: { gte: startDate, lte: endDate } },
+    _count: { id: true },
+    _sum: { uploadsInSession: true },
+    orderBy: { _count: { id: "desc" } },
+    take: 10,
+  });
+
+  return sessions.map((s) => ({
+    source: s.utmSource || "direct",
+    sessions: s._count.id,
+    uploads: s._sum.uploadsInSession || 0,
+    orders: 0, // Would need order data
+    conversionRate: s._count.id > 0 ? ((s._sum.uploadsInSession || 0) / s._count.id) * 100 : 0,
+  }));
+}
+
+export async function getMediumBreakdown(
+  shopId: string,
+  startDate: Date,
+  endDate: Date
+): Promise<MediumBreakdown[]> {
+  const sessions = await prisma.visitorSession.groupBy({
+    by: ["utmMedium"],
+    where: { shopId, startedAt: { gte: startDate, lte: endDate } },
+    _count: { id: true },
+    _sum: { uploadsInSession: true },
+    orderBy: { _count: { id: "desc" } },
+  });
+
+  const total = sessions.reduce((sum, s) => sum + s._count.id, 0);
+
+  return sessions.map((s) => ({
+    medium: s.utmMedium || "none",
+    sessions: s._count.id,
+    uploads: s._sum.uploadsInSession || 0,
+    percentage: total > 0 ? (s._count.id / total) * 100 : 0,
+  }));
+}
+
+export async function getCampaignBreakdown(
+  shopId: string,
+  startDate: Date,
+  endDate: Date
+): Promise<CampaignBreakdown[]> {
+  const sessions = await prisma.visitorSession.groupBy({
+    by: ["utmCampaign", "utmSource"],
+    where: { shopId, startedAt: { gte: startDate, lte: endDate }, utmCampaign: { not: null } },
+    _count: { id: true },
+    _sum: { uploadsInSession: true },
+    orderBy: { _count: { id: "desc" } },
+    take: 10,
+  });
+
+  return sessions.map((s) => ({
+    campaign: s.utmCampaign || "unknown",
+    sessions: s._count.id,
+    uploads: s._sum.uploadsInSession || 0,
+    source: s.utmSource,
+  }));
+}
+
+export async function getClickIdStats(
+  shopId: string,
+  startDate: Date,
+  endDate: Date
+): Promise<ClickIdStats> {
+  const [gclid, fbclid, msclkid, ttclid] = await Promise.all([
+    prisma.visitorSession.count({
+      where: { shopId, startedAt: { gte: startDate, lte: endDate }, gclid: { not: null } },
+    }),
+    prisma.visitorSession.count({
+      where: { shopId, startedAt: { gte: startDate, lte: endDate }, fbclid: { not: null } },
+    }),
+    prisma.visitorSession.count({
+      where: { shopId, startedAt: { gte: startDate, lte: endDate }, msclkid: { not: null } },
+    }),
+    prisma.visitorSession.count({
+      where: { shopId, startedAt: { gte: startDate, lte: endDate }, ttclid: { not: null } },
+    }),
+  ]);
+
+  return {
+    gclid,
+    fbclid,
+    msclkid,
+    ttclid,
+    total: gclid + fbclid + msclkid + ttclid,
+  };
+}
+
+export async function getReferrerBreakdown(
+  shopId: string,
+  startDate: Date,
+  endDate: Date
+): Promise<ReferrerBreakdown[]> {
+  const sessions = await prisma.visitorSession.groupBy({
+    by: ["referrerType"],
+    where: { shopId, startedAt: { gte: startDate, lte: endDate } },
+    _count: { id: true },
+    orderBy: { _count: { id: "desc" } },
+  });
+
+  const total = sessions.reduce((sum, s) => sum + s._count.id, 0);
+
+  return sessions.map((s) => ({
+    type: s.referrerType || "direct",
+    sessions: s._count.id,
+    percentage: total > 0 ? (s._count.id / total) * 100 : 0,
+  }));
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
-// COHORT ANALYSIS
-// Uses Visitor firstSeenAt for cohort grouping
+// COHORT ANALYTICS
 // ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * Generate cohort retention data
- */
-export async function getCohortData(
-  shopId: string,
-  weeks: number = 8
-): Promise<CohortData[]> {
+export interface WeeklyCohort {
+  weekStart: string;
+  totalVisitors: number;
+  week0: number;
+  week1: number;
+  week2: number;
+  week3: number;
+  week4: number;
+}
+
+export async function getWeeklyCohorts(shopId: string, weeks = 8): Promise<WeeklyCohort[]> {
+  const cohorts: WeeklyCohort[] = [];
   const now = new Date();
-  const cohorts: CohortData[] = [];
 
   for (let i = weeks - 1; i >= 0; i--) {
     const weekStart = new Date(now);
-    weekStart.setDate(weekStart.getDate() - (i * 7) - weekStart.getDay());
+    weekStart.setDate(weekStart.getDate() - (7 * (i + 1)));
     weekStart.setHours(0, 0, 0, 0);
+    weekStart.setDate(weekStart.getDate() - weekStart.getDay()); // Start of week
 
     const weekEnd = new Date(weekStart);
     weekEnd.setDate(weekEnd.getDate() + 7);
 
-    // Get visitors who had their first visit in this week
+    // Get visitors who first appeared in this week
     const cohortVisitors = await prisma.visitor.findMany({
       where: {
         shopId,
         firstSeenAt: { gte: weekStart, lt: weekEnd },
       },
-      select: {
-        id: true,
-        totalUploads: true,
-        totalOrders: true,
-        totalRevenue: true,
-      },
+      select: { id: true },
     });
 
-    if (cohortVisitors.length === 0) continue;
-
     const visitorIds = cohortVisitors.map((v) => v.id);
+    const totalVisitors = visitorIds.length;
 
-    // Check activity in subsequent weeks
-    const weeklyActivity: number[] = [];
-    
-    for (let w = 0; w <= 4; w++) {
-      const activityStart = new Date(weekStart);
-      activityStart.setDate(activityStart.getDate() + (w * 7));
-      
-      const activityEnd = new Date(activityStart);
-      activityEnd.setDate(activityEnd.getDate() + 7);
-
-      if (activityEnd > now) {
-        weeklyActivity.push(-1); // Future week
-        continue;
-      }
-
-      const activeCount = await prisma.upload.groupBy({
-        by: ["visitorId"],
-        where: {
-          shopId,
-          visitorId: { in: visitorIds },
-          createdAt: { gte: activityStart, lt: activityEnd },
-        },
+    if (totalVisitors === 0) {
+      cohorts.push({
+        weekStart: weekStart.toISOString().split("T")[0],
+        totalVisitors: 0,
+        week0: 0,
+        week1: 0,
+        week2: 0,
+        week3: 0,
+        week4: 0,
       });
+      continue;
+    }
 
-      weeklyActivity.push(activeCount.length);
+    // Calculate retention for each subsequent week
+    const retentionCounts = [0, 0, 0, 0, 0];
+
+    for (let w = 0; w <= 4 && (i - w) >= 0; w++) {
+      const retentionStart = new Date(weekStart);
+      retentionStart.setDate(retentionStart.getDate() + (7 * w));
+      
+      const retentionEnd = new Date(retentionStart);
+      retentionEnd.setDate(retentionEnd.getDate() + 7);
+
+      if (retentionEnd <= now) {
+        const activeCount = await prisma.visitorSession.count({
+          where: {
+            shopId,
+            visitorId: { in: visitorIds },
+            startedAt: { gte: retentionStart, lt: retentionEnd },
+          },
+        });
+        
+        // Count unique visitors who had sessions
+        const uniqueActive = await prisma.visitorSession.groupBy({
+          by: ["visitorId"],
+          where: {
+            shopId,
+            visitorId: { in: visitorIds },
+            startedAt: { gte: retentionStart, lt: retentionEnd },
+          },
+        });
+        
+        retentionCounts[w] = uniqueActive.length;
+      }
     }
 
     cohorts.push({
-      cohortDate: weekStart.toISOString().split("T")[0],
-      totalUsers: cohortVisitors.length,
-      week0: weeklyActivity[0] ?? 0,
-      week1: weeklyActivity[1] ?? -1,
-      week2: weeklyActivity[2] ?? -1,
-      week3: weeklyActivity[3] ?? -1,
-      week4: weeklyActivity[4] ?? -1,
-      totalRevenue: cohortVisitors.reduce(
-        (sum, v) => sum + Number(v.totalRevenue || 0),
-        0
-      ),
+      weekStart: weekStart.toISOString().split("T")[0],
+      totalVisitors,
+      week0: totalVisitors > 0 ? Math.round((retentionCounts[0] / totalVisitors) * 100) : 0,
+      week1: totalVisitors > 0 ? Math.round((retentionCounts[1] / totalVisitors) * 100) : 0,
+      week2: totalVisitors > 0 ? Math.round((retentionCounts[2] / totalVisitors) * 100) : 0,
+      week3: totalVisitors > 0 ? Math.round((retentionCounts[3] / totalVisitors) * 100) : 0,
+      week4: totalVisitors > 0 ? Math.round((retentionCounts[4] / totalVisitors) * 100) : 0,
     });
   }
 
@@ -405,375 +568,172 @@ export async function getCohortData(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// DEVICE PERFORMANCE
-// Uses Visitor.deviceType field
-// ═══════════════════════════════════════════════════════════════════════════
-
-/**
- * Get device performance metrics
- */
-export async function getDevicePerformance(
-  shopId: string,
-  range: TimeRange
-): Promise<DevicePerformance[]> {
-  const deviceStats = await prisma.visitor.groupBy({
-    by: ["deviceType"],
-    where: {
-      shopId,
-      firstSeenAt: { gte: range.start, lte: range.end },
-    },
-    _count: { id: true },
-    _sum: {
-      totalUploads: true,
-      totalOrders: true,
-      totalSessions: true,
-    },
-  });
-
-  return deviceStats.map((d) => {
-    const sessions = d._sum.totalSessions || 0;
-    const uploads = d._sum.totalUploads || 0;
-    const orders = d._sum.totalOrders || 0;
-
-    return {
-      deviceType: d.deviceType || "unknown",
-      sessions,
-      uploads,
-      uploadSuccessRate: sessions > 0 ? Math.round((uploads / sessions) * 100) : 0,
-      avgUploadTime: 0, // Would need timing data
-      orders,
-      conversionRate: sessions > 0 ? Math.round((orders / sessions) * 100) : 0,
-    };
-  });
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// GEO ANALYTICS
-// Uses Visitor.country field
-// ═══════════════════════════════════════════════════════════════════════════
-
-/**
- * Get geo-based analytics
- */
-export async function getGeoStats(
-  shopId: string,
-  range: TimeRange
-): Promise<GeoStats[]> {
-  const geoStats = await prisma.visitor.groupBy({
-    by: ["country"],
-    where: {
-      shopId,
-      firstSeenAt: { gte: range.start, lte: range.end },
-      country: { not: null },
-    },
-    _count: { id: true },
-    _sum: {
-      totalSessions: true,
-      totalUploads: true,
-      totalOrders: true,
-      totalRevenue: true,
-    },
-  });
-
-  return geoStats
-    .map((g) => ({
-      country: g.country || "Unknown",
-      sessions: g._sum.totalSessions || 0,
-      uploads: g._sum.totalUploads || 0,
-      orders: g._sum.totalOrders || 0,
-      revenue: Number(g._sum.totalRevenue || 0),
-      avgOrderValue:
-        (g._sum.totalOrders || 0) > 0
-          ? Number(g._sum.totalRevenue || 0) / (g._sum.totalOrders || 0)
-          : 0,
-    }))
-    .sort((a, b) => b.revenue - a.revenue);
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
 // AI INSIGHTS
-// Generates insights based on available data
 // ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * Generate AI-powered insights from analytics data
- */
+export interface AIInsight {
+  id: string;
+  type: "positive" | "negative" | "neutral" | "suggestion";
+  title: string;
+  description: string;
+  metric?: string;
+  change?: number;
+  priority: "high" | "medium" | "low";
+}
+
 export async function generateAIInsights(
   shopId: string,
-  range: TimeRange
+  startDate: Date,
+  endDate: Date
 ): Promise<AIInsight[]> {
   const insights: AIInsight[] = [];
-  
+
+  // Get current period stats
+  const stats = await getVisitorStats(shopId, startDate, endDate);
+
   // Compare with previous period
-  const periodLength = range.end.getTime() - range.start.getTime();
-  const previousStart = new Date(range.start.getTime() - periodLength);
-  const previousEnd = new Date(range.start.getTime());
+  const periodLength = endDate.getTime() - startDate.getTime();
+  const prevStart = new Date(startDate.getTime() - periodLength);
+  const prevEnd = startDate;
+  const prevStats = await getVisitorStats(shopId, prevStart, prevEnd);
 
-  // Get current and previous period data
-  const [currentUploads, previousUploads] = await Promise.all([
-    prisma.upload.count({
-      where: {
-        shopId,
-        createdAt: { gte: range.start, lte: range.end },
-      },
-    }),
-    prisma.upload.count({
-      where: {
-        shopId,
-        createdAt: { gte: previousStart, lt: previousEnd },
-      },
-    }),
-  ]);
-
-  // Upload trend insight
-  if (previousUploads > 0) {
-    const change = ((currentUploads - previousUploads) / previousUploads) * 100;
-    
-    if (Math.abs(change) > 10) {
+  // Visitor growth
+  if (prevStats.totalVisitors > 0) {
+    const growth = ((stats.newVisitors - prevStats.newVisitors) / prevStats.newVisitors) * 100;
+    if (growth > 20) {
       insights.push({
-        id: "upload-trend",
-        type: change > 0 ? "positive" : "negative",
-        title: change > 0 ? "Upload Volume Up" : "Upload Volume Down",
-        description: `Uploads ${change > 0 ? "increased" : "decreased"} by ${Math.abs(change).toFixed(1)}% compared to the previous period.`,
-        metric: `${currentUploads} uploads`,
-        change: Math.round(change),
-        priority: Math.abs(change) > 30 ? "high" : "medium",
-      });
-    }
-  }
-
-  // Check for conversion rate anomalies
-  const [sessionsWithUploads, totalSessions] = await Promise.all([
-    prisma.visitorSession.count({
-      where: {
-        shopId,
-        startedAt: { gte: range.start, lte: range.end },
-        uploadsInSession: { gt: 0 },
-      },
-    }),
-    prisma.visitorSession.count({
-      where: {
-        shopId,
-        startedAt: { gte: range.start, lte: range.end },
-      },
-    }),
-  ]);
-
-  const conversionRate = totalSessions > 0
-    ? (sessionsWithUploads / totalSessions) * 100
-    : 0;
-
-  if (conversionRate < 5 && totalSessions > 100) {
-    insights.push({
-      id: "low-conversion",
-      type: "negative",
-      title: "Low Upload Conversion",
-      description: "Only a small percentage of visitors are uploading designs. Consider improving the upload UX or adding more prominent CTAs.",
-      metric: `${conversionRate.toFixed(1)}% conversion`,
-      priority: "high",
-    });
-  } else if (conversionRate > 20 && totalSessions > 50) {
-    insights.push({
-      id: "high-conversion",
-      type: "positive",
-      title: "Strong Upload Conversion",
-      description: "Your visitors are converting well. Keep up the good work!",
-      metric: `${conversionRate.toFixed(1)}% conversion`,
-      priority: "low",
-    });
-  }
-
-  // Check top traffic sources
-  const topSource = await prisma.visitorSession.groupBy({
-    by: ["utmSource"],
-    where: {
-      shopId,
-      startedAt: { gte: range.start, lte: range.end },
-      utmSource: { not: null },
-    },
-    _count: { id: true },
-    orderBy: { _count: { id: "desc" } },
-    take: 1,
-  });
-
-  if (topSource.length > 0) {
-    const sourceShare = totalSessions > 0
-      ? (topSource[0]._count.id / totalSessions) * 100
-      : 0;
-
-    if (sourceShare > 50) {
-      insights.push({
-        id: "traffic-concentration",
-        type: "neutral",
-        title: "Traffic Concentrated",
-        description: `${topSource[0].utmSource} accounts for ${sourceShare.toFixed(0)}% of tracked traffic. Consider diversifying your traffic sources.`,
-        metric: topSource[0].utmSource || "Unknown",
-        priority: "medium",
-      });
-    }
-  }
-
-  // Check order link growth
-  const [currentOrders, previousOrders] = await Promise.all([
-    prisma.orderLink.count({
-      where: {
-        shopId,
-        createdAt: { gte: range.start, lte: range.end },
-      },
-    }),
-    prisma.orderLink.count({
-      where: {
-        shopId,
-        createdAt: { gte: previousStart, lt: previousEnd },
-      },
-    }),
-  ]);
-
-  if (previousOrders > 0) {
-    const orderChange = ((currentOrders - previousOrders) / previousOrders) * 100;
-    
-    if (orderChange > 20) {
-      insights.push({
-        id: "order-growth",
+        id: "visitor-growth",
         type: "positive",
-        title: "Order Volume Growing",
-        description: `Orders with custom uploads increased by ${orderChange.toFixed(0)}% compared to the previous period.`,
-        metric: `${currentOrders} orders`,
-        change: Math.round(orderChange),
-        priority: "medium",
+        title: "Strong Visitor Growth",
+        description: `New visitors increased by ${growth.toFixed(1)}% compared to the previous period.`,
+        metric: `${stats.newVisitors} new visitors`,
+        change: growth,
+        priority: "high",
       });
-    } else if (orderChange < -20) {
+    } else if (growth < -20) {
       insights.push({
-        id: "order-decline",
+        id: "visitor-decline",
         type: "negative",
-        title: "Order Volume Declining",
-        description: `Orders with custom uploads decreased by ${Math.abs(orderChange).toFixed(0)}% compared to the previous period. Investigate potential issues.`,
-        metric: `${currentOrders} orders`,
-        change: Math.round(orderChange),
+        title: "Visitor Decline",
+        description: `New visitors decreased by ${Math.abs(growth).toFixed(1)}% compared to the previous period.`,
+        metric: `${stats.newVisitors} new visitors`,
+        change: growth,
         priority: "high",
       });
     }
   }
 
-  // Mobile vs Desktop performance
-  const devicePerf = await getDevicePerformance(shopId, range);
-  const mobile = devicePerf.find((d) => d.deviceType === "mobile");
-  const desktop = devicePerf.find((d) => d.deviceType === "desktop");
-
-  if (mobile && desktop && mobile.conversionRate < desktop.conversionRate * 0.5 && mobile.sessions > 50) {
+  // Conversion rate insights
+  if (stats.uploadConversionRate > 15) {
     insights.push({
-      id: "mobile-optimization",
+      id: "good-upload-rate",
+      type: "positive",
+      title: "Excellent Upload Conversion",
+      description: `${stats.uploadConversionRate.toFixed(1)}% of visitors are uploading designs. This is above average.`,
+      metric: `${stats.visitorsWithUploads} uploaders`,
+      priority: "medium",
+    });
+  } else if (stats.uploadConversionRate < 5 && stats.totalVisitors > 50) {
+    insights.push({
+      id: "low-upload-rate",
       type: "suggestion",
-      title: "Mobile Experience Needs Work",
-      description: `Mobile conversion rate (${mobile.conversionRate}%) is significantly lower than desktop (${desktop.conversionRate}%). Consider optimizing the mobile upload experience.`,
+      title: "Low Upload Conversion",
+      description: "Consider improving the upload flow visibility or adding incentives to increase uploads.",
+      metric: `${stats.uploadConversionRate.toFixed(1)}% conversion`,
       priority: "high",
     });
   }
 
-  // New visitors insight
-  const newVisitors = await prisma.visitor.count({
-    where: {
-      shopId,
-      firstSeenAt: { gte: range.start, lte: range.end },
-    },
-  });
-
-  if (newVisitors > 100) {
+  // Returning visitors
+  const returnRate = stats.totalVisitors > 0 ? (stats.returningVisitors / stats.totalVisitors) * 100 : 0;
+  if (returnRate > 30) {
     insights.push({
-      id: "new-visitors",
+      id: "good-retention",
+      type: "positive",
+      title: "Strong Customer Loyalty",
+      description: `${returnRate.toFixed(1)}% of visitors return for multiple sessions, indicating good engagement.`,
+      metric: `${stats.returningVisitors} returning visitors`,
+      priority: "medium",
+    });
+  }
+
+  // Device insights
+  const devices = await getVisitorsByDevice(shopId);
+  const mobileDevice = devices.find((d) => d.type === "mobile");
+  if (mobileDevice && mobileDevice.percentage > 60) {
+    insights.push({
+      id: "mobile-heavy",
       type: "neutral",
-      title: "New Visitor Acquisition",
-      description: `${newVisitors} new unique visitors discovered your customizer in this period.`,
-      metric: `${newVisitors} new visitors`,
+      title: "Mobile-First Audience",
+      description: `${mobileDevice.percentage.toFixed(1)}% of visitors use mobile devices. Ensure your upload flow is mobile-optimized.`,
+      metric: `${mobileDevice.count} mobile visitors`,
+      priority: "medium",
+    });
+  }
+
+  // Add suggestion if no insights generated
+  if (insights.length === 0) {
+    insights.push({
+      id: "collect-more-data",
+      type: "neutral",
+      title: "Gathering Data",
+      description: "Continue collecting visitor data to generate personalized insights.",
       priority: "low",
     });
   }
 
-  return insights.sort((a, b) => {
-    const priorityOrder = { high: 0, medium: 1, low: 2 };
-    return priorityOrder[a.priority] - priorityOrder[b.priority];
-  });
+  return insights;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// HELPER: Update upload with revenue data (called from webhook)
-// These will work after migration is applied
+// UPLOAD ANALYTICS
 // ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * Link order revenue to upload (called from orders-paid webhook)
- * This function will work after the Prisma migration adds the new fields
- */
-export async function linkOrderToUpload(
-  uploadId: string,
-  orderData: {
-    orderId: string;
-    orderTotal: number;
-    orderCurrency: string;
-    paidAt: Date;
-  }
-): Promise<void> {
-  try {
-    // Use raw SQL to update since fields may not exist in Prisma client yet
-    await prisma.$executeRaw`
-      UPDATE uploads 
-      SET 
-        order_id = ${orderData.orderId},
-        order_total = ${orderData.orderTotal},
-        order_currency = ${orderData.orderCurrency},
-        order_paid_at = ${orderData.paidAt}
-      WHERE id = ${uploadId}
-    `;
-
-    // Also update visitor totals if linked
-    const upload = await prisma.upload.findUnique({
-      where: { id: uploadId },
-      select: { visitorId: true },
-    });
-
-    if (upload?.visitorId) {
-      await prisma.visitor.update({
-        where: { id: upload.visitorId },
-        data: {
-          totalOrders: { increment: 1 },
-          totalRevenue: { increment: new Decimal(orderData.orderTotal) },
-        },
-      });
-    }
-  } catch (error) {
-    // Log but don't fail - fields may not exist yet
-    console.warn("[Analytics] linkOrderToUpload failed (migration may not be applied):", error);
-  }
+export interface UploadStats {
+  totalUploads: number;
+  completedUploads: number;
+  failedUploads: number;
+  successRate: number;
+  avgFileSize: number;
+  totalDataTransferred: number;
 }
 
-/**
- * Mark upload as added to cart (called from cart tracking)
- */
-export async function markUploadAddedToCart(uploadId: string): Promise<void> {
-  try {
-    // Use raw SQL to update since field may not exist in Prisma client yet
-    await prisma.$executeRaw`
-      UPDATE uploads 
-      SET cart_added_at = ${new Date()}
-      WHERE id = ${uploadId}
-    `;
+export async function getUploadStats(
+  shopId: string,
+  startDate: Date,
+  endDate: Date
+): Promise<UploadStats> {
+  const [total, completed, failed, sizeAgg] = await Promise.all([
+    prisma.upload.count({
+      where: { shopId, createdAt: { gte: startDate, lte: endDate } },
+    }),
+    prisma.upload.count({
+      where: {
+        shopId,
+        createdAt: { gte: startDate, lte: endDate },
+        status: { in: ["uploaded", "ready", "completed"] },
+      },
+    }),
+    prisma.upload.count({
+      where: {
+        shopId,
+        createdAt: { gte: startDate, lte: endDate },
+        status: "failed",
+      },
+    }),
+    prisma.upload.aggregate({
+      where: { shopId, createdAt: { gte: startDate, lte: endDate } },
+      _avg: { fileSize: true },
+      _sum: { fileSize: true },
+    }),
+  ]);
 
-    // Update session metrics if linked
-    const upload = await prisma.upload.findUnique({
-      where: { id: uploadId },
-      select: { sessionId: true },
-    });
-
-    if (upload?.sessionId) {
-      await prisma.visitorSession.update({
-        where: { id: upload.sessionId },
-        data: {
-          addToCartCount: { increment: 1 },
-        },
-      });
-    }
-  } catch (error) {
-    // Log but don't fail - field may not exist yet
-    console.warn("[Analytics] markUploadAddedToCart failed (migration may not be applied):", error);
-  }
+  return {
+    totalUploads: total,
+    completedUploads: completed,
+    failedUploads: failed,
+    successRate: total > 0 ? (completed / total) * 100 : 0,
+    avgFileSize: sizeAgg._avg.fileSize || 0,
+    totalDataTransferred: sizeAgg._sum.fileSize || 0,
+  };
 }

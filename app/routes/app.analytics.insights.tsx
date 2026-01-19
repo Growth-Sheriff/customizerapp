@@ -1,15 +1,10 @@
 /**
- * AI Insights Dashboard
- * Analytics dashboard with AI-powered insights
- * 
- * @route /app/analytics/insights
- * @version 1.0.0
- * 
- * ⚠️ ADDITIVE ONLY: New standalone route
+ * Analytics - AI Insights Page
+ * AI-powered analytics insights with recommendations
  */
 
 import { json, type LoaderFunctionArgs } from "@remix-run/node";
-import { useLoaderData, useSearchParams } from "@remix-run/react";
+import { useLoaderData } from "@remix-run/react";
 import {
   Page,
   Layout,
@@ -17,419 +12,164 @@ import {
   Text,
   BlockStack,
   InlineStack,
+  Box,
   Badge,
   Icon,
-  Select,
   Divider,
-  Box,
+  InlineGrid,
   Banner,
+  Button,
   ProgressBar,
-  EmptyState,
 } from "@shopify/polaris";
 import {
+  LightbulbIcon,
+  ChartVerticalIcon,
+  ArrowUpIcon,
+  ArrowDownIcon,
   AlertCircleIcon,
   CheckCircleIcon,
-  ChartVerticalIcon,
-  ClockIcon,
-  GlobeIcon,
-  MobileIcon,
   InfoIcon,
 } from "@shopify/polaris-icons";
 import { authenticate } from "~/shopify.server";
 import {
-  getRevenueMetrics,
-  getTimeToConvert,
-  getDevicePerformance,
-  getGeoStats,
+  getShopIdFromDomain,
+  getVisitorStats,
+  getUploadStats,
   generateAIInsights,
+  getVisitorsByDevice,
+  type AIInsight,
+  type VisitorStats,
+  type UploadStats,
 } from "~/lib/analytics.server";
 
-// Local type definitions to avoid import issues
-interface AIInsightType {
-  id: string;
-  type: "positive" | "negative" | "neutral" | "suggestion";
-  title: string;
-  description: string;
-  metric?: string;
-  change?: number;
-  priority: "high" | "medium" | "low";
+interface LoaderData {
+  insights: AIInsight[];
+  visitorStats: VisitorStats;
+  uploadStats: UploadStats;
+  funnelData: {
+    stage: string;
+    value: number;
+    percentage: number;
+  }[];
+  error?: string;
 }
-
-interface DevicePerformanceType {
-  deviceType: string;
-  sessions: number;
-  uploads: number;
-  uploadSuccessRate: number;
-  avgUploadTime: number;
-  orders: number;
-  conversionRate: number;
-}
-
-interface GeoStatsType {
-  country: string;
-  sessions: number;
-  uploads: number;
-  orders: number;
-  revenue: number;
-  avgOrderValue: number;
-}
-
-interface SourceRevenueType {
-  source: string;
-  revenue: number;
-  orders: number;
-  avgOrderValue: number;
-  conversionRate: number;
-}
-
-interface DistributionType {
-  bucket: string;
-  count: number;
-  percentage: number;
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// LOADER
-// ═══════════════════════════════════════════════════════════════════════════
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { session } = await authenticate.admin(request);
-  const shopId = session.shop;
+  const shopId = await getShopIdFromDomain(session.shop);
 
-  const url = new URL(request.url);
-  const days = parseInt(url.searchParams.get("days") || "30", 10);
+  if (!shopId) {
+    return json<LoaderData>({
+      insights: [],
+      visitorStats: {
+        totalVisitors: 0,
+        newVisitors: 0,
+        returningVisitors: 0,
+        totalSessions: 0,
+        avgSessionsPerVisitor: 0,
+        visitorsWithUploads: 0,
+        visitorsWithOrders: 0,
+        uploadConversionRate: 0,
+        orderConversionRate: 0,
+      },
+      uploadStats: {
+        totalUploads: 0,
+        completedUploads: 0,
+        failedUploads: 0,
+        successRate: 0,
+        avgFileSize: 0,
+        totalDataTransferred: 0,
+      },
+      funnelData: [],
+      error: "Shop not found",
+    });
+  }
 
-  const now = new Date();
-  const range = {
-    start: new Date(now.getTime() - days * 24 * 60 * 60 * 1000),
-    end: now,
-  };
+  // Last 30 days
+  const endDate = new Date();
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - 30);
 
   try {
-    const [revenue, timeToConvert, devices, geo, insights] = await Promise.all([
-      getRevenueMetrics(shopId, range),
-      getTimeToConvert(shopId, range),
-      getDevicePerformance(shopId, range),
-      getGeoStats(shopId, range),
-      generateAIInsights(shopId, range),
+    const [insights, visitorStats, uploadStats] = await Promise.all([
+      generateAIInsights(shopId, startDate, endDate),
+      getVisitorStats(shopId, startDate, endDate),
+      getUploadStats(shopId, startDate, endDate),
     ]);
 
-    return json({
-      revenue,
-      timeToConvert,
-      devices,
-      geo: geo.slice(0, 10),
+    // Calculate funnel data
+    const funnelData = [
+      {
+        stage: "Visitors",
+        value: visitorStats.totalVisitors,
+        percentage: 100,
+      },
+      {
+        stage: "With Sessions",
+        value: visitorStats.totalSessions,
+        percentage: visitorStats.totalVisitors > 0 
+          ? Math.min(100, (visitorStats.totalSessions / visitorStats.totalVisitors) * 100) 
+          : 0,
+      },
+      {
+        stage: "Uploaded",
+        value: visitorStats.visitorsWithUploads,
+        percentage: visitorStats.totalVisitors > 0 
+          ? (visitorStats.visitorsWithUploads / visitorStats.totalVisitors) * 100 
+          : 0,
+      },
+      {
+        stage: "Ordered",
+        value: visitorStats.visitorsWithOrders,
+        percentage: visitorStats.totalVisitors > 0 
+          ? (visitorStats.visitorsWithOrders / visitorStats.totalVisitors) * 100 
+          : 0,
+      },
+    ];
+
+    return json<LoaderData>({
       insights,
-      days,
-      error: null as string | null,
+      visitorStats,
+      uploadStats,
+      funnelData,
     });
   } catch (error) {
-    console.error("[AI Insights] Loader error:", error);
-    return json({
-      revenue: null,
-      timeToConvert: null,
-      devices: [] as DevicePerformanceType[],
-      geo: [] as GeoStatsType[],
-      insights: [] as AIInsightType[],
-      days,
-      error: String(error),
+    console.error("AI Insights error:", error);
+    return json<LoaderData>({
+      insights: [],
+      visitorStats: {
+        totalVisitors: 0,
+        newVisitors: 0,
+        returningVisitors: 0,
+        totalSessions: 0,
+        avgSessionsPerVisitor: 0,
+        visitorsWithUploads: 0,
+        visitorsWithOrders: 0,
+        uploadConversionRate: 0,
+        orderConversionRate: 0,
+      },
+      uploadStats: {
+        totalUploads: 0,
+        completedUploads: 0,
+        failedUploads: 0,
+        successRate: 0,
+        avgFileSize: 0,
+        totalDataTransferred: 0,
+      },
+      funnelData: [],
+      error: error instanceof Error ? error.message : "Unknown error",
     });
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// COMPONENT
-// ═══════════════════════════════════════════════════════════════════════════
-
-export default function AIInsightsPage() {
-  const data = useLoaderData<typeof loader>();
-  const [searchParams, setSearchParams] = useSearchParams();
-
-  const handlePeriodChange = (value: string) => {
-    const params = new URLSearchParams(searchParams);
-    params.set("days", value);
-    setSearchParams(params);
+function InsightCard({ insight }: { insight: AIInsight }) {
+  const iconMap = {
+    positive: CheckCircleIcon,
+    negative: AlertCircleIcon,
+    neutral: InfoIcon,
+    suggestion: LightbulbIcon,
   };
 
-  if (data.error) {
-    return (
-      <Page title="AI Insights">
-        <Banner tone="critical">
-          <p>Error loading analytics: {data.error}</p>
-        </Banner>
-      </Page>
-    );
-  }
-
-  const insightCount = data.insights?.length ?? 0;
-
-  return (
-    <Page
-      title="AI Insights"
-      subtitle="Intelligent analytics and recommendations"
-      primaryAction={{
-        content: "Export Report",
-        disabled: true,
-      }}
-      secondaryActions={[
-        {
-          content: "Back to Analytics",
-          url: "/app/analytics",
-        },
-      ]}
-    >
-      <Layout>
-        {/* Period Selector */}
-        <Layout.Section>
-          <Card>
-            <InlineStack align="space-between" blockAlign="center">
-              <Text variant="headingMd" as="h2">
-                Analysis Period
-              </Text>
-              <div style={{ width: "200px" }}>
-                <Select
-                  label=""
-                  labelHidden
-                  options={[
-                    { label: "Last 7 days", value: "7" },
-                    { label: "Last 30 days", value: "30" },
-                    { label: "Last 90 days", value: "90" },
-                  ]}
-                  value={String(data.days)}
-                  onChange={handlePeriodChange}
-                />
-              </div>
-            </InlineStack>
-          </Card>
-        </Layout.Section>
-
-        {/* AI Insights */}
-        <Layout.Section>
-          <Card>
-            <BlockStack gap="400">
-              <InlineStack align="space-between">
-                <InlineStack gap="200" blockAlign="center">
-                  <Icon source={InfoIcon} tone="info" />
-                  <Text variant="headingMd" as="h2">
-                    AI-Powered Insights
-                  </Text>
-                </InlineStack>
-                <Badge tone="info">{`${insightCount} insights`}</Badge>
-              </InlineStack>
-
-              <Divider />
-
-              {insightCount === 0 ? (
-                <EmptyState
-                  heading="No insights yet"
-                  image=""
-                >
-                  <p>
-                    Not enough data to generate insights. Keep collecting data!
-                  </p>
-                </EmptyState>
-              ) : (
-                <BlockStack gap="300">
-                  {(data.insights as AIInsightType[]).map((insight: AIInsightType) => 
-                    insight && <InsightCard key={insight.id} insight={insight} />
-                  )}
-                </BlockStack>
-              )}
-            </BlockStack>
-          </Card>
-        </Layout.Section>
-
-        {/* Revenue Overview */}
-        {data.revenue && (
-          <Layout.Section>
-            <Card>
-              <BlockStack gap="400">
-                <InlineStack gap="200" blockAlign="center">
-                  <Icon source={ChartVerticalIcon} tone="success" />
-                  <Text variant="headingMd" as="h2">
-                    Revenue Attribution
-                  </Text>
-                </InlineStack>
-
-                <Divider />
-
-                <InlineStack gap="800" wrap={false}>
-                  <MetricBox
-                    label="Total Revenue"
-                    value={`$${data.revenue.totalRevenue.toLocaleString()}`}
-                  />
-                  <MetricBox
-                    label="Total Orders"
-                    value={String(data.revenue.totalOrders)}
-                  />
-                  <MetricBox
-                    label="Avg Order Value"
-                    value={`$${data.revenue.avgOrderValue.toFixed(2)}`}
-                  />
-                </InlineStack>
-
-                {data.revenue.revenueBySource.length > 0 && (
-                  <>
-                    <Divider />
-                    <Text variant="headingSm" as="h3">
-                      Revenue by Source
-                    </Text>
-                    <BlockStack gap="200">
-                      {(data.revenue.revenueBySource.slice(0, 5) as SourceRevenueType[]).map((source: SourceRevenueType) => 
-                        source && (
-                          <SourceRevenueBar
-                            key={source.source}
-                            source={source}
-                            maxRevenue={data.revenue!.totalRevenue}
-                          />
-                        )
-                      )}
-                    </BlockStack>
-                  </>
-                )}
-              </BlockStack>
-            </Card>
-          </Layout.Section>
-        )}
-
-        {/* Time to Convert */}
-        {data.timeToConvert && (
-          <Layout.Section>
-            <Card>
-              <BlockStack gap="400">
-                <InlineStack gap="200" blockAlign="center">
-                  <Icon source={ClockIcon} tone="warning" />
-                  <Text variant="headingMd" as="h2">
-                    Time to Convert
-                  </Text>
-                </InlineStack>
-
-                <Divider />
-
-                <InlineStack gap="400" wrap={false}>
-                  <TimeMetric
-                    label="Upload → Cart"
-                    seconds={data.timeToConvert.avgUploadToCart}
-                    median={data.timeToConvert.medianUploadToCart}
-                  />
-                  <TimeMetric
-                    label="Cart → Order"
-                    seconds={data.timeToConvert.avgCartToOrder}
-                    median={data.timeToConvert.medianCartToOrder}
-                  />
-                  <TimeMetric
-                    label="Total Journey"
-                    seconds={data.timeToConvert.avgTotalTime}
-                    highlight
-                  />
-                </InlineStack>
-
-                {data.timeToConvert.distribution.length > 0 && (
-                  <>
-                    <Divider />
-                    <Text variant="headingSm" as="h3">
-                      Conversion Time Distribution
-                    </Text>
-                    <InlineStack gap="200" wrap>
-                      {(data.timeToConvert.distribution as DistributionType[]).map((d: DistributionType) => 
-                        d && <Badge key={d.bucket} tone="info">{`${d.bucket}: ${d.percentage}%`}</Badge>
-                      )}
-                    </InlineStack>
-                  </>
-                )}
-              </BlockStack>
-            </Card>
-          </Layout.Section>
-        )}
-
-        {/* Device Performance */}
-        <Layout.Section>
-          <Card>
-            <BlockStack gap="400">
-              <InlineStack gap="200" blockAlign="center">
-                <Icon source={MobileIcon} tone="info" />
-                <Text variant="headingMd" as="h2">
-                  Device Performance
-                </Text>
-              </InlineStack>
-
-              <Divider />
-
-              {data.devices.length === 0 ? (
-                <Text as="p" tone="subdued">
-                  No device data available
-                </Text>
-              ) : (
-                <BlockStack gap="300">
-                  {(data.devices as DevicePerformanceType[]).map((device: DevicePerformanceType) => 
-                    device && <DeviceRow key={device.deviceType} device={device} />
-                  )}
-                </BlockStack>
-              )}
-            </BlockStack>
-          </Card>
-        </Layout.Section>
-
-        {/* Geo Stats */}
-        <Layout.Section>
-          <Card>
-            <BlockStack gap="400">
-              <InlineStack gap="200" blockAlign="center">
-                <Icon source={GlobeIcon} tone="info" />
-                <Text variant="headingMd" as="h2">
-                  Geographic Performance
-                </Text>
-              </InlineStack>
-
-              <Divider />
-
-              {data.geo.length === 0 ? (
-                <Text as="p" tone="subdued">
-                  No geographic data available
-                </Text>
-              ) : (
-                <div style={{ overflowX: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                    <thead>
-                      <tr>
-                        <th style={thStyle}>Country</th>
-                        <th style={thStyle}>Sessions</th>
-                        <th style={thStyle}>Uploads</th>
-                        <th style={thStyle}>Orders</th>
-                        <th style={thStyle}>Revenue</th>
-                        <th style={thStyle}>AOV</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(data.geo as GeoStatsType[]).map((g: GeoStatsType) => 
-                        g && (
-                          <tr key={g.country}>
-                            <td style={tdStyle}>{g.country}</td>
-                            <td style={tdStyle}>{g.sessions}</td>
-                            <td style={tdStyle}>{g.uploads}</td>
-                            <td style={tdStyle}>{g.orders}</td>
-                            <td style={tdStyle}>${g.revenue.toFixed(2)}</td>
-                            <td style={tdStyle}>${g.avgOrderValue.toFixed(2)}</td>
-                          </tr>
-                        )
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </BlockStack>
-          </Card>
-        </Layout.Section>
-      </Layout>
-    </Page>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// SUB-COMPONENTS
-// ═══════════════════════════════════════════════════════════════════════════
-
-function InsightCard({ insight }: { insight: AIInsightType }) {
   const toneMap: Record<string, "success" | "critical" | "info" | "warning"> = {
     positive: "success",
     negative: "critical",
@@ -437,145 +177,105 @@ function InsightCard({ insight }: { insight: AIInsightType }) {
     suggestion: "warning",
   };
 
-  const iconMap: Record<string, typeof CheckCircleIcon> = {
-    positive: CheckCircleIcon,
-    negative: AlertCircleIcon,
-    neutral: ChartVerticalIcon,
-    suggestion: InfoIcon,
+  const bgMap = {
+    positive: "bg-fill-success-secondary",
+    negative: "bg-fill-critical-secondary",
+    neutral: "bg-fill-info-secondary",
+    suggestion: "bg-fill-warning-secondary",
+  };
+
+  const priorityBadge = {
+    high: { tone: "critical" as const, label: "High Priority" },
+    medium: { tone: "warning" as const, label: "Medium" },
+    low: { tone: "info" as const, label: "Low" },
   };
 
   return (
-    <Box
-      background={
-        insight.type === "positive"
-          ? "bg-surface-success"
-          : insight.type === "negative"
-          ? "bg-surface-critical"
-          : "bg-surface-secondary"
-      }
-      padding="400"
-      borderRadius="200"
-    >
-      <InlineStack gap="300" blockAlign="start">
-        <Icon source={iconMap[insight.type]} tone={toneMap[insight.type]} />
-        <BlockStack gap="100">
+    <Card>
+      <BlockStack gap="300">
+        <InlineStack align="space-between" blockAlign="start">
           <InlineStack gap="200" blockAlign="center">
-            <Text variant="headingSm" as="h4">
-              {insight.title}
-            </Text>
-            <Badge
-              tone={
-                insight.priority === "high"
-                  ? "critical"
-                  : insight.priority === "medium"
-                  ? "warning"
-                  : "info"
-              }
+            <Box
+              padding="200"
+              background={bgMap[insight.type] as any}
+              borderRadius="200"
             >
-              {insight.priority}
-            </Badge>
-            {insight.change !== undefined && (
-              <Badge tone={insight.change > 0 ? "success" : "critical"}>
-                {`${insight.change > 0 ? "+" : ""}${insight.change}%`}
-              </Badge>
-            )}
+              <Icon source={iconMap[insight.type]} tone={toneMap[insight.type]} />
+            </Box>
+            <BlockStack gap="100">
+              <Text as="h3" variant="headingSm" fontWeight="semibold">
+                {insight.title}
+              </Text>
+              {insight.metric && (
+                <Text as="p" variant="bodySm" tone="subdued">
+                  {insight.metric}
+                </Text>
+              )}
+            </BlockStack>
           </InlineStack>
-          <Text as="p" tone="subdued">
-            {insight.description}
-          </Text>
-          {insight.metric && (
-            <Text as="p" variant="bodySm" fontWeight="semibold">
-              {insight.metric}
+          <Badge tone={priorityBadge[insight.priority].tone}>
+            {priorityBadge[insight.priority].label}
+          </Badge>
+        </InlineStack>
+        <Text as="p" variant="bodyMd">
+          {insight.description}
+        </Text>
+        {insight.change !== undefined && (
+          <InlineStack gap="200" blockAlign="center">
+            <Icon 
+              source={insight.change >= 0 ? ArrowUpIcon : ArrowDownIcon} 
+              tone={insight.change >= 0 ? "success" : "critical"} 
+            />
+            <Text 
+              as="span" 
+              variant="bodySm" 
+              fontWeight="semibold"
+              tone={insight.change >= 0 ? "success" : "critical"}
+            >
+              {insight.change >= 0 ? "+" : ""}{insight.change.toFixed(1)}% change
             </Text>
-          )}
-        </BlockStack>
-      </InlineStack>
-    </Box>
+          </InlineStack>
+        )}
+      </BlockStack>
+    </Card>
   );
 }
 
-function MetricBox({
+function StatBox({
   label,
   value,
+  subValue,
+  trend,
 }: {
   label: string;
-  value: string;
+  value: string | number;
+  subValue?: string;
+  trend?: "up" | "down" | "neutral";
 }) {
-  return (
-    <BlockStack gap="100">
-      <Text as="p" tone="subdued" variant="bodySm">
-        {label}
-      </Text>
-      <Text as="p" variant="headingLg" fontWeight="bold">
-        {value}
-      </Text>
-    </BlockStack>
-  );
-}
-
-function SourceRevenueBar({
-  source,
-  maxRevenue,
-}: {
-  source: SourceRevenueType;
-  maxRevenue: number;
-}) {
-  const percentage = maxRevenue > 0 ? (source.revenue / maxRevenue) * 100 : 0;
-
-  return (
-    <BlockStack gap="100">
-      <InlineStack align="space-between">
-        <Text as="span" variant="bodySm">
-          {source.source}
-        </Text>
-        <InlineStack gap="200">
-          <Text as="span" variant="bodySm" tone="subdued">
-            {source.orders} orders
-          </Text>
-          <Text as="span" variant="bodySm" fontWeight="semibold">
-            ${source.revenue.toFixed(2)}
-          </Text>
-        </InlineStack>
-      </InlineStack>
-      <ProgressBar progress={percentage} tone="primary" size="small" />
-    </BlockStack>
-  );
-}
-
-function TimeMetric({
-  label,
-  seconds,
-  median,
-  highlight,
-}: {
-  label: string;
-  seconds: number;
-  median?: number;
-  highlight?: boolean;
-}) {
-  const formatTime = (s: number) => {
-    if (s < 60) return `${s}s`;
-    if (s < 3600) return `${Math.round(s / 60)}m`;
-    if (s < 86400) return `${(s / 3600).toFixed(1)}h`;
-    return `${(s / 86400).toFixed(1)}d`;
-  };
-
   return (
     <Box
-      background={highlight ? "bg-surface-success" : "bg-surface-secondary"}
-      padding="300"
-      borderRadius="200"
+      padding="400"
+      background="bg-surface-secondary"
+      borderRadius="300"
     >
-      <BlockStack gap="100">
-        <Text as="p" tone="subdued" variant="bodySm">
+      <BlockStack gap="200">
+        <Text as="p" variant="bodySm" tone="subdued">
           {label}
         </Text>
-        <Text as="p" variant="headingMd" fontWeight="bold">
-          {formatTime(seconds)}
-        </Text>
-        {median !== undefined && (
+        <InlineStack gap="200" blockAlign="end">
+          <Text as="p" variant="headingLg" fontWeight="bold">
+            {typeof value === "number" ? value.toLocaleString() : value}
+          </Text>
+          {trend && (
+            <Icon
+              source={trend === "up" ? ArrowUpIcon : trend === "down" ? ArrowDownIcon : InfoIcon}
+              tone={trend === "up" ? "success" : trend === "down" ? "critical" : "subdued"}
+            />
+          )}
+        </InlineStack>
+        {subValue && (
           <Text as="p" variant="bodySm" tone="subdued">
-            Median: {formatTime(median)}
+            {subValue}
           </Text>
         )}
       </BlockStack>
@@ -583,41 +283,231 @@ function TimeMetric({
   );
 }
 
-function DeviceRow({ device }: { device: DevicePerformanceType }) {
-  return (
-    <Box background="bg-surface-secondary" padding="300" borderRadius="200">
-      <InlineStack align="space-between" blockAlign="center">
-        <BlockStack gap="100">
-          <Text as="span" variant="bodySm" fontWeight="semibold">
-            {device.deviceType.charAt(0).toUpperCase() +
-              device.deviceType.slice(1)}
-          </Text>
-          <Text as="span" variant="bodySm" tone="subdued">
-            {device.sessions} sessions
-          </Text>
-        </BlockStack>
-        <InlineStack gap="300">
-          <Badge tone="info">{`${device.uploads} uploads`}</Badge>
-          <Badge tone={device.conversionRate > 5 ? "success" : "warning"}>
-            {`${device.conversionRate}% conv`}
-          </Badge>
-        </InlineStack>
-      </InlineStack>
-    </Box>
-  );
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
 }
 
-// Table styles
-const thStyle: React.CSSProperties = {
-  textAlign: "left",
-  padding: "8px 12px",
-  borderBottom: "1px solid var(--p-border-subdued)",
-  fontWeight: 600,
-  fontSize: "13px",
-};
+export default function AnalyticsInsights() {
+  const { insights, visitorStats, uploadStats, funnelData, error } =
+    useLoaderData<typeof loader>();
 
-const tdStyle: React.CSSProperties = {
-  padding: "8px 12px",
-  borderBottom: "1px solid var(--p-border-subdued)",
-  fontSize: "13px",
-};
+  if (error) {
+    return (
+      <Page title="AI Insights" backAction={{ url: "/app/analytics" }}>
+        <Layout>
+          <Layout.Section>
+            <Banner tone="critical">
+              <p>Error loading insights: {error}</p>
+            </Banner>
+          </Layout.Section>
+        </Layout>
+      </Page>
+    );
+  }
+
+  return (
+    <Page
+      title="AI Insights"
+      subtitle="Intelligent analytics and actionable recommendations"
+      backAction={{ url: "/app/analytics" }}
+    >
+      <Layout>
+        {/* Key Metrics Overview */}
+        <Layout.Section>
+          <Card>
+            <BlockStack gap="400">
+              <InlineStack align="space-between">
+                <Text as="h3" variant="headingMd">
+                  📊 Key Performance Metrics
+                </Text>
+                <Badge tone="info">Last 30 days</Badge>
+              </InlineStack>
+              <Divider />
+              <InlineGrid columns={{ xs: 2, md: 4 }} gap="400">
+                <StatBox
+                  label="Upload Conversion"
+                  value={`${visitorStats.uploadConversionRate.toFixed(1)}%`}
+                  subValue={`${visitorStats.visitorsWithUploads} of ${visitorStats.totalVisitors}`}
+                  trend={visitorStats.uploadConversionRate > 10 ? "up" : "down"}
+                />
+                <StatBox
+                  label="Order Conversion"
+                  value={`${visitorStats.orderConversionRate.toFixed(1)}%`}
+                  subValue={`${visitorStats.visitorsWithOrders} orders`}
+                  trend={visitorStats.orderConversionRate > 3 ? "up" : "down"}
+                />
+                <StatBox
+                  label="Upload Success Rate"
+                  value={`${uploadStats.successRate.toFixed(1)}%`}
+                  subValue={`${uploadStats.completedUploads} of ${uploadStats.totalUploads}`}
+                  trend={uploadStats.successRate > 90 ? "up" : "down"}
+                />
+                <StatBox
+                  label="Avg Sessions/Visitor"
+                  value={visitorStats.avgSessionsPerVisitor.toFixed(1)}
+                  subValue={`${visitorStats.totalSessions} total sessions`}
+                  trend={visitorStats.avgSessionsPerVisitor > 1.5 ? "up" : "neutral"}
+                />
+              </InlineGrid>
+            </BlockStack>
+          </Card>
+        </Layout.Section>
+
+        {/* Conversion Funnel */}
+        <Layout.Section>
+          <Card>
+            <BlockStack gap="400">
+              <Text as="h3" variant="headingMd">
+                🎯 Conversion Funnel
+              </Text>
+              <Divider />
+              <BlockStack gap="400">
+                {funnelData.map((stage, i) => (
+                  <BlockStack gap="200" key={i}>
+                    <InlineStack align="space-between">
+                      <InlineStack gap="200" blockAlign="center">
+                        <Box
+                          padding="100"
+                          background="bg-fill-info"
+                          borderRadius="full"
+                          minWidth="24px"
+                        >
+                          <Text as="span" variant="bodySm" fontWeight="bold" tone="text-inverse">
+                            {i + 1}
+                          </Text>
+                        </Box>
+                        <Text as="span" variant="bodyMd" fontWeight="semibold">
+                          {stage.stage}
+                        </Text>
+                      </InlineStack>
+                      <InlineStack gap="200">
+                        <Text as="span" variant="bodyMd" fontWeight="bold">
+                          {stage.value.toLocaleString()}
+                        </Text>
+                        <Badge tone={stage.percentage > 50 ? "success" : stage.percentage > 10 ? "warning" : "critical"}>
+                          {stage.percentage.toFixed(1)}%
+                        </Badge>
+                      </InlineStack>
+                    </InlineStack>
+                    <ProgressBar 
+                      progress={stage.percentage} 
+                      size="small" 
+                      tone={stage.percentage > 50 ? "success" : stage.percentage > 10 ? "highlight" : "critical"} 
+                    />
+                  </BlockStack>
+                ))}
+              </BlockStack>
+            </BlockStack>
+          </Card>
+        </Layout.Section>
+
+        {/* AI Insights */}
+        <Layout.Section>
+          <BlockStack gap="400">
+            <InlineStack align="space-between">
+              <Text as="h2" variant="headingLg">
+                💡 AI-Powered Insights
+              </Text>
+              <Badge tone="success">{insights.length} insights</Badge>
+            </InlineStack>
+            
+            {insights.length > 0 ? (
+              <InlineGrid columns={{ xs: 1, md: 2 }} gap="400">
+                {insights.map((insight) => (
+                  <InsightCard key={insight.id} insight={insight} />
+                ))}
+              </InlineGrid>
+            ) : (
+              <Card>
+                <BlockStack gap="300" inlineAlign="center">
+                  <Text as="span" variant="headingLg">
+                    🤖
+                  </Text>
+                  <Text as="p" variant="bodyMd" alignment="center">
+                    Gathering more data to generate insights...
+                  </Text>
+                  <Text as="p" variant="bodySm" tone="subdued" alignment="center">
+                    Continue collecting visitor data to unlock AI-powered recommendations
+                  </Text>
+                </BlockStack>
+              </Card>
+            )}
+          </BlockStack>
+        </Layout.Section>
+
+        {/* Upload Performance */}
+        <Layout.Section>
+          <Card>
+            <BlockStack gap="400">
+              <Text as="h3" variant="headingMd">
+                📤 Upload Performance
+              </Text>
+              <Divider />
+              <InlineGrid columns={{ xs: 2, md: 4 }} gap="300">
+                <Box padding="300" background="bg-surface-secondary" borderRadius="200">
+                  <BlockStack gap="100" inlineAlign="center">
+                    <Text as="p" variant="bodySm" tone="subdued">Total Uploads</Text>
+                    <Text as="p" variant="headingMd" fontWeight="bold">
+                      {uploadStats.totalUploads.toLocaleString()}
+                    </Text>
+                  </BlockStack>
+                </Box>
+                <Box padding="300" background="bg-surface-secondary" borderRadius="200">
+                  <BlockStack gap="100" inlineAlign="center">
+                    <Text as="p" variant="bodySm" tone="subdued">Completed</Text>
+                    <Text as="p" variant="headingMd" fontWeight="bold" tone="success">
+                      {uploadStats.completedUploads.toLocaleString()}
+                    </Text>
+                  </BlockStack>
+                </Box>
+                <Box padding="300" background="bg-surface-secondary" borderRadius="200">
+                  <BlockStack gap="100" inlineAlign="center">
+                    <Text as="p" variant="bodySm" tone="subdued">Failed</Text>
+                    <Text as="p" variant="headingMd" fontWeight="bold" tone="critical">
+                      {uploadStats.failedUploads.toLocaleString()}
+                    </Text>
+                  </BlockStack>
+                </Box>
+                <Box padding="300" background="bg-surface-secondary" borderRadius="200">
+                  <BlockStack gap="100" inlineAlign="center">
+                    <Text as="p" variant="bodySm" tone="subdued">Data Transferred</Text>
+                    <Text as="p" variant="headingMd" fontWeight="bold">
+                      {formatBytes(uploadStats.totalDataTransferred)}
+                    </Text>
+                  </BlockStack>
+                </Box>
+              </InlineGrid>
+            </BlockStack>
+          </Card>
+        </Layout.Section>
+
+        {/* Pro Tips */}
+        <Layout.Section>
+          <Banner
+            title="Pro Tips for Better Conversions"
+            tone="info"
+          >
+            <BlockStack gap="200">
+              <Text as="p" variant="bodySm">
+                • Add clear call-to-action buttons near product images
+              </Text>
+              <Text as="p" variant="bodySm">
+                • Ensure mobile upload experience is optimized
+              </Text>
+              <Text as="p" variant="bodySm">
+                • Use UTM parameters in all marketing campaigns for better tracking
+              </Text>
+              <Text as="p" variant="bodySm">
+                • Follow up with visitors who uploaded but didn't order
+              </Text>
+            </BlockStack>
+          </Banner>
+        </Layout.Section>
+      </Layout>
+    </Page>
+  );
+}

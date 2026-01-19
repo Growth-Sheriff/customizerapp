@@ -1,15 +1,10 @@
 /**
- * Cohort Analysis Dashboard
- * Weekly cohort retention and revenue analysis
- * 
- * @route /app/analytics/cohorts
- * @version 1.0.0
- * 
- * ⚠️ ADDITIVE ONLY: New standalone route
+ * Analytics - Cohorts Page
+ * Weekly retention cohorts with visual heatmap
  */
 
 import { json, type LoaderFunctionArgs } from "@remix-run/node";
-import { useLoaderData, useSearchParams } from "@remix-run/react";
+import { useLoaderData } from "@remix-run/react";
 import {
   Page,
   Layout,
@@ -17,127 +12,162 @@ import {
   Text,
   BlockStack,
   InlineStack,
-  Badge,
-  Select,
-  Divider,
   Box,
+  Badge,
+  Divider,
   Banner,
-  Tooltip,
 } from "@shopify/polaris";
 import { authenticate } from "~/shopify.server";
-import { getCohortData } from "~/lib/analytics.server";
+import {
+  getShopIdFromDomain,
+  getWeeklyCohorts,
+  type WeeklyCohort,
+} from "~/lib/analytics.server";
 
-// Local type definition
-interface CohortDataType {
-  cohortDate: string;
-  totalUsers: number;
-  week0: number;
-  week1: number;
-  week2: number;
-  week3: number;
-  week4: number;
-  totalRevenue: number;
+interface LoaderData {
+  cohorts: WeeklyCohort[];
+  error?: string;
 }
-
-// ═══════════════════════════════════════════════════════════════════════════
-// LOADER
-// ═══════════════════════════════════════════════════════════════════════════
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { session } = await authenticate.admin(request);
-  const shopId = session.shop;
+  const shopId = await getShopIdFromDomain(session.shop);
 
-  const url = new URL(request.url);
-  const weeks = parseInt(url.searchParams.get("weeks") || "8", 10);
+  if (!shopId) {
+    return json<LoaderData>({
+      cohorts: [],
+      error: "Shop not found",
+    });
+  }
 
   try {
-    const cohorts = await getCohortData(shopId, weeks);
-
-    return json({
-      cohorts,
-      weeks,
-      error: null as string | null,
-    });
+    const cohorts = await getWeeklyCohorts(shopId, 8);
+    return json<LoaderData>({ cohorts });
   } catch (error) {
-    console.error("[Cohort Analysis] Loader error:", error);
-    return json({
-      cohorts: [] as CohortDataType[],
-      weeks,
-      error: String(error),
+    console.error("Cohorts analytics error:", error);
+    return json<LoaderData>({
+      cohorts: [],
+      error: error instanceof Error ? error.message : "Unknown error",
     });
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// COMPONENT
-// ═══════════════════════════════════════════════════════════════════════════
+function getHeatmapColor(value: number): string {
+  if (value === 0) return "bg-surface-secondary";
+  if (value >= 80) return "bg-fill-success";
+  if (value >= 60) return "bg-fill-success-secondary";
+  if (value >= 40) return "bg-fill-warning";
+  if (value >= 20) return "bg-fill-warning-secondary";
+  if (value >= 10) return "bg-fill-critical-secondary";
+  return "bg-fill-critical-secondary";
+}
 
-export default function CohortAnalysisPage() {
-  const data = useLoaderData<typeof loader>();
-  const [searchParams, setSearchParams] = useSearchParams();
+function getTextTone(value: number): "text-inverse" | "base" | "subdued" {
+  if (value >= 60) return "text-inverse";
+  if (value >= 20) return "base";
+  return "subdued";
+}
 
-  const handleWeeksChange = (value: string) => {
-    const params = new URLSearchParams(searchParams);
-    params.set("weeks", value);
-    setSearchParams(params);
-  };
-
-  if (data.error) {
+function CohortCell({ value, isHeader }: { value: number | string; isHeader?: boolean }) {
+  if (isHeader) {
     return (
-      <Page title="Cohort Analysis">
-        <Banner tone="critical">
-          <p>Error loading cohorts: {data.error}</p>
-        </Banner>
+      <Box
+        padding="200"
+        background="bg-surface-secondary"
+        borderRadius="100"
+        minWidth="60px"
+      >
+        <Text as="span" variant="bodySm" fontWeight="semibold" alignment="center">
+          {value}
+        </Text>
+      </Box>
+    );
+  }
+
+  const numValue = typeof value === "number" ? value : 0;
+  const bgColor = getHeatmapColor(numValue);
+
+  return (
+    <Box
+      padding="200"
+      background={bgColor as any}
+      borderRadius="100"
+      minWidth="60px"
+    >
+      <Text 
+        as="span" 
+        variant="bodySm" 
+        fontWeight="semibold" 
+        alignment="center"
+        tone={getTextTone(numValue)}
+      >
+        {numValue > 0 ? `${numValue}%` : "-"}
+      </Text>
+    </Box>
+  );
+}
+
+export default function AnalyticsCohorts() {
+  const { cohorts, error } = useLoaderData<typeof loader>();
+
+  if (error) {
+    return (
+      <Page title="Retention Cohorts" backAction={{ url: "/app/analytics" }}>
+        <Layout>
+          <Layout.Section>
+            <Banner tone="critical">
+              <p>Error loading cohorts: {error}</p>
+            </Banner>
+          </Layout.Section>
+        </Layout>
       </Page>
     );
   }
 
-  const cohorts = data.cohorts as CohortDataType[];
-  const totalUsers = cohorts.reduce((sum: number, c: CohortDataType) => sum + (c?.totalUsers || 0), 0);
-  const totalRevenue = cohorts.reduce((sum: number, c: CohortDataType) => sum + (c?.totalRevenue || 0), 0);
+  const hasData = cohorts.some((c) => c.totalVisitors > 0);
 
   return (
     <Page
-      title="Cohort Analysis"
-      subtitle="Weekly visitor retention and engagement"
-      secondaryActions={[
-        {
-          content: "Back to Analytics",
-          url: "/app/analytics",
-        },
-        {
-          content: "AI Insights",
-          url: "/app/analytics/insights",
-        },
-      ]}
+      title="Retention Cohorts"
+      subtitle="Track visitor retention week over week"
+      backAction={{ url: "/app/analytics" }}
     >
       <Layout>
-        {/* Period Selector */}
+        {/* Legend */}
         <Layout.Section>
           <Card>
-            <InlineStack align="space-between" blockAlign="center">
-              <BlockStack gap="100">
-                <Text variant="headingMd" as="h2">
-                  Cohort Period
-                </Text>
-                <Text as="p" tone="subdued" variant="bodySm">
-                  Analyze visitor retention over time
-                </Text>
-              </BlockStack>
-              <div style={{ width: "200px" }}>
-                <Select
-                  label=""
-                  labelHidden
-                  options={[
-                    { label: "Last 4 weeks", value: "4" },
-                    { label: "Last 8 weeks", value: "8" },
-                    { label: "Last 12 weeks", value: "12" },
-                  ]}
-                  value={String(data.weeks)}
-                  onChange={handleWeeksChange}
-                />
-              </div>
-            </InlineStack>
+            <BlockStack gap="300">
+              <Text as="h3" variant="headingSm">
+                📊 How to Read This Chart
+              </Text>
+              <Text as="p" variant="bodySm" tone="subdued">
+                Each row represents visitors who first arrived in a specific week. 
+                The columns show what percentage returned in subsequent weeks.
+              </Text>
+              <Divider />
+              <InlineStack gap="300" wrap>
+                <InlineStack gap="100" blockAlign="center">
+                  <Box padding="100" background="bg-fill-success" borderRadius="100" minWidth="20px" minHeight="20px" />
+                  <Text as="span" variant="bodySm">80%+ (Excellent)</Text>
+                </InlineStack>
+                <InlineStack gap="100" blockAlign="center">
+                  <Box padding="100" background="bg-fill-success-secondary" borderRadius="100" minWidth="20px" minHeight="20px" />
+                  <Text as="span" variant="bodySm">60-79% (Good)</Text>
+                </InlineStack>
+                <InlineStack gap="100" blockAlign="center">
+                  <Box padding="100" background="bg-fill-warning" borderRadius="100" minWidth="20px" minHeight="20px" />
+                  <Text as="span" variant="bodySm">40-59% (Average)</Text>
+                </InlineStack>
+                <InlineStack gap="100" blockAlign="center">
+                  <Box padding="100" background="bg-fill-warning-secondary" borderRadius="100" minWidth="20px" minHeight="20px" />
+                  <Text as="span" variant="bodySm">20-39% (Low)</Text>
+                </InlineStack>
+                <InlineStack gap="100" blockAlign="center">
+                  <Box padding="100" background="bg-fill-critical-secondary" borderRadius="100" minWidth="20px" minHeight="20px" />
+                  <Text as="span" variant="bodySm">&lt;20% (Poor)</Text>
+                </InlineStack>
+              </InlineStack>
+            </BlockStack>
           </Card>
         </Layout.Section>
 
@@ -145,309 +175,158 @@ export default function CohortAnalysisPage() {
         <Layout.Section>
           <Card>
             <BlockStack gap="400">
-              <Text variant="headingMd" as="h2">
-                Weekly Retention Cohorts
-              </Text>
-
-              <Text as="p" tone="subdued" variant="bodySm">
-                Each row represents visitors who first uploaded in that week.
-                Columns show how many returned in subsequent weeks.
-              </Text>
-
+              <InlineStack align="space-between">
+                <Text as="h3" variant="headingMd">
+                  📅 Weekly Cohort Analysis
+                </Text>
+                <Badge tone="info">{cohorts.length} weeks</Badge>
+              </InlineStack>
               <Divider />
+              
+              {hasData ? (
+                <Box overflowX="auto">
+                  <BlockStack gap="200">
+                    {/* Header Row */}
+                    <InlineStack gap="200" wrap={false}>
+                      <Box minWidth="100px" padding="200">
+                        <Text as="span" variant="bodySm" fontWeight="bold">
+                          Week Start
+                        </Text>
+                      </Box>
+                      <Box minWidth="70px" padding="200">
+                        <Text as="span" variant="bodySm" fontWeight="bold">
+                          Visitors
+                        </Text>
+                      </Box>
+                      <CohortCell value="Week 0" isHeader />
+                      <CohortCell value="Week 1" isHeader />
+                      <CohortCell value="Week 2" isHeader />
+                      <CohortCell value="Week 3" isHeader />
+                      <CohortCell value="Week 4" isHeader />
+                    </InlineStack>
 
-              {cohorts.length === 0 ? (
-                <Banner tone="info">
-                  <p>
-                    No cohort data available yet. Cohorts are created as new
-                    visitors upload designs.
-                  </p>
-                </Banner>
+                    {/* Data Rows */}
+                    {cohorts.map((cohort, i) => (
+                      <InlineStack key={i} gap="200" wrap={false}>
+                        <Box minWidth="100px" padding="200">
+                          <Text as="span" variant="bodySm">
+                            {cohort.weekStart}
+                          </Text>
+                        </Box>
+                        <Box minWidth="70px" padding="200">
+                          <Text as="span" variant="bodySm" fontWeight="semibold">
+                            {cohort.totalVisitors.toLocaleString()}
+                          </Text>
+                        </Box>
+                        <CohortCell value={cohort.week0} />
+                        <CohortCell value={cohort.week1} />
+                        <CohortCell value={cohort.week2} />
+                        <CohortCell value={cohort.week3} />
+                        <CohortCell value={cohort.week4} />
+                      </InlineStack>
+                    ))}
+                  </BlockStack>
+                </Box>
               ) : (
-                <CohortTable cohorts={cohorts} />
+                <Box padding="800">
+                  <BlockStack gap="400" inlineAlign="center">
+                    <Text as="span" variant="heading2xl">
+                      📊
+                    </Text>
+                    <Text as="h3" variant="headingMd" alignment="center">
+                      No Cohort Data Yet
+                    </Text>
+                    <Text as="p" variant="bodyMd" tone="subdued" alignment="center">
+                      Cohort analysis requires at least one week of visitor data.
+                      As visitors return over time, you'll see retention patterns here.
+                    </Text>
+                  </BlockStack>
+                </Box>
               )}
             </BlockStack>
           </Card>
         </Layout.Section>
 
         {/* Summary Stats */}
-        <Layout.Section>
-          <Card>
-            <BlockStack gap="400">
-              <Text variant="headingMd" as="h2">
-                Cohort Summary
-              </Text>
-
-              <Divider />
-
-              <InlineStack gap="600" wrap>
-                <SummaryMetric
-                  label="Total Cohort Users"
-                  value={String(totalUsers)}
-                />
-                <SummaryMetric
-                  label="Total Revenue"
-                  value={`$${totalRevenue.toFixed(2)}`}
-                />
-                <SummaryMetric
-                  label="Avg Week 1 Retention"
-                  value={`${calculateAvgRetention(cohorts, 1)}%`}
-                />
-                <SummaryMetric
-                  label="Avg Week 4 Retention"
-                  value={`${calculateAvgRetention(cohorts, 4)}%`}
-                />
-              </InlineStack>
-            </BlockStack>
-          </Card>
-        </Layout.Section>
-
-        {/* Help Section */}
-        <Layout.Section>
-          <Card>
-            <BlockStack gap="300">
-              <Text variant="headingMd" as="h2">
-                How to Read This
-              </Text>
-
-              <BlockStack gap="200">
-                <Box background="bg-surface-secondary" padding="300" borderRadius="200">
-                  <InlineStack gap="200" blockAlign="center">
-                    <Badge tone="success">Green</Badge>
-                    <Text as="span" variant="bodySm">
-                      Above 20% retention - Excellent engagement
-                    </Text>
-                  </InlineStack>
-                </Box>
-
-                <Box background="bg-surface-secondary" padding="300" borderRadius="200">
-                  <InlineStack gap="200" blockAlign="center">
-                    <Badge tone="warning">Yellow</Badge>
-                    <Text as="span" variant="bodySm">
-                      10-20% retention - Room for improvement
-                    </Text>
-                  </InlineStack>
-                </Box>
-
-                <Box background="bg-surface-secondary" padding="300" borderRadius="200">
-                  <InlineStack gap="200" blockAlign="center">
-                    <Badge tone="critical">Red</Badge>
-                    <Text as="span" variant="bodySm">
-                      Below 10% retention - Needs attention
-                    </Text>
-                  </InlineStack>
-                </Box>
-
-                <Box background="bg-surface-secondary" padding="300" borderRadius="200">
-                  <InlineStack gap="200" blockAlign="center">
-                    <Badge>Gray</Badge>
-                    <Text as="span" variant="bodySm">
-                      Future period - Data not yet available
-                    </Text>
-                  </InlineStack>
-                </Box>
+        {hasData && (
+          <Layout.Section>
+            <Card>
+              <BlockStack gap="400">
+                <Text as="h3" variant="headingMd">
+                  📈 Retention Summary
+                </Text>
+                <Divider />
+                <InlineStack gap="400" wrap>
+                  <Box padding="400" background="bg-surface-secondary" borderRadius="200">
+                    <BlockStack gap="100" inlineAlign="center">
+                      <Text as="p" variant="bodySm" tone="subdued">
+                        Avg Week 1 Retention
+                      </Text>
+                      <Text as="p" variant="headingLg" fontWeight="bold">
+                        {cohorts.length > 0
+                          ? `${(cohorts.reduce((sum, c) => sum + c.week1, 0) / cohorts.filter(c => c.totalVisitors > 0).length || 0).toFixed(0)}%`
+                          : "N/A"}
+                      </Text>
+                    </BlockStack>
+                  </Box>
+                  <Box padding="400" background="bg-surface-secondary" borderRadius="200">
+                    <BlockStack gap="100" inlineAlign="center">
+                      <Text as="p" variant="bodySm" tone="subdued">
+                        Avg Week 2 Retention
+                      </Text>
+                      <Text as="p" variant="headingLg" fontWeight="bold">
+                        {cohorts.length > 0
+                          ? `${(cohorts.reduce((sum, c) => sum + c.week2, 0) / cohorts.filter(c => c.totalVisitors > 0).length || 0).toFixed(0)}%`
+                          : "N/A"}
+                      </Text>
+                    </BlockStack>
+                  </Box>
+                  <Box padding="400" background="bg-surface-secondary" borderRadius="200">
+                    <BlockStack gap="100" inlineAlign="center">
+                      <Text as="p" variant="bodySm" tone="subdued">
+                        Best Performing Week
+                      </Text>
+                      <Text as="p" variant="headingLg" fontWeight="bold">
+                        {cohorts.reduce((best, c) => c.week1 > best.week1 ? c : best, cohorts[0])?.weekStart || "N/A"}
+                      </Text>
+                    </BlockStack>
+                  </Box>
+                  <Box padding="400" background="bg-surface-secondary" borderRadius="200">
+                    <BlockStack gap="100" inlineAlign="center">
+                      <Text as="p" variant="bodySm" tone="subdued">
+                        Total Tracked Visitors
+                      </Text>
+                      <Text as="p" variant="headingLg" fontWeight="bold">
+                        {cohorts.reduce((sum, c) => sum + c.totalVisitors, 0).toLocaleString()}
+                      </Text>
+                    </BlockStack>
+                  </Box>
+                </InlineStack>
               </BlockStack>
+            </Card>
+          </Layout.Section>
+        )}
+
+        {/* Tips */}
+        <Layout.Section>
+          <Banner
+            title="Improving Retention"
+            tone="info"
+          >
+            <BlockStack gap="200">
+              <Text as="p" variant="bodySm">
+                💡 <strong>Week 1 drop-off:</strong> Improve first-visit experience and upload success
+              </Text>
+              <Text as="p" variant="bodySm">
+                💡 <strong>Week 2+ drop-off:</strong> Send follow-up emails or retargeting ads
+              </Text>
+              <Text as="p" variant="bodySm">
+                💡 <strong>High retention weeks:</strong> Analyze what campaigns drove traffic that week
+              </Text>
             </BlockStack>
-          </Card>
+          </Banner>
         </Layout.Section>
       </Layout>
     </Page>
   );
 }
-
-// ═══════════════════════════════════════════════════════════════════════════
-// SUB-COMPONENTS
-// ═══════════════════════════════════════════════════════════════════════════
-
-function CohortTable({ cohorts }: { cohorts: CohortDataType[] }) {
-  return (
-    <div style={{ overflowX: "auto" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "700px" }}>
-        <thead>
-          <tr>
-            <th style={thStyle}>Cohort Week</th>
-            <th style={thStyle}>Users</th>
-            <th style={thStyle}>Week 0</th>
-            <th style={thStyle}>Week 1</th>
-            <th style={thStyle}>Week 2</th>
-            <th style={thStyle}>Week 3</th>
-            <th style={thStyle}>Week 4</th>
-            <th style={thStyle}>Revenue</th>
-          </tr>
-        </thead>
-        <tbody>
-          {cohorts.map((cohort: CohortDataType) => (
-            <tr key={cohort.cohortDate}>
-              <td style={tdStyle}>
-                <Text as="span" variant="bodySm" fontWeight="semibold">
-                  {formatWeekDate(cohort.cohortDate)}
-                </Text>
-              </td>
-              <td style={tdStyle}>
-                <Badge>{String(cohort.totalUsers)}</Badge>
-              </td>
-              <td style={tdStyle}>
-                <RetentionCell
-                  value={cohort.week0}
-                  total={cohort.totalUsers}
-                />
-              </td>
-              <td style={tdStyle}>
-                <RetentionCell
-                  value={cohort.week1}
-                  total={cohort.totalUsers}
-                />
-              </td>
-              <td style={tdStyle}>
-                <RetentionCell
-                  value={cohort.week2}
-                  total={cohort.totalUsers}
-                />
-              </td>
-              <td style={tdStyle}>
-                <RetentionCell
-                  value={cohort.week3}
-                  total={cohort.totalUsers}
-                />
-              </td>
-              <td style={tdStyle}>
-                <RetentionCell
-                  value={cohort.week4}
-                  total={cohort.totalUsers}
-                />
-              </td>
-              <td style={tdStyle}>
-                <Text as="span" variant="bodySm">
-                  ${cohort.totalRevenue.toFixed(2)}
-                </Text>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function RetentionCell({
-  value,
-  total,
-}: {
-  value: number;
-  total: number;
-}) {
-  // -1 means future week (no data yet)
-  if (value === -1) {
-    return (
-      <Box
-        background="bg-surface-disabled"
-        padding="200"
-        borderRadius="100"
-      >
-        <Text as="span" variant="bodySm" tone="subdued">
-          -
-        </Text>
-      </Box>
-    );
-  }
-
-  const percentage = total > 0 ? Math.round((value / total) * 100) : 0;
-
-  let bgColor: "bg-surface-success" | "bg-surface-warning" | "bg-surface-critical" = "bg-surface-critical";
-  if (percentage >= 20) bgColor = "bg-surface-success";
-  else if (percentage >= 10) bgColor = "bg-surface-warning";
-
-  return (
-    <Tooltip content={`${value} of ${total} users returned`}>
-      <Box
-        background={bgColor}
-        padding="200"
-        borderRadius="100"
-      >
-        <Text as="span" variant="bodySm" fontWeight="semibold">
-          {percentage}%
-        </Text>
-      </Box>
-    </Tooltip>
-  );
-}
-
-function SummaryMetric({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
-  return (
-    <Box background="bg-surface-secondary" padding="400" borderRadius="200">
-      <BlockStack gap="100">
-        <Text as="p" tone="subdued" variant="bodySm">
-          {label}
-        </Text>
-        <Text as="p" variant="headingMd" fontWeight="bold">
-          {value}
-        </Text>
-      </BlockStack>
-    </Box>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// HELPERS
-// ═══════════════════════════════════════════════════════════════════════════
-
-function formatWeekDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  const options: Intl.DateTimeFormatOptions = {
-    month: "short",
-    day: "numeric",
-  };
-  return date.toLocaleDateString("en-US", options);
-}
-
-function calculateAvgRetention(cohorts: CohortDataType[], week: number): string {
-  const validCohorts = cohorts.filter((c: CohortDataType) => {
-    const weekValue =
-      week === 1
-        ? c.week1
-        : week === 2
-        ? c.week2
-        : week === 3
-        ? c.week3
-        : c.week4;
-    return weekValue >= 0;
-  });
-
-  if (validCohorts.length === 0) return "N/A";
-
-  const totalRetention = validCohorts.reduce((sum: number, c: CohortDataType) => {
-    const weekValue =
-      week === 1
-        ? c.week1
-        : week === 2
-        ? c.week2
-        : week === 3
-        ? c.week3
-        : c.week4;
-    return sum + (c.totalUsers > 0 ? (weekValue / c.totalUsers) * 100 : 0);
-  }, 0);
-
-  return (totalRetention / validCohorts.length).toFixed(1);
-}
-
-// Table styles
-const thStyle: React.CSSProperties = {
-  textAlign: "left",
-  padding: "12px",
-  borderBottom: "2px solid var(--p-border-subdued)",
-  fontWeight: 600,
-  fontSize: "13px",
-  backgroundColor: "var(--p-surface-secondary)",
-};
-
-const tdStyle: React.CSSProperties = {
-  padding: "10px 12px",
-  borderBottom: "1px solid var(--p-border-subdued)",
-  fontSize: "13px",
-};

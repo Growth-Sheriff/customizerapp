@@ -1,23 +1,22 @@
 /**
  * Advanced Analytics API v1
- * Revenue attribution, cohorts, AI insights, time-to-convert
+ * Revenue attribution, cohorts, AI insights
  * 
  * @route /api/v1/analytics/advanced
- * @version 1.0.0
- * 
- * ⚠️ ADDITIVE ONLY: New standalone API, no changes to existing routes
+ * @version 2.0.0
  */
 
 import { json, type LoaderFunctionArgs, type ActionFunctionArgs } from "@remix-run/node";
 import prisma from "~/lib/prisma.server";
 import {
-  getRevenueMetrics,
-  getTimeToConvert,
-  getCohortData,
-  getDevicePerformance,
-  getGeoStats,
+  getVisitorStats,
+  getVisitorsByCountry,
+  getVisitorsByDevice,
   generateAIInsights,
-  markUploadAddedToCart,
+  getWeeklyCohorts,
+  getAttributionStats,
+  getSourceBreakdown,
+  getUploadStats,
 } from "~/lib/analytics.server";
 import { createHash } from "crypto";
 
@@ -104,19 +103,20 @@ export async function loader({ request }: LoaderFunctionArgs) {
   try {
     switch (endpoint) {
       // ═════════════════════════════════════════════════════════════════════
-      // Revenue Attribution
+      // Visitor Stats
       // ═════════════════════════════════════════════════════════════════════
-      case "revenue": {
-        const metrics = await getRevenueMetrics(shop.id, range);
-        return json({ success: true, data: metrics });
+      case "visitors": {
+        const stats = await getVisitorStats(shop.id, range.start, range.end);
+        return json({ success: true, data: stats });
       }
 
       // ═════════════════════════════════════════════════════════════════════
-      // Time to Convert
+      // Attribution Stats
       // ═════════════════════════════════════════════════════════════════════
-      case "time-to-convert": {
-        const metrics = await getTimeToConvert(shop.id, range);
-        return json({ success: true, data: metrics });
+      case "attribution": {
+        const stats = await getAttributionStats(shop.id, range.start, range.end);
+        const sources = await getSourceBreakdown(shop.id, range.start, range.end);
+        return json({ success: true, data: { stats, sources } });
       }
 
       // ═════════════════════════════════════════════════════════════════════
@@ -124,7 +124,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       // ═════════════════════════════════════════════════════════════════════
       case "cohorts": {
         const weeks = parseInt(url.searchParams.get("weeks") || "8", 10);
-        const data = await getCohortData(shop.id, weeks);
+        const data = await getWeeklyCohorts(shop.id, weeks);
         return json({ success: true, data });
       }
 
@@ -132,7 +132,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       // Device Performance
       // ═════════════════════════════════════════════════════════════════════
       case "devices": {
-        const data = await getDevicePerformance(shop.id, range);
+        const data = await getVisitorsByDevice(shop.id);
         return json({ success: true, data });
       }
 
@@ -140,7 +140,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       // Geo Analytics
       // ═════════════════════════════════════════════════════════════════════
       case "geo": {
-        const data = await getGeoStats(shop.id, range);
+        const data = await getVisitorsByCountry(shop.id);
         return json({ success: true, data });
       }
 
@@ -148,31 +148,41 @@ export async function loader({ request }: LoaderFunctionArgs) {
       // AI Insights
       // ═════════════════════════════════════════════════════════════════════
       case "insights": {
-        const insights = await generateAIInsights(shop.id, range);
+        const insights = await generateAIInsights(shop.id, range.start, range.end);
         return json({ success: true, data: insights });
+      }
+
+      // ═════════════════════════════════════════════════════════════════════
+      // Upload Stats
+      // ═════════════════════════════════════════════════════════════════════
+      case "uploads": {
+        const data = await getUploadStats(shop.id, range.start, range.end);
+        return json({ success: true, data });
       }
 
       // ═════════════════════════════════════════════════════════════════════
       // Overview (All metrics combined)
       // ═════════════════════════════════════════════════════════════════════
       case "overview": {
-        const [revenue, timeToConvert, devices, geoData, insights] =
+        const [visitors, attribution, devices, geoData, insights, uploads] =
           await Promise.all([
-            getRevenueMetrics(shop.id, range),
-            getTimeToConvert(shop.id, range),
-            getDevicePerformance(shop.id, range),
-            getGeoStats(shop.id, range),
-            generateAIInsights(shop.id, range),
+            getVisitorStats(shop.id, range.start, range.end),
+            getAttributionStats(shop.id, range.start, range.end),
+            getVisitorsByDevice(shop.id),
+            getVisitorsByCountry(shop.id),
+            generateAIInsights(shop.id, range.start, range.end),
+            getUploadStats(shop.id, range.start, range.end),
           ]);
 
         return json({
           success: true,
           data: {
-            revenue,
-            timeToConvert,
+            visitors,
+            attribution,
             devices,
             topCountries: geoData.slice(0, 10),
             insights,
+            uploads,
           },
         });
       }
@@ -232,7 +242,12 @@ export async function action({ request }: ActionFunctionArgs) {
           return json({ error: "Upload not found" }, { status: 404 });
         }
 
-        await markUploadAddedToCart(uploadId);
+        // Mark upload as added to cart
+        await prisma.upload.update({
+          where: { id: uploadId },
+          data: { addedToCartAt: new Date() },
+        });
+
         return json({ success: true });
       }
 
