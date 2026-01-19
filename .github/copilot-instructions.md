@@ -223,6 +223,160 @@ LOCATION → UPLOAD → POSITION → CONFIRM
 
 ---
 
+## � Visitor Identification Project - Safe Implementation Rules
+
+> **Version:** 1.0.0  
+> **Status:** Active Development  
+> **Principle:** ADDITIVE ONLY - Mevcut sisteme ekleme, değişiklik değil
+
+### 🎯 Project Scope
+
+Visitor fingerprinting, attribution tracking ve analytics sistemi eklenmesi. **Mevcut upload, cart, webhook sistemlerine DOKUNMADAN** paralel çalışacak.
+
+### 🛡️ KORUMA ALTINDA - DOKUNULMAZ DOSYALAR
+
+Bu dosyalarda **HİÇBİR DEĞİŞİKLİK YAPILAMAZ** (import ekleme dahil):
+
+| Dosya | Neden |
+|-------|-------|
+| `app/routes/api.upload.intent.tsx` | ❌ Upload flow kritik - DOKUNMA |
+| `app/routes/api.upload.complete.tsx` | ❌ Upload completion kritik - DOKUNMA |
+| `app/routes/webhooks.*.tsx` | ❌ Webhook handlers kritik - DOKUNMA |
+| `extensions/theme-extension/assets/ul-cart.js` | ❌ Cart flow kritik - DOKUNMA |
+| `extensions/theme-extension/assets/ul-upload.js` | ❌ Upload flow kritik - DOKUNMA |
+| `app/lib/shopify.server.ts` | ❌ Auth flow kritik - DOKUNMA |
+| `app/shopify.server.ts` | ❌ Shopify config kritik - DOKUNMA |
+
+### ⚠️ DİKKATLİ DÜZENLEME - Sadece NULLABLE Alan Ekleme
+
+Bu dosyalarda **SADECE nullable FK alanları** eklenebilir:
+
+| Dosya | İzin Verilen |
+|-------|-------------|
+| `prisma/schema.prisma` → `Upload` model | `visitorId String? @map("visitor_id")` ✅ |
+| `prisma/schema.prisma` → `Upload` model | `sessionId String? @map("session_id")` ✅ |
+| `prisma/schema.prisma` → Yeni modeller | `Visitor`, `VisitorSession` tabloları ✅ |
+
+### ✅ SERBEST ALAN - Yeni Dosyalar
+
+Bu dosyalar **serbestçe oluşturulabilir**:
+
+```
+# Theme Extension - YENİ JS dosyaları
+extensions/theme-extension/assets/ul-fingerprint.js    ✅ YENİ
+extensions/theme-extension/assets/ul-attribution.js   ✅ YENİ  
+extensions/theme-extension/assets/ul-consent.js       ✅ YENİ
+extensions/theme-extension/assets/ul-visitor.js       ✅ YENİ
+
+# Backend - YENİ API endpoint'ler
+app/routes/api.v1.visitors.tsx                        ✅ YENİ
+app/routes/api.v1.visitors.$id.tsx                    ✅ YENİ
+app/routes/api.v1.sessions.tsx                        ✅ YENİ
+app/routes/api.v1.analytics.tsx                       ✅ YENİ
+
+# Backend - YENİ lib dosyaları
+app/lib/visitor.server.ts                             ✅ YENİ
+app/lib/fingerprint.server.ts                         ✅ YENİ
+app/lib/attribution.server.ts                         ✅ YENİ
+app/lib/geo.server.ts                                 ✅ YENİ
+
+# Admin Dashboard - YENİ route'lar
+app/routes/app.analytics.visitors.tsx                 ✅ YENİ
+app/routes/app.analytics.attribution.tsx              ✅ YENİ
+```
+
+### 🔴 MUTLAK YASAKLAR
+
+| Yasak | Neden |
+|-------|-------|
+| ❌ Upload intent/complete logic değiştirme | Mevcut flow bozulur |
+| ❌ Webhook handler logic değiştirme | Sipariş akışı bozulur |
+| ❌ Cart JS logic değiştirme | Add to cart bozulur |
+| ❌ NOT NULL constraint ekleme | Mevcut veriler bozulur |
+| ❌ Mevcut tablo kolonlarını silme | Veri kaybı |
+| ❌ Mevcut API response formatını değiştirme | Client uyumsuzluk |
+| ❌ ul-analytics.js'in mevcut track fonksiyonunu değiştirme | Analytics bozulur |
+
+### ✅ GÜVENLİ EKLEME KURALLARI
+
+1. **Prisma Migration:**
+   ```prisma
+   // ✅ DOĞRU - Nullable FK
+   model Upload {
+     visitorId String? @map("visitor_id")
+     visitor   Visitor? @relation(fields: [visitorId], references: [id])
+   }
+   
+   // ❌ YANLIŞ - NOT NULL
+   model Upload {
+     visitorId String @map("visitor_id")  // YASAK!
+   }
+   ```
+
+2. **JS Entegrasyonu:**
+   ```javascript
+   // ✅ DOĞRU - Yeni dosyada, window objesine ekleme
+   // ul-visitor.js (YENİ DOSYA)
+   window.ULVisitor = { ... };
+   
+   // ❌ YANLIŞ - Mevcut dosyayı değiştirme
+   // ul-analytics.js içinde değişiklik YASAK
+   ```
+
+3. **API Entegrasyonu:**
+   ```typescript
+   // ✅ DOĞRU - Yeni endpoint
+   // api.v1.visitors.tsx (YENİ DOSYA)
+   export async function action({ request }) { ... }
+   
+   // ❌ YANLIŞ - Mevcut endpoint'e ekleme
+   // api.upload.intent.tsx'e kod ekleme YASAK
+   ```
+
+### 📊 Test Kriterleri
+
+Her değişiklik sonrası bu testler PASS olmalı:
+
+| Test | Komut | Beklenen |
+|------|-------|----------|
+| Upload intent | `curl POST /api/upload/intent` | 200 + uploadId |
+| Upload complete | `curl POST /api/upload/complete` | 200 + success |
+| Cart add | Storefront'ta sepete ekle | Başarılı |
+| Webhook receive | Shopify'dan test webhook | 200 |
+| Mevcut upload'lar | DB'de eski upload'lar | visitorId=null, çalışıyor |
+
+### 🔄 Entegrasyon Stratejisi
+
+```
+FAZ 1: Database + Yeni API'lar (mevcut sisteme 0 etki)
+       └─ Visitor, VisitorSession tabloları
+       └─ api.v1.visitors.tsx endpoint'leri
+       └─ Upload tablosuna nullable FK'lar
+
+FAZ 2: Client-Side JS (mevcut JS'lere 0 etki)
+       └─ ul-fingerprint.js (YENİ)
+       └─ ul-attribution.js (YENİ)
+       └─ ul-consent.js (YENİ)
+
+FAZ 3: Backend Services (mevcut servislerden BAĞIMSIZ)
+       └─ visitor.server.ts (YENİ)
+       └─ geo.server.ts (YENİ)
+
+FAZ 4: Dashboard (mevcut dashboard'a YENİ route'lar)
+       └─ app.analytics.visitors.tsx (YENİ)
+       └─ app.analytics.attribution.tsx (YENİ)
+```
+
+### ⚡ Rollback Planı
+
+Sorun çıkarsa:
+1. Yeni JS dosyalarını theme'den kaldır
+2. Yeni API route'ları sil
+3. Migration rollback (sadece yeni tablolar silinir)
+4. **Mevcut sistem ETKİLENMEZ**
+
+---
+
 ## 📌 Final Note
 
 This document is **binding** for all development, deployment, and AI assistance.
@@ -231,7 +385,8 @@ Any implementation violating these rules must be **rejected immediately**.
 
 ---
 
-*Version: 3.1.0 | Domain: customizerapp.dev | App: 3D Customizer*
+*Version: 3.2.0 | Domain: customizerapp.dev | App: 3D Customizer*
+*Visitor Identification Rules: v1.0.0 | Status: Active*
 
 
 # 📚 FuncLib v4 - Kullanım Kılavuzu
