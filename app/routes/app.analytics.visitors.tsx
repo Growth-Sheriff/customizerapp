@@ -272,6 +272,7 @@ export default function AnalyticsVisitors() {
   // Convert top visitors to table rows
   const visitorRows = topVisitors.map((v) => [
     v.id.slice(0, 8) + "...",
+    v.email || "-",
     v.country || "Unknown",
     v.deviceType || "Unknown",
     v.totalSessions.toString(),
@@ -534,8 +535,8 @@ export default function AnalyticsVisitors() {
               </InlineStack>
               {visitorRows.length > 0 ? (
                 <DataTable
-                  columnContentTypes={["text", "text", "text", "numeric", "numeric", "numeric", "text"]}
-                  headings={["ID", "Country", "Device", "Sessions", "Uploads", "Orders", "Last Seen"]}
+                  columnContentTypes={["text", "text", "text", "text", "numeric", "numeric", "numeric", "text"]}
+                  headings={["ID", "Email", "Country", "Device", "Sessions", "Uploads", "Orders", "Last Seen"]}
                   rows={visitorRows}
                   footerContent={`Showing top ${topVisitors.length} visitors by activity`}
                 />

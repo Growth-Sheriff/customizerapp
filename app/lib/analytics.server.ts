@@ -71,6 +71,7 @@ export interface DailyVisitors {
 
 export interface TopVisitor {
   id: string;
+  email: string | null;
   country: string | null;
   deviceType: string | null;
   browser: string | null;
@@ -235,6 +236,7 @@ export async function getTopVisitors(shopId: string, limit = 20): Promise<TopVis
     take: limit,
     select: {
       id: true,
+      customerEmail: true,
       country: true,
       deviceType: true,
       browser: true,
@@ -246,7 +248,11 @@ export async function getTopVisitors(shopId: string, limit = 20): Promise<TopVis
     },
   });
 
-  return visitors;
+  // Map customerEmail to email for consistent interface
+  return visitors.map(v => ({
+    ...v,
+    email: v.customerEmail,
+  }));
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
