@@ -880,6 +880,18 @@
               });
             }
             
+            // Visitor Tracking: Dispatch ul:upload:complete event for ULVisitor integration
+            window.dispatchEvent(new CustomEvent('ul:upload:complete', {
+              detail: {
+                uploadId,
+                productId,
+                thumbnailUrl: state.upload.result.thumbnailUrl,
+                originalUrl: state.upload.result.originalUrl,
+                fileName: state.upload.file.name,
+                fileSize: state.upload.file.size
+              }
+            }));
+            
             // FAZ 3 - EDGE-001: Store upload in sessionStorage with tab session ID
             try {
               sessionStorage.setItem(`ul_upload_${productId}`, JSON.stringify({
@@ -1388,6 +1400,16 @@
         document.dispatchEvent(new CustomEvent('ul:addedToCart', {
           detail: { productId, quantity: form.quantity, variantId: form.selectedVariantId },
           bubbles: true
+        }));
+        
+        // Visitor Tracking: Dispatch ul:cart:add event for ULVisitor integration
+        window.dispatchEvent(new CustomEvent('ul:cart:add', {
+          detail: { 
+            productId, 
+            quantity: form.quantity, 
+            variantId: form.selectedVariantId,
+            uploadId: upload.uploadId 
+          }
         }));
 
         // Redirect to Shopify cart page after short delay

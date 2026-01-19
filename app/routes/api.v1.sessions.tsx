@@ -61,24 +61,39 @@ export async function action({ request }: ActionFunctionArgs) {
     return json({ error: "Shop not found" }, { status: 404 });
   }
   
-  // Verify session exists and belongs to shop
-  const session = await prisma.visitorSession.findFirst({
+  // Find session - supports both session ID (cuid) and session token
+  // Client may send either the database ID or the session token
+  let session = await prisma.visitorSession.findFirst({
     where: {
-      id: sessionId,
       shopId: shop.id,
+      OR: [
+        { id: sessionId },
+        { sessionToken: sessionId },
+      ],
     },
     select: { id: true, visitorId: true },
   });
   
   if (!session) {
-    return json({ error: "Session not found" }, { status: 404 });
+    // Session not found - this can happen if visitor hasn't been synced yet
+    // Return success but with a flag indicating session was not found
+    // This prevents blocking the cart flow
+    return json({ 
+      success: true, 
+      action: sessionAction,
+      sessionFound: false,
+      message: "Session not found, action skipped" 
+    });
   }
+  
+  // Use the actual session ID for subsequent operations
+  const actualSessionId = session.id;
   
   try {
     switch (sessionAction) {
       case "page_view":
         await prisma.visitorSession.update({
-          where: { id: sessionId },
+          where: { id: actualSessionId },
           data: {
             pageViews: { increment: 1 },
             lastActivityAt: new Date(),
@@ -87,7 +102,7 @@ export async function action({ request }: ActionFunctionArgs) {
         break;
         
       case "add_to_cart":
-        await recordAddToCart(sessionId);
+        await recordAddToCart(actualSessionId);
         break;
         
       case "link_upload":
@@ -96,7 +111,7 @@ export async function action({ request }: ActionFunctionArgs) {
         }
         
         const effectiveVisitorId = visitorId || session.visitorId;
-        await linkUploadToVisitor(uploadId, effectiveVisitorId, sessionId);
+        await linkUploadToVisitor(uploadId, effectiveVisitorId, actualSessionId);
         break;
         
       default:
@@ -106,6 +121,7 @@ export async function action({ request }: ActionFunctionArgs) {
     return json({
       success: true,
       action: sessionAction,
+      sessionFound: true,
     });
   } catch (error) {
     console.error("[Session Update Error]", error);

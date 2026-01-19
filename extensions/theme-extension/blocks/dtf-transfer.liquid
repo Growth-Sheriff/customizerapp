@@ -106,6 +106,17 @@
 <script src="{{ 'ul-state.js' | asset_url }}" defer></script>
 
 {% comment %}
+  Visitor Tracking Fallback
+  Ensures ULVisitor is available even if visitor-tracking block is not added
+  Script is smart enough to prevent double initialization
+{% endcomment %}
+<script 
+  src="{{ 'ul-visitor.js' | asset_url }}" 
+  defer
+  data-shop-domain="{{ shop.permanent_domain }}"
+></script>
+
+{% comment %}
   Render the DTF Uploader snippet
   This handles all the upload logic, API calls, and UI
 {% endcomment %}
