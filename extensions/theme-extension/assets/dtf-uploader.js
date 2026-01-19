@@ -699,6 +699,8 @@
 
         // Step 3: Complete upload
         // For CDN uploads (Bunny/R2), include the publicUrl so backend can update storageKey
+        // Calculate upload duration for analytics
+        const uploadDurationMs = Date.now() - instance.uploadStartTime;
         const completeResponse = await fetch(`${apiBase}/api/upload/complete`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -709,7 +711,8 @@
               itemId: intentData.itemId,
               location: 'front',
               fileUrl: uploadResult?.fileUrl || intentData.publicUrl || null,
-              storageProvider: intentData.storageProvider || 'local'
+              storageProvider: intentData.storageProvider || 'local',
+              uploadDurationMs: uploadDurationMs
             }]
           })
         });

@@ -737,6 +737,9 @@
       progressCallback({ phase: 'complete', percent: 100, text: 'Finalizing...' });
     }
     
+    // Calculate upload duration for analytics
+    const uploadDurationMs = Date.now() - uploadStartTime;
+    
     const completeResponse = await fetch(`${apiBase}/api/upload/complete`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -747,7 +750,8 @@
           itemId,
           location: 'front',
           fileUrl: publicUrl || null,
-          storageProvider: storageProvider || 'local'
+          storageProvider: storageProvider || 'local',
+          uploadDurationMs: uploadDurationMs
         }]
       })
     });
