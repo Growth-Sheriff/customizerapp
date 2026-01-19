@@ -696,6 +696,7 @@ export interface UploadStats {
   successRate: number;
   avgFileSize: number;
   totalDataTransferred: number;
+  totalItems: number;
 }
 
 export async function getUploadStats(
@@ -703,7 +704,7 @@ export async function getUploadStats(
   startDate: Date,
   endDate: Date
 ): Promise<UploadStats> {
-  const [total, completed, failed, sizeAgg] = await Promise.all([
+  const [total, completed, failed] = await Promise.all([
     prisma.upload.count({
       where: { shopId, createdAt: { gte: startDate, lte: endDate } },
     }),
@@ -711,7 +712,7 @@ export async function getUploadStats(
       where: {
         shopId,
         createdAt: { gte: startDate, lte: endDate },
-        status: { in: ["uploaded", "ready", "completed"] },
+        status: { in: ["uploaded", "ready", "completed", "approved"] },
       },
     }),
     prisma.upload.count({
@@ -721,19 +722,28 @@ export async function getUploadStats(
         status: "failed",
       },
     }),
-    prisma.upload.aggregate({
-      where: { shopId, createdAt: { gte: startDate, lte: endDate } },
-      _avg: { fileSize: true },
-      _sum: { fileSize: true },
-    }),
   ]);
+
+  // Get file size stats from UploadItem (where fileSize is stored)
+  const uploadIds = await prisma.upload.findMany({
+    where: { shopId, createdAt: { gte: startDate, lte: endDate } },
+    select: { id: true },
+  });
+
+  const itemStats = await prisma.uploadItem.aggregate({
+    where: { uploadId: { in: uploadIds.map((u) => u.id) } },
+    _avg: { fileSize: true },
+    _sum: { fileSize: true },
+    _count: { id: true },
+  });
 
   return {
     totalUploads: total,
     completedUploads: completed,
     failedUploads: failed,
     successRate: total > 0 ? (completed / total) * 100 : 0,
-    avgFileSize: sizeAgg._avg.fileSize || 0,
-    totalDataTransferred: sizeAgg._sum.fileSize || 0,
+    avgFileSize: itemStats._avg.fileSize || 0,
+    totalDataTransferred: itemStats._sum.fileSize || 0,
+    totalItems: itemStats._count.id || 0,
   };
 }
