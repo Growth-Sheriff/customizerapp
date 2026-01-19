@@ -1,0 +1,190 @@
+{% comment %}
+  Delivery Badge System v2.0.0
+  
+  Bu snippet tüm delivery hesaplama JS dosyalarını yükler.
+  Kullanım: {% render 'delivery-scripts' %}
+  
+  İçerik:
+  1. shopify-live-shipping.js - Shopify API'den gerçek oranları çeker
+  2. live-shipping-rates.js - Rate fetcher wrapper
+  3. delivery-badge-ui.js - Badge UI komponenti
+  4. delivery-calculator.js - Zone bazlı statik hesaplama
+{% endcomment %}
+
+{% comment %} Delivery Badge Styles {% endcomment %}
+<style>
+  .delivery-badge {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 16px;
+    background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+    border: 1px solid #86efac;
+    border-radius: 12px;
+    margin: 16px 0;
+  }
+  
+  .delivery-badge__icon {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #22c55e;
+    border-radius: 8px;
+    color: white;
+  }
+  
+  .delivery-badge__content {
+    flex: 1;
+  }
+  
+  .delivery-badge__label {
+    font-size: 12px;
+    color: #166534;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+  }
+  
+  .delivery-badge__date {
+    font-size: 16px;
+    font-weight: 600;
+    color: #14532d;
+    margin-bottom: 4px;
+  }
+  
+  .delivery-badge__note {
+    font-size: 13px;
+    color: #15803d;
+  }
+  
+  .delivery-compact {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+    color: #166534;
+    padding: 8px 12px;
+    background: #f0fdf4;
+    border-radius: 6px;
+  }
+  
+  .delivery-compact strong {
+    color: #14532d;
+  }
+  
+  .delivery-inline {
+    font-size: 14px;
+    color: #166534;
+  }
+  
+  .delivery-zip-input {
+    padding: 16px;
+    background: #fafafa;
+    border-radius: 8px;
+    margin: 16px 0;
+  }
+  
+  .delivery-zip-input label {
+    display: block;
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: 8px;
+  }
+  
+  .delivery-zip-input__row {
+    display: flex;
+    gap: 8px;
+  }
+  
+  .delivery-zip-input__row input {
+    flex: 1;
+    padding: 10px 12px;
+    border: 1px solid #e5e5e5;
+    border-radius: 6px;
+    font-size: 16px;
+  }
+  
+  .delivery-zip-input__row input:focus {
+    outline: none;
+    border-color: #22c55e;
+    box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.1);
+  }
+  
+  .delivery-zip-input__btn {
+    padding: 10px 20px;
+    background: #22c55e;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  
+  .delivery-zip-input__btn:hover {
+    background: #16a34a;
+  }
+  
+  .delivery-zip-input__result {
+    margin-top: 12px;
+  }
+  
+  .delivery-zip-result {
+    padding: 12px;
+    background: #f0fdf4;
+    border-radius: 6px;
+    color: #166534;
+  }
+  
+  .delivery-zip-error {
+    padding: 12px;
+    background: #fef2f2;
+    border-radius: 6px;
+    color: #b91c1c;
+  }
+  
+  /* Zone-specific colors */
+  .delivery-badge[data-zone="1"] {
+    background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+    border-color: #86efac;
+  }
+  
+  .delivery-badge[data-zone="2"],
+  .delivery-badge[data-zone="3"] {
+    background: linear-gradient(135deg, #fefce8 0%, #fef08a 100%);
+    border-color: #fde047;
+  }
+  
+  .delivery-badge[data-zone="2"] .delivery-badge__icon,
+  .delivery-badge[data-zone="3"] .delivery-badge__icon {
+    background: #eab308;
+  }
+  
+  .delivery-badge[data-zone="2"] .delivery-badge__label,
+  .delivery-badge[data-zone="3"] .delivery-badge__label,
+  .delivery-badge[data-zone="2"] .delivery-badge__note,
+  .delivery-badge[data-zone="3"] .delivery-badge__note {
+    color: #854d0e;
+  }
+  
+  .delivery-badge[data-zone="2"] .delivery-badge__date,
+  .delivery-badge[data-zone="3"] .delivery-badge__date {
+    color: #713f12;
+  }
+  
+  .delivery-badge[data-zone="4"],
+  .delivery-badge[data-zone="5"],
+  .delivery-badge[data-zone="6"] {
+    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+    border-color: #fcd34d;
+  }
+</style>
+
+{% comment %} Delivery Scripts - Load in order {% endcomment %}
+{{ 'shopify-live-shipping.js' | asset_url | script_tag }}
+{{ 'live-shipping-rates.js' | asset_url | script_tag }}
+{{ 'delivery-badge-ui.js' | asset_url | script_tag }}
+{{ 'delivery-calculator.js' | asset_url | script_tag }}
