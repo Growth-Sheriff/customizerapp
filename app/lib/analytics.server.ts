@@ -742,8 +742,8 @@ export async function getUploadStats(
     completedUploads: completed,
     failedUploads: failed,
     successRate: total > 0 ? (completed / total) * 100 : 0,
-    avgFileSize: itemStats._avg.fileSize || 0,
-    totalDataTransferred: itemStats._sum.fileSize || 0,
-    totalItems: itemStats._count.id || 0,
+    avgFileSize: itemStats._avg?.fileSize ?? 0,
+    totalDataTransferred: itemStats._sum?.fileSize ?? 0,
+    totalItems: itemStats._count?.id ?? 0,
   };
 }

@@ -220,19 +220,19 @@ function InsightCard({ insight }: { insight: AIInsight }) {
         <Text as="p" variant="bodyMd">
           {insight.description}
         </Text>
-        {insight.change !== undefined && (
+        {insight.change !== undefined && insight.change !== null && (
           <InlineStack gap="200" blockAlign="center">
             <Icon 
-              source={insight.change >= 0 ? ArrowUpIcon : ArrowDownIcon} 
-              tone={insight.change >= 0 ? "success" : "critical"} 
+              source={(insight.change ?? 0) >= 0 ? ArrowUpIcon : ArrowDownIcon} 
+              tone={(insight.change ?? 0) >= 0 ? "success" : "critical"} 
             />
             <Text 
               as="span" 
               variant="bodySm" 
               fontWeight="semibold"
-              tone={insight.change >= 0 ? "success" : "critical"}
+              tone={(insight.change ?? 0) >= 0 ? "success" : "critical"}
             >
-              {insight.change >= 0 ? "+" : ""}{insight.change.toFixed(1)}% change
+              {(insight.change ?? 0) >= 0 ? "+" : ""}{(insight.change ?? 0).toFixed(1)}% change
             </Text>
           </InlineStack>
         )}
@@ -330,27 +330,27 @@ export default function AnalyticsInsights() {
               <InlineGrid columns={{ xs: 2, md: 4 }} gap="400">
                 <StatBox
                   label="Upload Conversion"
-                  value={`${visitorStats.uploadConversionRate.toFixed(1)}%`}
-                  subValue={`${visitorStats.visitorsWithUploads} of ${visitorStats.totalVisitors}`}
-                  trend={visitorStats.uploadConversionRate > 10 ? "up" : "down"}
+                  value={`${(visitorStats.uploadConversionRate ?? 0).toFixed(1)}%`}
+                  subValue={`${visitorStats.visitorsWithUploads ?? 0} of ${visitorStats.totalVisitors ?? 0}`}
+                  trend={(visitorStats.uploadConversionRate ?? 0) > 10 ? "up" : "down"}
                 />
                 <StatBox
                   label="Order Conversion"
-                  value={`${visitorStats.orderConversionRate.toFixed(1)}%`}
-                  subValue={`${visitorStats.visitorsWithOrders} orders`}
-                  trend={visitorStats.orderConversionRate > 3 ? "up" : "down"}
+                  value={`${(visitorStats.orderConversionRate ?? 0).toFixed(1)}%`}
+                  subValue={`${visitorStats.visitorsWithOrders ?? 0} orders`}
+                  trend={(visitorStats.orderConversionRate ?? 0) > 3 ? "up" : "down"}
                 />
                 <StatBox
                   label="Upload Success Rate"
-                  value={`${uploadStats.successRate.toFixed(1)}%`}
-                  subValue={`${uploadStats.completedUploads} of ${uploadStats.totalUploads}`}
-                  trend={uploadStats.successRate > 90 ? "up" : "down"}
+                  value={`${(uploadStats.successRate ?? 0).toFixed(1)}%`}
+                  subValue={`${uploadStats.completedUploads ?? 0} of ${uploadStats.totalUploads ?? 0}`}
+                  trend={(uploadStats.successRate ?? 0) > 90 ? "up" : "down"}
                 />
                 <StatBox
                   label="Avg Sessions/Visitor"
-                  value={visitorStats.avgSessionsPerVisitor.toFixed(1)}
-                  subValue={`${visitorStats.totalSessions} total sessions`}
-                  trend={visitorStats.avgSessionsPerVisitor > 1.5 ? "up" : "neutral"}
+                  value={(visitorStats.avgSessionsPerVisitor ?? 0).toFixed(1)}
+                  subValue={`${visitorStats.totalSessions ?? 0} total sessions`}
+                  trend={(visitorStats.avgSessionsPerVisitor ?? 0) > 1.5 ? "up" : "neutral"}
                 />
               </InlineGrid>
             </BlockStack>
@@ -388,8 +388,8 @@ export default function AnalyticsInsights() {
                         <Text as="span" variant="bodyMd" fontWeight="bold">
                           {stage.value.toLocaleString()}
                         </Text>
-                        <Badge tone={stage.percentage > 50 ? "success" : stage.percentage > 10 ? "warning" : "critical"}>
-                          {stage.percentage.toFixed(1)}%
+                        <Badge tone={(stage.percentage ?? 0) > 50 ? "success" : (stage.percentage ?? 0) > 10 ? "warning" : "critical"}>
+                          {(stage.percentage ?? 0).toFixed(1)}%
                         </Badge>
                       </InlineStack>
                     </InlineStack>
@@ -476,7 +476,7 @@ export default function AnalyticsInsights() {
                   <BlockStack gap="100" inlineAlign="center">
                     <Text as="p" variant="bodySm" tone="subdued">Data Transferred</Text>
                     <Text as="p" variant="headingMd" fontWeight="bold">
-                      {formatBytes(uploadStats.totalDataTransferred)}
+                      {formatBytes(uploadStats.totalDataTransferred ?? 0)}
                     </Text>
                   </BlockStack>
                 </Box>
