@@ -86,6 +86,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
     sessionsWithUtm,
     // Total sessions
     totalSessions,
+    // Click ID stats (gclid, fbclid, etc.)
+    clickIdStats,
+    // Revenue by source
+    revenueBySource,
     // Conversions by source
     conversionsBySource,
   ] = await Promise.all([
@@ -187,6 +191,41 @@ export async function loader({ request }: LoaderFunctionArgs) {
       },
     }),
 
+    // Click ID stats (NEW) - Google, Facebook, TikTok, Microsoft
+    Promise.all([
+      prisma.visitorSession.count({
+        where: { shopId: shop.id, startedAt: { gte: startDate }, gclid: { not: null } },
+      }),
+      prisma.visitorSession.count({
+        where: { shopId: shop.id, startedAt: { gte: startDate }, fbclid: { not: null } },
+      }),
+      prisma.visitorSession.count({
+        where: { shopId: shop.id, startedAt: { gte: startDate }, ttclid: { not: null } },
+      }),
+      prisma.visitorSession.count({
+        where: { shopId: shop.id, startedAt: { gte: startDate }, msclkid: { not: null } },
+      }),
+    ]),
+
+    // Revenue by referrer type (NEW)
+    prisma.$queryRaw`
+      SELECT 
+        vs.referrer_type,
+        COUNT(DISTINCT vs.id) as sessions,
+        SUM(v.total_revenue) as revenue,
+        COUNT(DISTINCT CASE WHEN v.total_orders > 0 THEN v.id END) as customers
+      FROM visitor_sessions vs
+      LEFT JOIN visitors v ON vs.visitor_id = v.id
+      WHERE vs.shop_id = ${shop.id} AND vs.started_at >= ${startDate}
+      GROUP BY vs.referrer_type
+      ORDER BY revenue DESC NULLS LAST
+    ` as Promise<Array<{
+      referrer_type: string | null;
+      sessions: bigint;
+      revenue: bigint | null;
+      customers: bigint;
+    }>>,
+
     // Uploads by referrer type (conversion indicator)
     prisma.$queryRaw`
       SELECT 
@@ -213,6 +252,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
     ? Math.round((sessionsWithUtm / totalSessions) * 100) 
     : 0;
 
+  // Click ID metrics
+  const [gclidCount, fbclidCount, ttclidCount, msclidCount] = clickIdStats;
+  const totalPaidClicks = gclidCount + fbclidCount + ttclidCount + msclidCount;
+
+  // Total revenue from all sources
+  const totalRevenue = revenueBySource.reduce(
+    (sum, r) => sum + Number(r.revenue || 0), 
+    0
+  );
+
   return json({
     error: null,
     period,
@@ -220,6 +269,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
       totalSessions,
       sessionsWithUtm,
       utmRate,
+      totalPaidClicks,
+      totalRevenue,
+    },
+    clickIds: {
+      gclid: gclidCount,
+      fbclid: fbclidCount,
+      ttclid: ttclidCount,
+      msclid: msclidCount,
     },
     utmSources: utmSources.map((s) => ({
       source: s.utmSource || "Unknown",
@@ -244,6 +301,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
     landingPages: landingPages.map((p) => ({
       page: p.landingPage || "Unknown",
       count: p._count.id,
+    })),
+    revenueBySource: (revenueBySource || []).map((r) => ({
+      type: r.referrer_type || "direct",
+      sessions: Number(r.sessions),
+      revenue: Number(r.revenue || 0),
+      customers: Number(r.customers),
     })),
     conversions: (conversionsBySource || []).map((c) => ({
       type: c.referrer_type || "direct",
@@ -295,6 +358,8 @@ export default function AttributionAnalytics() {
   const referrerDomains = "referrerDomains" in data ? data.referrerDomains : [];
   const landingPages = "landingPages" in data ? data.landingPages : [];
   const conversions = "conversions" in data ? data.conversions : [];
+  const clickIds = "clickIds" in data ? data.clickIds : { gclid: 0, fbclid: 0, ttclid: 0, msclid: 0 };
+  const revenueBySource = "revenueBySource" in data ? data.revenueBySource : [];
 
   if (!stats || stats.totalSessions === 0) {
     return (
@@ -318,12 +383,21 @@ export default function AttributionAnalytics() {
   }
 
   // Prepare conversion table
-  const conversionRows = conversions.map((c) => [
+  const conversionRows = conversions.map((c: any) => [
     c.type,
     c.sessions.toLocaleString(),
     c.uploads.toLocaleString(),
     c.completedUploads.toLocaleString(),
     `${c.conversionRate}%`,
+  ]);
+
+  // Prepare revenue by source table
+  const revenueRows = revenueBySource.map((r: any) => [
+    r.type ? r.type.charAt(0).toUpperCase() + r.type.slice(1) : "Direct",
+    r.sessions.toLocaleString(),
+    r.customers.toLocaleString(),
+    `$${(r.revenue / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+    r.customers > 0 ? `$${(r.revenue / 100 / r.customers).toFixed(2)}` : "$0",
   ]);
 
   // Prepare UTM table based on tab
@@ -444,7 +518,87 @@ export default function AttributionAnalytics() {
                 </BlockStack>
               </Card>
             </Box>
+
+            <Box minWidth="200px">
+              <Card>
+                <BlockStack gap="200">
+                  <Text as="h3" variant="headingMd">
+                    Total Revenue
+                  </Text>
+                  <Text as="p" variant="heading2xl">
+                    ${((stats.totalRevenue || 0) / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </Text>
+                  <Text as="p" variant="bodySm" tone="subdued">
+                    From all tracked visitors
+                  </Text>
+                </BlockStack>
+              </Card>
+            </Box>
           </InlineStack>
+        </Layout.Section>
+
+        {/* Paid Click IDs (Google, Facebook, TikTok, Microsoft) */}
+        <Layout.Section>
+          <Card>
+            <BlockStack gap="400">
+              <Text as="h3" variant="headingMd">
+                Paid Ad Clicks (Click IDs)
+              </Text>
+              <Divider />
+              <InlineStack gap="600" wrap>
+                <BlockStack gap="100">
+                  <Text as="span" tone="subdued">Google Ads (gclid)</Text>
+                  <Text as="p" variant="headingLg">{clickIds.gclid.toLocaleString()}</Text>
+                </BlockStack>
+                <BlockStack gap="100">
+                  <Text as="span" tone="subdued">Facebook (fbclid)</Text>
+                  <Text as="p" variant="headingLg">{clickIds.fbclid.toLocaleString()}</Text>
+                </BlockStack>
+                <BlockStack gap="100">
+                  <Text as="span" tone="subdued">TikTok (ttclid)</Text>
+                  <Text as="p" variant="headingLg">{clickIds.ttclid.toLocaleString()}</Text>
+                </BlockStack>
+                <BlockStack gap="100">
+                  <Text as="span" tone="subdued">Microsoft (msclkid)</Text>
+                  <Text as="p" variant="headingLg">{clickIds.msclid.toLocaleString()}</Text>
+                </BlockStack>
+                <BlockStack gap="100">
+                  <Text as="span" tone="subdued">Total Paid Clicks</Text>
+                  <Text as="p" variant="headingLg" fontWeight="bold">
+                    {stats.totalPaidClicks?.toLocaleString() || 0}
+                  </Text>
+                </BlockStack>
+              </InlineStack>
+            </BlockStack>
+          </Card>
+        </Layout.Section>
+
+        {/* Revenue by Source */}
+        <Layout.Section>
+          <Card>
+            <BlockStack gap="400">
+              <Text as="h3" variant="headingMd">
+                Revenue by Traffic Source
+              </Text>
+              <DataTable
+                columnContentTypes={[
+                  "text",
+                  "numeric",
+                  "numeric",
+                  "text",
+                  "text",
+                ]}
+                headings={[
+                  "Source Type",
+                  "Sessions",
+                  "Customers",
+                  "Revenue",
+                  "Avg Order Value",
+                ]}
+                rows={revenueRows}
+              />
+            </BlockStack>
+          </Card>
         </Layout.Section>
 
         {/* Conversion by Source */}

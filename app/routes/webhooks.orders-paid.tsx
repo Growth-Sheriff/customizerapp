@@ -3,6 +3,7 @@ import { json } from "@remix-run/node";
 import crypto from "crypto";
 import prisma from "~/lib/prisma.server";
 import { shopifyGraphQL } from "~/lib/shopify.server";
+import { recordOrderForVisitor } from "~/lib/visitor.server";
 
 // Verify Shopify webhook signature
 function verifyWebhookSignature(body: string, hmac: string, secret: string): boolean {
@@ -138,6 +139,18 @@ export async function action({ request }: ActionFunctionArgs) {
               transform: item.transform,
               preflightStatus: item.preflightStatus,
             });
+          }
+
+          // 📊 Visitor Revenue Tracking: Record order for visitor analytics
+          if (upload.visitorId) {
+            try {
+              const orderTotal = parseFloat(order.total_price) || 0;
+              await recordOrderForVisitor(upload.visitorId, orderTotal);
+              console.log(`[Webhook] Revenue recorded for visitor ${upload.visitorId}: $${orderTotal}`);
+            } catch (visitorErr) {
+              // Non-blocking: visitor tracking is optional enhancement
+              console.warn(`[Webhook] Visitor revenue tracking failed:`, visitorErr);
+            }
           }
 
           console.log(`[Webhook] Linked upload ${uploadId} to order ${order.id}`);

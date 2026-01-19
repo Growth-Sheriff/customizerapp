@@ -79,6 +79,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
     visitorsWithOrders,
     topCountries,
     topDevices,
+    topBrowsers,
+    topOS,
+    topScreenResolutions,
+    totalRevenue,
     recentVisitors,
     visitorsByDay,
   ] = await Promise.all([
@@ -150,6 +154,52 @@ export async function loader({ request }: LoaderFunctionArgs) {
       orderBy: { _count: { id: "desc" } },
     }),
 
+    // Top browsers (NEW)
+    prisma.visitor.groupBy({
+      by: ["browser"],
+      where: {
+        shopId: shop.id,
+        browser: { not: null },
+      },
+      _count: { id: true },
+      orderBy: { _count: { id: "desc" } },
+      take: 10,
+    }),
+
+    // Top OS (NEW)
+    prisma.visitor.groupBy({
+      by: ["os"],
+      where: {
+        shopId: shop.id,
+        os: { not: null },
+      },
+      _count: { id: true },
+      orderBy: { _count: { id: "desc" } },
+      take: 10,
+    }),
+
+    // Top screen resolutions (NEW)
+    prisma.visitor.groupBy({
+      by: ["screenResolution"],
+      where: {
+        shopId: shop.id,
+        screenResolution: { not: null },
+      },
+      _count: { id: true },
+      orderBy: { _count: { id: "desc" } },
+      take: 10,
+    }),
+
+    // Total revenue from visitors (NEW)
+    prisma.visitor.aggregate({
+      where: {
+        shopId: shop.id,
+        totalRevenue: { gt: 0 },
+      },
+      _sum: { totalRevenue: true },
+      _avg: { totalRevenue: true },
+    }),
+
     // Recent visitors
     prisma.visitor.findMany({
       where: { shopId: shop.id },
@@ -161,11 +211,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
         city: true,
         deviceType: true,
         browser: true,
+        os: true,
+        screenResolution: true,
         firstSeenAt: true,
         lastSeenAt: true,
         totalSessions: true,
         totalUploads: true,
         totalOrders: true,
+        totalRevenue: true,
         customerEmail: true,
       },
     }),
@@ -213,6 +266,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
     ? Math.round((visitorsWithOrders / totalVisitors) * 100)
     : 0;
 
+  // Revenue metrics
+  const revenueTotal = totalRevenue._sum.totalRevenue || 0;
+  const revenueAvg = totalRevenue._avg.totalRevenue || 0;
+
   return json({
     error: null,
     period,
@@ -229,6 +286,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
       avgSessionsPerVisitor: totalVisitors > 0 
         ? (totalSessions / totalVisitors).toFixed(1) 
         : "0",
+      totalRevenue: revenueTotal,
+      avgOrderValue: revenueAvg,
     },
     topCountries: topCountries.map((c) => ({
       country: c.country || "Unknown",
@@ -237,6 +296,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
     topDevices: topDevices.map((d) => ({
       device: d.deviceType || "Unknown",
       count: d._count.id,
+    })),
+    topBrowsers: topBrowsers.map((b) => ({
+      browser: b.browser || "Unknown",
+      count: b._count.id,
+    })),
+    topOS: topOS.map((o) => ({
+      os: o.os || "Unknown",
+      count: o._count.id,
+    })),
+    topScreenResolutions: topScreenResolutions.map((s) => ({
+      resolution: s.screenResolution || "Unknown",
+      count: s._count.id,
     })),
     visitors: recentVisitors.map((v) => ({
       ...v,
@@ -284,6 +355,9 @@ export default function VisitorAnalytics() {
   const { stats, period } = data;
   const topCountries = "topCountries" in data ? data.topCountries : [];
   const topDevices = "topDevices" in data ? data.topDevices : [];
+  const topBrowsers = "topBrowsers" in data ? data.topBrowsers : [];
+  const topOS = "topOS" in data ? data.topOS : [];
+  const topScreenResolutions = "topScreenResolutions" in data ? data.topScreenResolutions : [];
   const visitors = "visitors" in data ? data.visitors : [];
   const visitorsByDay = "visitorsByDay" in data ? data.visitorsByDay : [];
   const funnel = "funnel" in data ? data.funnel : null;
@@ -309,14 +383,16 @@ export default function VisitorAnalytics() {
     );
   }
 
-  // Prepare table data
-  const tableRows = visitors.map((v) => [
+  // Prepare table data with revenue
+  const tableRows = visitors.map((v: any) => [
     v.customerEmail || v.id.slice(0, 8) + "...",
     v.country || "-",
+    `${v.browser || "-"} / ${v.os || "-"}`,
     v.deviceType || "-",
     v.totalSessions.toString(),
     v.totalUploads.toString(),
     v.totalOrders.toString(),
+    v.totalRevenue ? `$${(v.totalRevenue / 100).toFixed(2)}` : "$0",
     new Date(v.lastSeenAt).toLocaleDateString(),
   ]);
 
@@ -412,6 +488,22 @@ export default function VisitorAnalytics() {
                     progress={stats.orderConversion}
                     tone="success"
                   />
+                </BlockStack>
+              </Card>
+            </Box>
+
+            <Box minWidth="200px">
+              <Card>
+                <BlockStack gap="200">
+                  <Text as="h3" variant="headingMd">
+                    Total Revenue
+                  </Text>
+                  <Text as="p" variant="heading2xl">
+                    ${((stats.totalRevenue || 0) / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </Text>
+                  <Text as="p" variant="bodySm" tone="subdued">
+                    Avg: ${((stats.avgOrderValue || 0) / 100).toFixed(2)} per order
+                  </Text>
                 </BlockStack>
               </Card>
             </Box>
@@ -593,6 +685,81 @@ export default function VisitorAnalytics() {
           </Card>
         </Layout.Section>
 
+        {/* Browsers */}
+        <Layout.Section variant="oneHalf">
+          <Card>
+            <BlockStack gap="400">
+              <Text as="h3" variant="headingMd">
+                Top Browsers
+              </Text>
+              <Divider />
+              <BlockStack gap="300">
+                {topBrowsers.slice(0, 5).map((b: any, i: number) => (
+                  <InlineStack key={i} align="space-between">
+                    <Text as="span">{b.browser}</Text>
+                    <Badge>{b.count.toLocaleString()}</Badge>
+                  </InlineStack>
+                ))}
+                {topBrowsers.length === 0 && (
+                  <Text as="p" tone="subdued">
+                    No browser data yet
+                  </Text>
+                )}
+              </BlockStack>
+            </BlockStack>
+          </Card>
+        </Layout.Section>
+
+        {/* Operating Systems */}
+        <Layout.Section variant="oneHalf">
+          <Card>
+            <BlockStack gap="400">
+              <Text as="h3" variant="headingMd">
+                Operating Systems
+              </Text>
+              <Divider />
+              <BlockStack gap="300">
+                {topOS.slice(0, 5).map((o: any, i: number) => (
+                  <InlineStack key={i} align="space-between">
+                    <Text as="span">{o.os}</Text>
+                    <Badge>{o.count.toLocaleString()}</Badge>
+                  </InlineStack>
+                ))}
+                {topOS.length === 0 && (
+                  <Text as="p" tone="subdued">
+                    No OS data yet
+                  </Text>
+                )}
+              </BlockStack>
+            </BlockStack>
+          </Card>
+        </Layout.Section>
+
+        {/* Screen Resolutions */}
+        <Layout.Section variant="oneHalf">
+          <Card>
+            <BlockStack gap="400">
+              <Text as="h3" variant="headingMd">
+                Screen Resolutions
+              </Text>
+              <Divider />
+              <BlockStack gap="300">
+                {topScreenResolutions.slice(0, 5).map((s: any, i: number) => (
+                  <InlineStack key={i} align="space-between">
+                    <Text as="span">{s.resolution}</Text>
+                    <Badge>{s.count.toLocaleString()}</Badge>
+                  </InlineStack>
+                ))}
+                {topScreenResolutions.length === 0 && (
+                  <Text as="p" tone="subdued">
+                    No resolution data yet
+                  </Text>
+                )}
+              </BlockStack>
+            </BlockStack>
+          </Card>
+        </Layout.Section>
+
         {/* Recent Visitors Table */}
         <Layout.Section>
           <Card>
@@ -605,18 +772,22 @@ export default function VisitorAnalytics() {
                   "text",
                   "text",
                   "text",
+                  "text",
                   "numeric",
                   "numeric",
                   "numeric",
+                  "text",
                   "text",
                 ]}
                 headings={[
                   "Visitor",
                   "Country",
+                  "Browser/OS",
                   "Device",
                   "Sessions",
                   "Uploads",
                   "Orders",
+                  "Revenue",
                   "Last Seen",
                 ]}
                 rows={tableRows}
