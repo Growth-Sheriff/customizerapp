@@ -663,6 +663,10 @@
     const apiBase = section?.dataset.apiBase || CONFIG.apiBase;
     const shopDomain = window.Shopify?.shop || getShopFromUrl();
 
+    // Get customer info if logged in
+    const customerId = window.ULCustomer?.id || null;
+    const customerEmail = window.ULCustomer?.email || null;
+
     // Track upload start time
     const uploadStartTime = Date.now();
 
@@ -677,7 +681,9 @@
         fileName: file.name,
         contentType: file.type,
         fileSize: file.size,
-        mode: 'dtf'
+        mode: 'dtf',
+        customerId: customerId ? String(customerId) : null,
+        customerEmail: customerEmail
       })
     });
 

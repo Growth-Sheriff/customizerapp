@@ -274,12 +274,18 @@ function UTMBadge({ utmInfo }: { utmInfo: { source?: string | null; medium?: str
 }
 
 // Visitor Info component
-function VisitorInfo({ visitorInfo, customerEmail }: { 
+function VisitorInfo({ visitorInfo, customerEmail, customerId: uploadCustomerId }: { 
   visitorInfo: { email?: string | null; customerId?: string | null; deviceType?: string | null; browser?: string | null; country?: string | null } | null;
   customerEmail?: string | null;
+  customerId?: string | null;
 }) {
-  const email = visitorInfo?.email || customerEmail;
-  const customerId = visitorInfo?.customerId;
+  // Priority: Upload.customerEmail > Visitor.customerEmail
+  const email = customerEmail || visitorInfo?.email;
+  // Priority: Upload.customerId > Visitor.shopifyCustomerId
+  const customerId = uploadCustomerId || visitorInfo?.customerId;
+  
+  // Has customer info if email exists
+  const isLoggedInCustomer = !!email;
   
   if (!email && !customerId && !visitorInfo) {
     return <Text as="span" tone="subdued">Anonymous</Text>;
@@ -292,18 +298,19 @@ function VisitorInfo({ visitorInfo, customerEmail }: {
   if (visitorInfo?.browser) tooltipParts.push(`Browser: ${visitorInfo.browser}`);
   if (visitorInfo?.country) tooltipParts.push(`Country: ${visitorInfo.country}`);
 
+  // Show email if available (truncate if long), otherwise show device type
   const displayText = email 
-    ? email.length > 15 ? email.slice(0, 12) + "..." : email
+    ? email.length > 20 ? email.slice(0, 17) + "..." : email
     : visitorInfo?.deviceType || "Visitor";
 
   return (
     <Tooltip content={tooltipParts.join("\n")}>
       <InlineStack gap="100" blockAlign="center">
-        <Icon source={PersonIcon} tone="subdued" />
+        <Icon source={PersonIcon} tone={isLoggedInCustomer ? "magic" : "subdued"} />
         <Text as="span" variant="bodySm">
           {displayText}
         </Text>
-        {customerId && <Badge tone="success" size="small">Customer</Badge>}
+        {isLoggedInCustomer && <Badge tone="success" size="small">Customer</Badge>}
       </InlineStack>
     </Tooltip>
   );
@@ -389,7 +396,8 @@ export default function UploadsPage() {
     <VisitorInfo 
       key={`${upload.id}-visitor`} 
       visitorInfo={upload.visitorInfo} 
-      customerEmail={upload.customerEmail} 
+      customerEmail={upload.customerEmail}
+      customerId={upload.customerId}
     />,
     // Date
     new Date(upload.createdAt).toLocaleDateString(),

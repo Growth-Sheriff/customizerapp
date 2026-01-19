@@ -106,6 +106,17 @@
 <script src="{{ 'ul-state.js' | asset_url }}" defer></script>
 
 {% comment %}
+  Customer Data for Upload Attribution
+  Makes customer info available to upload JS for tracking logged-in users
+{% endcomment %}
+<script>
+  window.ULCustomer = {
+    id: {{ customer.id | default: 'null' }},
+    email: {{ customer.email | json | default: 'null' }}
+  };
+</script>
+
+{% comment %}
   Visitor Tracking Fallback
   Ensures ULVisitor is available even if visitor-tracking block is not added
   Script is smart enough to prevent double initialization

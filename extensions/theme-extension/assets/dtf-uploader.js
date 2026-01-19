@@ -659,6 +659,10 @@
       elements.step1.classList.remove('completed');
 
       try {
+        // Get customer info if logged in
+        const customerId = window.ULCustomer?.id || null;
+        const customerEmail = window.ULCustomer?.email || null;
+        
         // Step 1: Get signed URL from API
         const intentResponse = await fetch(`${apiBase}/api/upload/intent`, {
           method: 'POST',
@@ -669,7 +673,9 @@
             mode: 'dtf',
             fileName: file.name,
             contentType: file.type || 'application/octet-stream',
-            fileSize: file.size
+            fileSize: file.size,
+            customerId: customerId ? String(customerId) : null,
+            customerEmail: customerEmail
           })
         });
 

@@ -70,7 +70,7 @@ export async function action({ request }: ActionFunctionArgs) {
     return corsJson({ error: "Invalid JSON body" }, request, { status: 400 });
   }
 
-  const { shopDomain, productId, variantId, mode, contentType, fileName, fileSize } = body;
+  const { shopDomain, productId, variantId, mode, contentType, fileName, fileSize, customerId, customerEmail } = body;
 
   // Validate required fields
   if (!shopDomain) {
@@ -218,6 +218,8 @@ export async function action({ request }: ActionFunctionArgs) {
         variantId,
         mode,
         status: "draft",
+        customerId: customerId || null,
+        customerEmail: customerEmail || null,
       },
     });
 

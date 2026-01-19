@@ -1066,6 +1066,10 @@ console.log('[ULTShirtModal] Script loading...');
       // Track upload start time
       const uploadStartTime = Date.now();
       
+      // Get customer info if logged in
+      const customerId = window.ULCustomer?.id || null;
+      const customerEmail = window.ULCustomer?.email || null;
+      
       // FAZ 0 - TSM-003: Robust shopDomain detection with validation
       const shopDomain = this.getShopDomain();
       
@@ -1090,7 +1094,9 @@ console.log('[ULTShirtModal] Script loading...');
           mode: '3d_designer',
           fileName: file.name,
           contentType: file.type || 'application/octet-stream',
-          fileSize: file.size
+          fileSize: file.size,
+          customerId: customerId ? String(customerId) : null,
+          customerEmail: customerEmail
         })
       });
       
