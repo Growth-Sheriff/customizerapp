@@ -3,8 +3,14 @@ import { json } from "@remix-run/node";
 import { useLoaderData, useSearchParams, Link } from "@remix-run/react";
 import {
   Page, Layout, Card, Text, BlockStack, InlineStack,
-  Badge, Button, DataTable, Filters, ChoiceList, Pagination, Box
+  Badge, Button, DataTable, Filters, ChoiceList, Pagination, Box,
+  Tooltip, Icon,
 } from "@shopify/polaris";
+import { 
+  PersonIcon, 
+  TargetIcon, 
+  ClockIcon,
+} from "@shopify/polaris-icons";
 import { useState, useCallback } from "react";
 import { authenticate } from "~/shopify.server";
 import prisma from "~/lib/prisma.server";
@@ -51,6 +57,27 @@ export async function loader({ request }: LoaderFunctionArgs) {
             preflightStatus: true,
             thumbnailKey: true,
             storageKey: true,
+            fileSize: true,
+          },
+        },
+        visitor: {
+          select: {
+            id: true,
+            customerEmail: true,
+            shopifyCustomerId: true,
+            deviceType: true,
+            browser: true,
+            country: true,
+          },
+        },
+        session: {
+          select: {
+            id: true,
+            utmSource: true,
+            utmMedium: true,
+            utmCampaign: true,
+            referrerType: true,
+            referrerDomain: true,
           },
         },
       },
@@ -83,6 +110,27 @@ export async function loader({ request }: LoaderFunctionArgs) {
         }
       }
 
+      // Calculate total file size
+      const totalFileSize = u.items.reduce((sum, item) => sum + (item.fileSize || 0), 0);
+
+      // Build UTM info
+      const utmInfo = u.session ? {
+        source: u.session.utmSource,
+        medium: u.session.utmMedium,
+        campaign: u.session.utmCampaign,
+        referrerType: u.session.referrerType,
+        referrerDomain: u.session.referrerDomain,
+      } : null;
+
+      // Build visitor info
+      const visitorInfo = u.visitor ? {
+        email: u.visitor.customerEmail,
+        customerId: u.visitor.shopifyCustomerId,
+        deviceType: u.visitor.deviceType,
+        browser: u.visitor.browser,
+        country: u.visitor.country,
+      } : null;
+
       return {
         id: u.id,
         mode: u.mode,
@@ -92,6 +140,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
         customerEmail: u.customerEmail,
         itemCount: u.items.length,
         thumbnailUrl,
+        totalFileSize,
+        utmInfo,
+        visitorInfo,
         preflightStatus: u.items.some(i => i.preflightStatus === "error")
           ? "error"
           : u.items.some(i => i.preflightStatus === "warning")
@@ -100,6 +151,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
               ? "ok"
               : "pending",
         createdAt: u.createdAt.toISOString(),
+        updatedAt: u.updatedAt.toISOString(),
       };
     })
   );
@@ -153,6 +205,94 @@ function StatusBadge({ status }: { status: string }) {
   return <Badge tone={toneMap[status] || "info"}>{labelMap[status] || status}</Badge>;
 }
 
+// Format bytes to human readable
+function formatBytes(bytes: number): string {
+  if (!bytes || bytes === 0) return "-";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+}
+
+// UTM Badge component
+function UTMBadge({ utmInfo }: { utmInfo: { source?: string | null; medium?: string | null; campaign?: string | null; referrerType?: string | null; referrerDomain?: string | null } | null }) {
+  if (!utmInfo) return <Text as="span" tone="subdued">-</Text>;
+  
+  const { source, medium, campaign, referrerType, referrerDomain } = utmInfo;
+  
+  // Build display text
+  let displayText = "";
+  let tooltipContent = "";
+  
+  if (source) {
+    displayText = source;
+    tooltipContent = `Source: ${source}`;
+    if (medium) tooltipContent += `\nMedium: ${medium}`;
+    if (campaign) tooltipContent += `\nCampaign: ${campaign}`;
+  } else if (referrerType) {
+    displayText = referrerType.replace("_", " ");
+    tooltipContent = `Referrer Type: ${referrerType}`;
+    if (referrerDomain) tooltipContent += `\nDomain: ${referrerDomain}`;
+  } else {
+    return <Text as="span" tone="subdued">Direct</Text>;
+  }
+
+  const toneMap: Record<string, "success" | "info" | "warning" | "attention"> = {
+    google: "success",
+    facebook: "info",
+    instagram: "info",
+    tiktok: "attention",
+    organic_search: "success",
+    paid_search: "warning",
+    social: "info",
+    email: "attention",
+  };
+
+  return (
+    <Tooltip content={tooltipContent}>
+      <Badge tone={toneMap[source || referrerType || ""] || "info"}>
+        {displayText}
+      </Badge>
+    </Tooltip>
+  );
+}
+
+// Visitor Info component
+function VisitorInfo({ visitorInfo, customerEmail }: { 
+  visitorInfo: { email?: string | null; customerId?: string | null; deviceType?: string | null; browser?: string | null; country?: string | null } | null;
+  customerEmail?: string | null;
+}) {
+  const email = visitorInfo?.email || customerEmail;
+  const customerId = visitorInfo?.customerId;
+  
+  if (!email && !customerId && !visitorInfo) {
+    return <Text as="span" tone="subdued">Anonymous</Text>;
+  }
+
+  const tooltipParts = [];
+  if (email) tooltipParts.push(`Email: ${email}`);
+  if (customerId) tooltipParts.push(`Customer ID: ${customerId}`);
+  if (visitorInfo?.deviceType) tooltipParts.push(`Device: ${visitorInfo.deviceType}`);
+  if (visitorInfo?.browser) tooltipParts.push(`Browser: ${visitorInfo.browser}`);
+  if (visitorInfo?.country) tooltipParts.push(`Country: ${visitorInfo.country}`);
+
+  const displayText = email 
+    ? email.length > 15 ? email.slice(0, 12) + "..." : email
+    : visitorInfo?.deviceType || "Visitor";
+
+  return (
+    <Tooltip content={tooltipParts.join("\n")}>
+      <InlineStack gap="100" blockAlign="center">
+        <Icon source={PersonIcon} tone="subdued" />
+        <Text as="span" variant="bodySm">
+          {displayText}
+        </Text>
+        {customerId && <Badge tone="success" size="small">Customer</Badge>}
+      </InlineStack>
+    </Tooltip>
+  );
+}
+
 export default function UploadsPage() {
   const data = useLoaderData<typeof loader>();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -194,6 +334,7 @@ export default function UploadsPage() {
   }, [setSearchParams]);
 
   const rows = uploads.map(upload => [
+    // Upload Preview & ID
     <InlineStack key={upload.id} gap="200" align="start">
       {upload.thumbnailUrl ? (
         <img
@@ -210,11 +351,27 @@ export default function UploadsPage() {
         {upload.id.slice(0, 10)}...
       </Link>
     </InlineStack>,
+    // Mode
     upload.mode,
+    // Status
     <StatusBadge key={`${upload.id}-status`} status={upload.status} />,
+    // Quality
     <StatusBadge key={`${upload.id}-preflight`} status={upload.preflightStatus} />,
+    // File Size (MB)
+    <Text key={`${upload.id}-size`} as="span" variant="bodySm">
+      {formatBytes(upload.totalFileSize)}
+    </Text>,
+    // Items
     upload.itemCount,
-    upload.customerEmail || "-",
+    // UTM / Source
+    <UTMBadge key={`${upload.id}-utm`} utmInfo={upload.utmInfo} />,
+    // Customer / Visitor
+    <VisitorInfo 
+      key={`${upload.id}-visitor`} 
+      visitorInfo={upload.visitorInfo} 
+      customerEmail={upload.customerEmail} 
+    />,
+    // Date
     new Date(upload.createdAt).toLocaleDateString(),
   ]);
 
@@ -301,8 +458,8 @@ export default function UploadsPage() {
                 {/* Table */}
                 {uploads.length > 0 ? (
                   <DataTable
-                    columnContentTypes={["text", "text", "text", "text", "numeric", "text", "text"]}
-                    headings={["Upload", "Mode", "Status", "Quality", "Items", "Customer", "Date"]}
+                    columnContentTypes={["text", "text", "text", "text", "text", "numeric", "text", "text", "text"]}
+                    headings={["Upload", "Mode", "Status", "Quality", "Size", "Items", "Source", "Customer", "Date"]}
                     rows={rows}
                   />
                 ) : (
