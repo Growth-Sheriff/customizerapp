@@ -61,7 +61,7 @@
   // ===== GLOBAL NAMESPACE =====
   const ULDTFUploader = {
     instances: {},
-    version: '4.1.0',
+    version: '4.2.0', // Added upload cancel support
 
     /**
      * Initialize uploader for a product
@@ -127,7 +127,9 @@
         },
         
         elements: null,
-        pollCount: 0
+        pollCount: 0,
+        activeXHR: null,  // v4.2.0: Track active XHR for cancel support
+        isCancelled: false  // v4.2.0: Track if upload was cancelled
       };
 
       // Get DOM elements
@@ -156,6 +158,7 @@
         progress: $('progress'),
         progressFill: $('progress-fill'),
         progressText: $('progress-text'),
+        cancelBtn: $('cancel-upload'),  // v4.2.0: Cancel upload button
         preview: $('preview'),
         thumb: $('thumb'),
         filename: $('filename'),
@@ -478,6 +481,13 @@
         this.clearUpload(productId);
       });
 
+      // v4.2.0: Cancel upload button
+      if (elements.cancelBtn) {
+        elements.cancelBtn.addEventListener('click', () => {
+          this.cancelUpload(productId);
+        });
+      }
+
       // Size selection - Option buttons (v4.3.0), Dropdown fallback, or legacy grid
       this.bindOptionButtons(productId);
       
@@ -580,6 +590,15 @@
     async handleFileSelect(productId, file) {
       const instance = this.instances[productId];
       const { elements, apiBase, shopDomain, state } = instance;
+
+      // v4.2.0: Cancel any existing upload before starting new one
+      if (instance.activeXHR) {
+        console.log('[UL] Cancelling existing upload to start new one');
+        this.cancelUpload(productId);
+      }
+      
+      // Reset cancelled flag for new upload
+      instance.isCancelled = false;
 
       // FAZ 7: Use ULErrorHandler for file validation
       if (window.ULErrorHandler) {
@@ -783,24 +802,30 @@
       // Provider-aware upload
       switch (provider) {
         case 'bunny':
-          return this.uploadToBunny(file, intentData, elements);
+          return this.uploadToBunny(file, intentData, elements, productId);
         case 'r2':
-          return this.uploadToR2(file, intentData, elements);
+          return this.uploadToR2(file, intentData, elements, productId);
         case 'local':
         default:
-          return this.uploadToLocal(file, intentData, elements);
+          return this.uploadToLocal(file, intentData, elements, productId);
       }
     },
 
     /**
      * Upload to Bunny.net Storage (Direct PUT)
      */
-    async uploadToBunny(file, intentData, elements) {
+    async uploadToBunny(file, intentData, elements, productId) {
       const startTime = Date.now();
       const fileSize = file.size;
+      const instance = productId ? this.instances[productId] : null;
       
       return new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
+        
+        // v4.2.0: Store XHR reference for cancel support
+        if (instance) {
+          instance.activeXHR = xhr;
+        }
 
         xhr.upload.addEventListener('progress', (e) => {
           if (e.lengthComputable) {
@@ -857,12 +882,18 @@
     /**
      * Upload to R2 (Presigned PUT)
      */
-    async uploadToR2(file, intentData, elements) {
+    async uploadToR2(file, intentData, elements, productId) {
       const startTime = Date.now();
       const fileSize = file.size;
+      const instance = productId ? this.instances[productId] : null;
       
       return new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
+        
+        // v4.2.0: Store XHR reference for cancel support
+        if (instance) {
+          instance.activeXHR = xhr;
+        }
 
         xhr.upload.addEventListener('progress', (e) => {
           if (e.lengthComputable) {
@@ -911,9 +942,10 @@
     /**
      * Upload to Local Server (POST with FormData)
      */
-    async uploadToLocal(file, intentData, elements) {
+    async uploadToLocal(file, intentData, elements, productId) {
       const startTime = Date.now();
       const fileSize = file.size;
+      const instance = productId ? this.instances[productId] : null;
       
       const formData = new FormData();
       formData.append('file', file);
@@ -923,6 +955,11 @@
 
       return new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
+        
+        // v4.2.0: Store XHR reference for cancel support
+        if (instance) {
+          instance.activeXHR = xhr;
+        }
 
         xhr.upload.addEventListener('progress', (e) => {
           if (e.lengthComputable) {
@@ -1232,11 +1269,67 @@
     },
 
     /**
+     * v4.2.0: Cancel active upload
+     */
+    cancelUpload(productId) {
+      const instance = this.instances[productId];
+      if (!instance) return;
+      
+      const { elements, state } = instance;
+      
+      console.log('[UL] Cancelling upload for product:', productId);
+      
+      // Set cancelled flag
+      instance.isCancelled = true;
+      
+      // Abort active XHR if exists
+      if (instance.activeXHR) {
+        instance.activeXHR.abort();
+        instance.activeXHR = null;
+      }
+      
+      // Reset upload state
+      state.upload.status = 'idle';
+      state.upload.progress = 0;
+      state.upload.error = null;
+      
+      // Reset UI
+      if (elements.progress) {
+        elements.progress.classList.remove('active');
+      }
+      if (elements.dropzone) {
+        elements.dropzone.style.display = 'block';
+      }
+      if (elements.progressFill) {
+        elements.progressFill.style.width = '0%';
+      }
+      if (elements.progressText) {
+        elements.progressText.textContent = 'Upload cancelled';
+      }
+      
+      // Track cancellation
+      if (window.ULAnalytics) {
+        window.ULAnalytics.trackEvent('upload_cancelled', {
+          productId,
+          fileName: state.upload.file?.name || ''
+        });
+      }
+      
+      console.log('[UL] Upload cancelled successfully');
+    },
+
+    /**
      * Clear upload and reset to initial state
      */
     clearUpload(productId) {
       const instance = this.instances[productId];
       const { elements, state } = instance;
+      
+      // v4.2.0: Cancel any active upload first
+      if (instance.activeXHR) {
+        instance.activeXHR.abort();
+        instance.activeXHR = null;
+      }
 
       // Reset state
       state.upload = {
