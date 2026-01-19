@@ -889,37 +889,54 @@
         throw new Error(errData.error || 'Failed to get upload URL');
       }
       const intentData = await intentResponse.json();
+      const { uploadId, itemId, uploadUrl, storageProvider, uploadHeaders, publicUrl, key } = intentData;
       
       progressFill.style.width = '30%';
       progressText.textContent = 'Uploading file...';
       
-      // Step 2: Upload file - always local storage (POST with FormData)
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('key', intentData.key);
-      formData.append('uploadId', intentData.uploadId);
-      formData.append('itemId', intentData.itemId);
-      const uploadResponse = await fetch(intentData.uploadUrl, {
-        method: 'POST',
-        body: formData
-      });
+      // Step 2: Upload file (provider-aware)
+      let uploadResponse;
+      if (storageProvider === 'bunny' || storageProvider === 'r2') {
+        // Direct PUT to CDN storage
+        const headers = { 'Content-Type': file.type || 'application/octet-stream' };
+        if (uploadHeaders) {
+          Object.entries(uploadHeaders).forEach(([k, v]) => headers[k] = v);
+        }
+        uploadResponse = await fetch(uploadUrl, {
+          method: 'PUT',
+          headers,
+          body: file
+        });
+      } else {
+        // Local storage - POST with FormData
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('key', key);
+        formData.append('uploadId', uploadId);
+        formData.append('itemId', itemId);
+        uploadResponse = await fetch(uploadUrl, {
+          method: 'POST',
+          body: formData
+        });
+      }
       
       if (!uploadResponse.ok) throw new Error('Upload failed');
       
       progressFill.style.width = '60%';
       progressText.textContent = 'Processing...';
       
-      // Step 3: Complete upload - always local storage
+      // Step 3: Complete upload (provider-aware)
       const completeResponse = await fetch(`${apiBase}/api/upload/complete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          uploadId: intentData.uploadId,
+          uploadId: uploadId,
           shopDomain: shopDomain,
           items: [{
-            itemId: intentData.itemId,
+            itemId: itemId,
             location: 'front',
-            storageProvider: 'local'
+            fileUrl: publicUrl || null,
+            storageProvider: storageProvider || 'local'
           }]
         })
       });
@@ -930,7 +947,6 @@
       progressText.textContent = 'Analyzing...';
       
       // Store upload ID
-      const uploadId = intentData.uploadId;
       if (uploadIdInput) uploadIdInput.value = uploadId;
       
       // Poll for status and get the signed download URL from API

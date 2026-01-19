@@ -681,16 +681,15 @@
         elements.progressFill.style.width = '15%';
         elements.progressText.textContent = 'Uploading...';
 
-        // Step 2: Upload file directly to storage
-        // uploadToStorage returns result with fileUrl for Shopify uploads
+        // Step 2: Upload file directly to storage (provider-aware)
+        // uploadToStorage returns result with fileUrl for CDN uploads
         const uploadResult = await this.uploadToStorage(productId, file, intentData);
 
         elements.progressFill.style.width = '80%';
         elements.progressText.textContent = 'Finalizing...';
 
         // Step 3: Complete upload
-        // For Shopify uploads, include the fileUrl so backend can update storageKey
-        // Also include fileId in case URL is not ready yet (Shopify async processing)
+        // For CDN uploads (Bunny/R2), include the publicUrl so backend can update storageKey
         const completeResponse = await fetch(`${apiBase}/api/upload/complete`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -700,9 +699,8 @@
             items: [{
               itemId: intentData.itemId,
               location: 'front',
-              fileUrl: uploadResult?.fileUrl || null,
-              fileId: uploadResult?.fileId || null,
-              storageProvider: intentData.storageProvider || 'shopify'
+              fileUrl: uploadResult?.fileUrl || intentData.publicUrl || null,
+              storageProvider: intentData.storageProvider || 'local'
             }]
           })
         });
@@ -761,16 +759,103 @@
 
     /**
      * Upload file to storage with progress tracking
-     * FAZ 1 - DTF-003: Explicit storage type check with switch/case
-     * Upload file to local storage (only storage option)
+     * MULTI-STORAGE: Provider-aware upload (Bunny PUT, Local POST)
      */
     async uploadToStorage(productId, file, intentData) {
       const instance = this.instances[productId];
       const { elements } = instance;
+      
+      const provider = intentData.storageProvider || 'local';
+      console.log('[UL] uploadToStorage - provider:', provider);
 
-      // Always use local storage - no other options
-      console.log('[UL] uploadToStorage - using local storage');
+      // Provider-aware upload
+      switch (provider) {
+        case 'bunny':
+          return this.uploadToBunny(file, intentData, elements);
+        case 'r2':
+          return this.uploadToR2(file, intentData, elements);
+        case 'local':
+        default:
+          return this.uploadToLocal(file, intentData, elements);
+      }
+    },
 
+    /**
+     * Upload to Bunny.net Storage (Direct PUT)
+     */
+    async uploadToBunny(file, intentData, elements) {
+      return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+
+        xhr.upload.addEventListener('progress', (e) => {
+          if (e.lengthComputable) {
+            const percent = 15 + ((e.loaded / e.total) * 60);
+            elements.progressFill.style.width = `${percent}%`;
+            elements.progressText.textContent = `Uploading... ${Math.round((e.loaded / e.total) * 100)}%`;
+          }
+        });
+
+        xhr.addEventListener('load', () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve({ fileUrl: intentData.publicUrl });
+          } else {
+            reject(new Error(`Bunny upload failed (${xhr.status})`));
+          }
+        });
+
+        xhr.addEventListener('error', () => reject(new Error('Network error during Bunny upload')));
+        xhr.addEventListener('abort', () => reject(new Error('Bunny upload cancelled')));
+
+        xhr.open('PUT', intentData.uploadUrl);
+        
+        // Set Bunny headers
+        if (intentData.uploadHeaders) {
+          Object.entries(intentData.uploadHeaders).forEach(([key, value]) => {
+            xhr.setRequestHeader(key, value);
+          });
+        }
+        xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+        
+        xhr.send(file);
+      });
+    },
+
+    /**
+     * Upload to R2 (Presigned PUT)
+     */
+    async uploadToR2(file, intentData, elements) {
+      return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+
+        xhr.upload.addEventListener('progress', (e) => {
+          if (e.lengthComputable) {
+            const percent = 15 + ((e.loaded / e.total) * 60);
+            elements.progressFill.style.width = `${percent}%`;
+            elements.progressText.textContent = `Uploading... ${Math.round((e.loaded / e.total) * 100)}%`;
+          }
+        });
+
+        xhr.addEventListener('load', () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve({ fileUrl: intentData.publicUrl });
+          } else {
+            reject(new Error(`R2 upload failed (${xhr.status})`));
+          }
+        });
+
+        xhr.addEventListener('error', () => reject(new Error('Network error during R2 upload')));
+        xhr.addEventListener('abort', () => reject(new Error('R2 upload cancelled')));
+
+        xhr.open('PUT', intentData.uploadUrl);
+        xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+        xhr.send(file);
+      });
+    },
+
+    /**
+     * Upload to Local Server (POST with FormData)
+     */
+    async uploadToLocal(file, intentData, elements) {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('key', intentData.key);
@@ -782,7 +867,7 @@
 
         xhr.upload.addEventListener('progress', (e) => {
           if (e.lengthComputable) {
-            const percent = 15 + ((e.loaded / e.total) * 60); // 15% to 75%
+            const percent = 15 + ((e.loaded / e.total) * 60);
             elements.progressFill.style.width = `${percent}%`;
             elements.progressText.textContent = `Uploading... ${Math.round((e.loaded / e.total) * 100)}%`;
           }
@@ -792,7 +877,7 @@
           if (xhr.status >= 200 && xhr.status < 300) {
             resolve();
           } else {
-            reject(new Error(`Upload failed (${xhr.status})`));
+            reject(new Error(`Local upload failed (${xhr.status})`));
           }
         });
 

@@ -618,16 +618,18 @@
     // Get API base from section settings
     const section = document.querySelector('.ul-carousel-section');
     const apiBase = section?.dataset.apiBase || CONFIG.apiBase;
+    const shopDomain = window.Shopify?.shop || getShopFromUrl();
 
     // 1. Create upload intent
     const intentResponse = await fetch(`${apiBase}/api/upload/intent`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        filename: file.name,
+        shopDomain,
+        fileName: file.name,
         contentType: file.type,
-        size: file.size,
-        shop: window.Shopify?.shop || getShopFromUrl()
+        fileSize: file.size,
+        mode: 'dtf'
       })
     });
 
@@ -635,14 +637,34 @@
       throw new Error('Failed to create upload intent');
     }
 
-    const { uploadId, signedUrl } = await intentResponse.json();
+    const intentData = await intentResponse.json();
+    const { uploadId, itemId, uploadUrl, storageProvider, uploadHeaders, publicUrl, key } = intentData;
 
-    // 2. Upload to signed URL
-    const uploadResponse = await fetch(signedUrl, {
-      method: 'PUT',
-      headers: { 'Content-Type': file.type },
-      body: file
-    });
+    // 2. Upload to storage (provider-aware)
+    let uploadResponse;
+    if (storageProvider === 'bunny' || storageProvider === 'r2') {
+      // Direct PUT to CDN storage
+      const headers = { 'Content-Type': file.type || 'application/octet-stream' };
+      if (uploadHeaders) {
+        Object.assign(headers, uploadHeaders);
+      }
+      uploadResponse = await fetch(uploadUrl, {
+        method: 'PUT',
+        headers,
+        body: file
+      });
+    } else {
+      // Local storage - POST with FormData
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('key', key);
+      formData.append('uploadId', uploadId);
+      formData.append('itemId', itemId);
+      uploadResponse = await fetch(uploadUrl, {
+        method: 'POST',
+        body: formData
+      });
+    }
 
     if (!uploadResponse.ok) {
       throw new Error('Failed to upload file');
@@ -652,7 +674,16 @@
     const completeResponse = await fetch(`${apiBase}/api/upload/complete`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ uploadId })
+      body: JSON.stringify({
+        shopDomain,
+        uploadId,
+        items: [{
+          itemId,
+          location: 'front',
+          fileUrl: publicUrl || null,
+          storageProvider: storageProvider || 'local'
+        }]
+      })
     });
 
     if (!completeResponse.ok) {
@@ -660,7 +691,7 @@
     }
 
     // Build full public URL with https://
-    const fullUrl = `${window.location.origin}${apiBase}/api/upload/file/${uploadId}`;
+    const fullUrl = publicUrl || `${window.location.origin}${apiBase}/api/upload/file/${uploadId}`;
 
     return {
       id: uploadId,

@@ -1075,16 +1075,35 @@ console.log('[ULTShirtModal] Script loading...');
       }
       
       const intentData = await intentRes.json();
-      const { uploadId, itemId, uploadUrl } = intentData;
+      const { uploadId, itemId, uploadUrl, storageProvider, uploadMethod, uploadHeaders, publicUrl } = intentData;
       
-      console.log('[ULTShirtModal] Intent response:', { uploadId, itemId });
+      console.log('[ULTShirtModal] Intent response:', { uploadId, itemId, storageProvider });
       
-      // Step 2: Upload file directly to storage
-      const uploadRes = await fetch(uploadUrl, {
-        method: 'PUT',
-        headers: { 'Content-Type': file.type || 'application/octet-stream' },
-        body: file
-      });
+      // Step 2: Upload file directly to storage (provider-aware)
+      let uploadRes;
+      if (storageProvider === 'bunny' || storageProvider === 'r2') {
+        // Direct PUT to CDN storage
+        const headers = { 'Content-Type': file.type || 'application/octet-stream' };
+        if (uploadHeaders) {
+          Object.assign(headers, uploadHeaders);
+        }
+        uploadRes = await fetch(uploadUrl, {
+          method: 'PUT',
+          headers,
+          body: file
+        });
+      } else {
+        // Local storage - POST with FormData
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('key', intentData.key);
+        formData.append('uploadId', uploadId);
+        formData.append('itemId', itemId);
+        uploadRes = await fetch(uploadUrl, {
+          method: 'POST',
+          body: formData
+        });
+      }
       
       if (!uploadRes.ok) throw new Error('Upload failed');
       
@@ -1097,7 +1116,9 @@ console.log('[ULTShirtModal] Script loading...');
           uploadId,
           items: [{
             itemId,
-            location: 'front'
+            location: 'front',
+            fileUrl: publicUrl || null,
+            storageProvider: storageProvider || 'local'
           }]
         })
       });
