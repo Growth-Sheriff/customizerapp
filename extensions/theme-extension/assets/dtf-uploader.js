@@ -784,6 +784,9 @@
      * Upload to Bunny.net Storage (Direct PUT)
      */
     async uploadToBunny(file, intentData, elements) {
+      const startTime = Date.now();
+      const fileSize = file.size;
+      
       return new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
 
@@ -791,12 +794,31 @@
           if (e.lengthComputable) {
             const percent = 15 + ((e.loaded / e.total) * 60);
             elements.progressFill.style.width = `${percent}%`;
-            elements.progressText.textContent = `Uploading... ${Math.round((e.loaded / e.total) * 100)}%`;
+            
+            // Calculate speed and remaining time
+            const elapsed = (Date.now() - startTime) / 1000;
+            const speed = elapsed > 0 ? e.loaded / elapsed : 0;
+            const remaining = speed > 0 ? (e.total - e.loaded) / speed : 0;
+            
+            // Format sizes
+            const loadedMB = (e.loaded / (1024 * 1024)).toFixed(1);
+            const totalMB = (e.total / (1024 * 1024)).toFixed(1);
+            const speedMBs = (speed / (1024 * 1024)).toFixed(1);
+            
+            // Format remaining time
+            const remainingText = remaining < 60 
+              ? `~${Math.ceil(remaining)}s left`
+              : `~${Math.ceil(remaining / 60)}m left`;
+            
+            elements.progressText.textContent = `${loadedMB} / ${totalMB} MB • ${speedMBs} MB/s • ${remainingText}`;
           }
         });
 
         xhr.addEventListener('load', () => {
           if (xhr.status >= 200 && xhr.status < 300) {
+            const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+            const totalMB = (fileSize / (1024 * 1024)).toFixed(1);
+            elements.progressText.textContent = `✓ ${totalMB} MB uploaded in ${duration}s`;
             resolve({ fileUrl: intentData.publicUrl });
           } else {
             reject(new Error(`Bunny upload failed (${xhr.status})`));
@@ -824,6 +846,9 @@
      * Upload to R2 (Presigned PUT)
      */
     async uploadToR2(file, intentData, elements) {
+      const startTime = Date.now();
+      const fileSize = file.size;
+      
       return new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
 
@@ -831,12 +856,31 @@
           if (e.lengthComputable) {
             const percent = 15 + ((e.loaded / e.total) * 60);
             elements.progressFill.style.width = `${percent}%`;
-            elements.progressText.textContent = `Uploading... ${Math.round((e.loaded / e.total) * 100)}%`;
+            
+            // Calculate speed and remaining time
+            const elapsed = (Date.now() - startTime) / 1000;
+            const speed = elapsed > 0 ? e.loaded / elapsed : 0;
+            const remaining = speed > 0 ? (e.total - e.loaded) / speed : 0;
+            
+            // Format sizes
+            const loadedMB = (e.loaded / (1024 * 1024)).toFixed(1);
+            const totalMB = (e.total / (1024 * 1024)).toFixed(1);
+            const speedMBs = (speed / (1024 * 1024)).toFixed(1);
+            
+            // Format remaining time
+            const remainingText = remaining < 60 
+              ? `~${Math.ceil(remaining)}s left`
+              : `~${Math.ceil(remaining / 60)}m left`;
+            
+            elements.progressText.textContent = `${loadedMB} / ${totalMB} MB • ${speedMBs} MB/s • ${remainingText}`;
           }
         });
 
         xhr.addEventListener('load', () => {
           if (xhr.status >= 200 && xhr.status < 300) {
+            const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+            const totalMB = (fileSize / (1024 * 1024)).toFixed(1);
+            elements.progressText.textContent = `✓ ${totalMB} MB uploaded in ${duration}s`;
             resolve({ fileUrl: intentData.publicUrl });
           } else {
             reject(new Error(`R2 upload failed (${xhr.status})`));
@@ -856,6 +900,9 @@
      * Upload to Local Server (POST with FormData)
      */
     async uploadToLocal(file, intentData, elements) {
+      const startTime = Date.now();
+      const fileSize = file.size;
+      
       const formData = new FormData();
       formData.append('file', file);
       formData.append('key', intentData.key);
@@ -869,12 +916,31 @@
           if (e.lengthComputable) {
             const percent = 15 + ((e.loaded / e.total) * 60);
             elements.progressFill.style.width = `${percent}%`;
-            elements.progressText.textContent = `Uploading... ${Math.round((e.loaded / e.total) * 100)}%`;
+            
+            // Calculate speed and remaining time
+            const elapsed = (Date.now() - startTime) / 1000;
+            const speed = elapsed > 0 ? e.loaded / elapsed : 0;
+            const remaining = speed > 0 ? (e.total - e.loaded) / speed : 0;
+            
+            // Format sizes
+            const loadedMB = (e.loaded / (1024 * 1024)).toFixed(1);
+            const totalMB = (e.total / (1024 * 1024)).toFixed(1);
+            const speedMBs = (speed / (1024 * 1024)).toFixed(1);
+            
+            // Format remaining time
+            const remainingText = remaining < 60 
+              ? `~${Math.ceil(remaining)}s left`
+              : `~${Math.ceil(remaining / 60)}m left`;
+            
+            elements.progressText.textContent = `${loadedMB} / ${totalMB} MB • ${speedMBs} MB/s • ${remainingText}`;
           }
         });
 
         xhr.addEventListener('load', () => {
           if (xhr.status >= 200 && xhr.status < 300) {
+            const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+            const totalMB = (fileSize / (1024 * 1024)).toFixed(1);
+            elements.progressText.textContent = `✓ ${totalMB} MB uploaded in ${duration}s`;
             resolve();
           } else {
             reject(new Error(`Local upload failed (${xhr.status})`));
