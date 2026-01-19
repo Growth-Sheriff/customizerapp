@@ -32,11 +32,7 @@ const ORDERS_QUERY = `
               currencyCode
             }
           }
-          customer {
-            email
-            firstName
-            lastName
-          }
+          email
           shippingAddress {
             city
             provinceCode
@@ -204,9 +200,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
         fulfillmentStatus: shopifyOrder.displayFulfillmentStatus,
         totalPrice: parseFloat(shopifyOrder.totalPriceSet?.shopMoney?.amount || "0"),
         currency: shopifyOrder.totalPriceSet?.shopMoney?.currencyCode || "USD",
-        customer: shopifyOrder.customer ? {
-          email: shopifyOrder.customer.email,
-          name: `${shopifyOrder.customer.firstName || ""} ${shopifyOrder.customer.lastName || ""}`.trim(),
+        customer: shopifyOrder.email ? {
+          email: shopifyOrder.email,
+          name: "",
         } : null,
         shipping: shopifyOrder.shippingAddress ? {
           city: shopifyOrder.shippingAddress.city,
