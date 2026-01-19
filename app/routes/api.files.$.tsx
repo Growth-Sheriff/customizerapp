@@ -1,5 +1,5 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
-import { readLocalFile, validateLocalFileToken } from "~/lib/storage.server";
+import { readLocalFile, validateLocalFileToken, isBunnyUrl } from "~/lib/storage.server";
 import mime from "mime-types";
 
 /**
@@ -7,6 +7,9 @@ import mime from "mime-types";
  * 
  * WI-004: Serves files from local storage with signed URL token validation
  * Token is HMAC-SHA256 signed and time-limited
+ * 
+ * For Bunny URLs: Redirects to CDN
+ * For Local files: Serves from filesystem
  */
 export async function loader({ params, request }: LoaderFunctionArgs) {
   // Handle CORS preflight
@@ -42,6 +45,22 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
   }
 
   try {
+    // If the key is a Bunny URL or bunny: prefixed, redirect to CDN
+    if (isBunnyUrl(decodedKey) || decodedKey.startsWith('bunny:')) {
+      const cdnUrl = process.env.BUNNY_CDN_URL || 'https://customizerappdev.b-cdn.net';
+      let redirectUrl: string;
+      
+      if (decodedKey.startsWith('http')) {
+        redirectUrl = decodedKey;
+      } else {
+        const cleanKey = decodedKey.replace('bunny:', '');
+        redirectUrl = `${cdnUrl}/${cleanKey}`;
+      }
+      
+      return Response.redirect(redirectUrl, 302);
+    }
+
+    // Otherwise serve from local storage
     const buffer = await readLocalFile(decodedKey);
     
     // Determine content type from file extension

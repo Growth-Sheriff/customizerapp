@@ -1,7 +1,7 @@
 # 3D Customizer – Project Rules & Fixed Principles (MASTER DOCUMENT)
 
-> **Version:** 3.1.0  
-> **Last Updated:** December 21, 2025  
+> **Version:** 3.3.0  
+> **Last Updated:** January 19, 2026  
 > **Project:** 3D Customizer - DTF/Print Customizer Shopify App  
 > **Domain:** customizerapp.dev
 
@@ -377,7 +377,219 @@ Sorun çıkarsa:
 
 ---
 
-## 📌 Final Note
+## �️ Multi-Storage Implementasyonu - BEYİN CERRAHİSİ KURALLARI
+
+> **Version:** 1.0.0  
+> **Status:** ACTIVE SURGERY  
+> **Principle:** MARKDOWN DOKÜMANA %100 SADIK KAL - ASLA SAPMA YOK
+
+### 🎯 Operasyon Kapsamı
+
+3 farklı storage provider desteği eklenmesi:
+- **Bunny.net** (PRIMARY) - CDN tabanlı, hızlı, ucuz
+- **Local** (FALLBACK) - Sunucu filesystem
+- **R2** (OPTIONAL) - Cloudflare S3-uyumlu
+
+### ⚠️ MUTLAK OPERASYON KURALLARI
+
+Bu kurallar **BEYİN CERRAHİSİ** hassasiyetinde uygulanacaktır:
+
+| Kural | Açıklama | Ceza |
+|-------|----------|------|
+| **ASLA KISALTMA** | Kod bloklarını `...` ile kısaltma | ❌ OPERASYON İPTAL |
+| **ASLA ATLAMA** | Hiçbir dosya/satır atlanamaz | ❌ OPERASYON İPTAL |
+| **ASLA EKSİLTME** | Dokümandaki her satır uygulanmalı | ❌ OPERASYON İPTAL |
+| **ASLA DURAKSAMA** | Yarıda bırakma yok | ❌ OPERASYON İPTAL |
+| **ASLA STATİK KOD** | Hardcoded değer yasak | ❌ OPERASYON İPTAL |
+| **MARKDOWN'A SADIK KAL** | MULTI_STORAGE_IMPLEMENTATION.md referans | ❌ OPERASYON İPTAL |
+
+### 📋 REFERANS DOKÜMAN
+
+**MULTI_STORAGE_IMPLEMENTATION.md** dosyası tek kaynak (single source of truth):
+- FAZ 1-8 tüm değişiklikleri içerir
+- Her kod bloğu TAMAMEN kopyalanmalı
+- Satır numaraları ve dosya yolları kesin
+
+### 🔴 YASAKLAR - ASLA YAPILMAYACAKLAR
+
+```
+❌ // ... existing code ...     → YASAK! Tam kod yazılacak
+❌ // ... rest of file ...      → YASAK! Tam kod yazılacak  
+❌ // implementation here       → YASAK! Tam implementasyon
+❌ /* omitted for brevity */    → YASAK! Hiçbir şey atlanmaz
+❌ // TODO: implement           → YASAK! Şimdi implement et
+❌ // similar to above          → YASAK! Her şey explicit
+❌ Yarım bırakıp "devam?" demek → YASAK! Bitene kadar devam
+❌ "Geri kalan aynı" demek      → YASAK! Her satır yazılacak
+```
+
+### ✅ ZORUNLU DAVRANIŞLAR
+
+```
+✅ Her fonksiyon TAMAMEN yazılacak
+✅ Her import EXPLICIT olacak
+✅ Her config değeri ENV'den gelecek
+✅ Her hata DETAYLI loglanacak
+✅ Her dosya BAŞTAN SONA yazılacak
+✅ Markdown'daki kod bloğu BİREBİR kopyalanacak
+✅ Hiçbir satır atlanmayacak, kısaltılmayacak
+✅ İşlem bitene kadar durmak yok
+```
+
+### 📁 DEĞİŞECEK DOSYALAR (TAM LİSTE)
+
+**FAZ 1: Core Library**
+| Dosya | Eylem | Satır |
+|-------|-------|-------|
+| `app/lib/storage.server.ts` | REWRITE | ~350 |
+
+**FAZ 2-6: API Routes**
+| Dosya | Eylem | Satır |
+|-------|-------|-------|
+| `app/routes/api.upload.intent.tsx` | UPDATE | ~50 |
+| `app/routes/api.upload.complete.tsx` | UPDATE | ~30 |
+| `app/routes/api.upload.status.$id.tsx` | UPDATE | ~40 |
+
+**FAZ 4: Theme Extension**
+| Dosya | Eylem | Satır |
+|-------|-------|-------|
+| `extensions/theme-extension/assets/dtf-uploader.js` | UPDATE | ~60 |
+| `extensions/theme-extension/assets/tshirt-modal.js` | UPDATE | ~60 |
+| `extensions/theme-extension/assets/product-bar-upload.js` | UPDATE | ~60 |
+| `extensions/theme-extension/assets/carousel-upload.js` | UPDATE | ~60 |
+| `theme-snippets/snippets/dtf-quick-upload-btn.liquid` | UPDATE | ~60 |
+
+**FAZ 5: Environment**
+| Dosya | Eylem | Satır |
+|-------|-------|-------|
+| `.env` | ADD | ~10 |
+| `.env.example` | ADD | ~10 |
+
+**FAZ 7: Migration**
+| Dosya | Eylem | Satır |
+|-------|-------|-------|
+| `scripts/migrate-to-bunny.ts` | CREATE | ~150 |
+
+**FAZ 8: FuncLib Discovered (CRITICAL)**
+| Dosya | Eylem | Satır |
+|-------|-------|-------|
+| `workers/preflight.worker.ts` | UPDATE | ~80 |
+| `workers/export.worker.ts` | UPDATE | ~60 |
+| `app/routes/app.uploads._index.tsx` | UPDATE | ~15 |
+| `app/routes/app.uploads.$id.tsx` | UPDATE | ~15 |
+| `app/routes/app.queue.tsx` | UPDATE | ~15 |
+| `app/routes/app.asset-sets._index.tsx` | UPDATE | ~15 |
+| `app/routes/app.asset-sets.$id.tsx` | UPDATE | ~15 |
+| `app/routes/api.v1.exports.$id.tsx` | UPDATE | ~15 |
+| `app/routes/api.asset-sets.$id.tsx` | UPDATE | ~15 |
+| `app/routes/api.gdpr.shop.redact.tsx` | UPDATE | ~15 |
+| `app/routes/api.files.$.tsx` | UPDATE | ~30 |
+| `app/routes/api.upload.file.$id.tsx` | UPDATE | ~30 |
+| `app/routes/api.storage.preview.$.tsx` | UPDATE | ~30 |
+
+**TOPLAM:** ~24 dosya, ~1110 satır değişiklik
+
+### 🔒 Bunny.net Credentials
+
+```env
+BUNNY_STORAGE_ZONE=customizerappdev
+BUNNY_API_KEY=28f55d96-a471-431c-b9bfa4d25247-3d0d-47e6
+BUNNY_CDN_URL=https://customizerappdev.b-cdn.net
+BUNNY_STORAGE_URL=https://storage.bunnycdn.com
+```
+
+### 📊 Storage Provider Seçimi
+
+```typescript
+// Database'den okunacak - HARDCODE YASAK
+const provider = shop.storageProvider; // 'bunny' | 'local' | 'r2'
+```
+
+### 🧪 Test Kriterleri
+
+Her FAZ sonrası bu testler PASS olmalı:
+
+| Test | Komut | Beklenen |
+|------|-------|----------|
+| Bunny Upload | `curl PUT bunny-url` | 201 |
+| Bunny Download | `curl GET cdn-url` | 200 + file |
+| Local Fallback | Bunny down iken | Local'a yaz |
+| 5GB Upload | Büyük dosya | Timeout yok |
+| Thumbnail | Bunny Optimizer | WebP dönsün |
+
+### 🔄 Operasyon Sırası
+
+```
+1. MULTI_STORAGE_IMPLEMENTATION.md oku (REFERANS)
+2. FAZ 1: storage.server.ts TAMAMEN yeniden yaz
+3. FAZ 2: api.upload.intent.tsx güncelle
+4. FAZ 3: api.upload.status.$id.tsx güncelle
+5. FAZ 4: Theme JS dosyaları (5 adet) güncelle
+6. FAZ 5: .env değişkenleri ekle
+7. FAZ 6: api.upload.complete.tsx güncelle
+8. FAZ 7: Migration script oluştur
+9. FAZ 8: FuncLib discovered dosyalar (13 adet) güncelle
+10. TEST: Tüm akışları doğrula
+```
+
+### ⚡ Hata Durumunda
+
+Herhangi bir hata olursa:
+1. **DURMA** - Devam et, hatayı logla
+2. **ROLLBACK YOK** - İleri git
+3. **MARKDOWN'A DÖN** - Referansa bak
+4. **TAM KOD YAZ** - Kısaltma yok
+
+### 📝 Kod Yazım Standartları
+
+```typescript
+// ✅ DOĞRU - Tam fonksiyon
+export async function uploadToBunny(
+  buffer: Buffer,
+  key: string,
+  contentType: string
+): Promise<BunnyUploadResult> {
+  const url = `${BUNNY_STORAGE_URL}/${BUNNY_STORAGE_ZONE}/${key}`;
+  
+  const response = await fetch(url, {
+    method: 'PUT',
+    headers: {
+      'AccessKey': BUNNY_API_KEY,
+      'Content-Type': contentType,
+    },
+    body: buffer,
+  });
+  
+  if (!response.ok) {
+    throw new Error(`Bunny upload failed: ${response.status}`);
+  }
+  
+  return {
+    success: true,
+    cdnUrl: `${BUNNY_CDN_URL}/${key}`,
+    storageUrl: url,
+  };
+}
+
+// ❌ YANLIŞ - Kısaltılmış
+export async function uploadToBunny(buffer, key, contentType) {
+  // ... implementation
+}
+```
+
+### 🎯 Başarı Kriteri
+
+Operasyon BAŞARILI sayılır eğer:
+1. ✅ Tüm 24 dosya güncellenmiş
+2. ✅ ~1110 satır kod yazılmış
+3. ✅ Hiçbir kısaltma/atlama yok
+4. ✅ Tüm testler geçiyor
+5. ✅ Build başarılı
+6. ✅ Upload akışı çalışıyor
+
+---
+
+## �📌 Final Note
 
 This document is **binding** for all development, deployment, and AI assistance.
 
@@ -385,8 +597,9 @@ Any implementation violating these rules must be **rejected immediately**.
 
 ---
 
-*Version: 3.2.0 | Domain: customizerapp.dev | App: 3D Customizer*
+*Version: 3.3.0 | Domain: customizerapp.dev | App: 3D Customizer*
 *Visitor Identification Rules: v1.0.0 | Status: Active*
+*Multi-Storage Implementation: v1.0.0 | Status: ACTIVE SURGERY*
 
 
 # 📚 FuncLib v4 - Kullanım Kılavuzu

@@ -296,7 +296,10 @@ export async function action({ request }: ActionFunctionArgs) {
     const fileName = formData.get("fileName") as string;
     const contentType = formData.get("contentType") as string;
 
-    const storageConfig = getStorageConfig(shop.storageConfig as any);
+    const storageConfig = getStorageConfig({
+      storageProvider: shop.storageProvider,
+      storageConfig: shop.storageConfig as Record<string, string> | null,
+    });
     const key = `${shopDomain}/assets/models/${Date.now()}_${fileName}`;
 
     const { url } = await getUploadSignedUrl(storageConfig, key, contentType, 900);

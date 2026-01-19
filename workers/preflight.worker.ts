@@ -94,6 +94,66 @@ async function uploadLocalFile(storageKey: string, localPath: string): Promise<v
   await fs.copyFile(localPath, destPath);
 }
 
+// Download file from Bunny.net CDN
+async function downloadFromBunny(storageKey: string, localPath: string): Promise<void> {
+  const cdnUrl = process.env.BUNNY_CDN_URL || 'https://customizerappdev.b-cdn.net';
+  
+  // Build URL - handle bunny: prefix and http URLs
+  let url: string;
+  if (storageKey.startsWith('http://') || storageKey.startsWith('https://')) {
+    url = storageKey;
+  } else if (storageKey.startsWith('bunny:')) {
+    url = `${cdnUrl}/${storageKey.replace('bunny:', '')}`;
+  } else {
+    url = `${cdnUrl}/${storageKey}`;
+  }
+  
+  console.log(`[Preflight] Downloading from Bunny CDN: ${url}`);
+  
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to download from Bunny: ${response.status} ${response.statusText}`);
+  }
+  
+  const buffer = Buffer.from(await response.arrayBuffer());
+  await fs.writeFile(localPath, buffer);
+}
+
+// Upload file to Bunny.net storage
+async function uploadToBunny(storageKey: string, localPath: string, contentType: string): Promise<void> {
+  const zone = process.env.BUNNY_STORAGE_ZONE || 'customizerappdev';
+  const apiKey = process.env.BUNNY_API_KEY || '';
+  
+  // Remove bunny: prefix if present
+  const key = storageKey.startsWith('bunny:') ? storageKey.replace('bunny:', '') : storageKey;
+  const url = `https://storage.bunnycdn.com/${zone}/${key}`;
+  
+  console.log(`[Preflight] Uploading to Bunny storage: ${url}`);
+  
+  const content = await fs.readFile(localPath);
+  
+  const response = await fetch(url, {
+    method: 'PUT',
+    headers: {
+      'AccessKey': apiKey,
+      'Content-Type': contentType,
+    },
+    body: content,
+  });
+  
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => '');
+    throw new Error(`Failed to upload to Bunny: ${response.status} ${response.statusText} - ${errorText}`);
+  }
+}
+
+// Check if storage key is a Bunny URL or key
+function isBunnyStorage(storageKey: string): boolean {
+  return storageKey.startsWith('bunny:') ||
+    storageKey.includes('.b-cdn.net') ||
+    storageKey.includes('bunnycdn.com');
+}
+
 // Download file from storage (S3/R2)
 async function downloadFile(client: S3Client, key: string, localPath: string): Promise<void> {
   const bucket = process.env.R2_BUCKET_NAME || process.env.S3_BUCKET_NAME || "product-3d-customizer";
@@ -175,7 +235,10 @@ const preflightWorker = new Worker<PreflightJobData>(
       const ext = path.extname(storageKey) || ".tmp";
       const originalPath = path.join(tempDir, `original${ext}`);
       
-      if (storageProvider === "local") {
+      // Check for Bunny storage first (bunny: prefix or CDN URL)
+      if (storageProvider === "bunny" || isBunnyStorage(storageKey)) {
+        await downloadFromBunny(storageKey, originalPath);
+      } else if (storageProvider === "local") {
         await downloadLocalFile(storageKey, originalPath);
       } else {
         const client = getStorageClient(storageProvider);
@@ -249,7 +312,9 @@ const preflightWorker = new Worker<PreflightJobData>(
 
       // Upload thumbnail
       const thumbnailKey = storageKey.replace(/\.[^.]+$/, "_thumb.webp");
-      if (storageProvider === "local") {
+      if (storageProvider === "bunny") {
+        await uploadToBunny(thumbnailKey, thumbnailPath, "image/webp");
+      } else if (storageProvider === "local") {
         await uploadLocalFile(thumbnailKey, thumbnailPath);
       } else if (client) {
         await uploadFile(client, thumbnailKey, thumbnailPath, "image/webp");

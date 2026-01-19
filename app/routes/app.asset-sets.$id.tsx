@@ -48,7 +48,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   let modelUrl = (schema.model as any)?.source || "";
   if (modelUrl && !modelUrl.startsWith("http") && !modelUrl.startsWith("default_")) {
     try {
-      const storageConfig = getStorageConfig(shop.storageConfig as any);
+      const storageConfig = getStorageConfig({
+        storageProvider: shop.storageProvider,
+        storageConfig: shop.storageConfig as Record<string, string> | null,
+      });
       modelUrl = await getDownloadSignedUrl(storageConfig, modelUrl, 3600);
     } catch (e) {
       console.error("Failed to get model URL:", e);

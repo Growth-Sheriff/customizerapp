@@ -1,5 +1,5 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
-import { readLocalFile } from "~/lib/storage.server";
+import { readLocalFile, isBunnyUrl } from "~/lib/storage.server";
 import { authenticate } from "~/shopify.server";
 
 /**
@@ -8,6 +8,9 @@ import { authenticate } from "~/shopify.server";
  * Protected endpoint - requires admin authentication
  * Serves files from local storage with proper caching headers.
  * For thumbnails and preview images in the admin panel.
+ * 
+ * For Bunny storage: Redirects to CDN
+ * For Local storage: Serves from filesystem
  * 
  * The key is URL-encoded and can contain slashes.
  */
@@ -30,7 +33,22 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
       return new Response("Missing key", { status: 400 });
     }
 
-    // Local storage only
+    // If key is a Bunny URL or bunny: prefixed, redirect to CDN
+    if (isBunnyUrl(key) || key.startsWith('bunny:')) {
+      const cdnUrl = process.env.BUNNY_CDN_URL || 'https://customizerappdev.b-cdn.net';
+      let redirectUrl: string;
+      
+      if (key.startsWith('http')) {
+        redirectUrl = key;
+      } else {
+        const cleanKey = key.replace('bunny:', '');
+        redirectUrl = `${cdnUrl}/${cleanKey}`;
+      }
+      
+      return Response.redirect(redirectUrl, 302);
+    }
+
+    // Local storage
     try {
       const data = await readLocalFile(key);
       const contentType = getContentType(key);

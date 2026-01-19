@@ -55,8 +55,61 @@ function getBucketName(): string {
   return process.env.R2_BUCKET_NAME || process.env.S3_BUCKET_NAME || "product-3d-customizer";
 }
 
-// Download file from storage
-async function downloadFileFromStorage(key: string, localPath: string): Promise<void> {
+// Check if storage key is a Bunny URL or key
+function isBunnyStorage(storageKey: string): boolean {
+  return storageKey.startsWith('bunny:') ||
+    storageKey.includes('.b-cdn.net') ||
+    storageKey.includes('bunnycdn.com');
+}
+
+// Download file from Bunny.net CDN
+async function downloadFromBunny(storageKey: string, localPath: string): Promise<void> {
+  const cdnUrl = process.env.BUNNY_CDN_URL || 'https://customizerappdev.b-cdn.net';
+  
+  // Build URL - handle bunny: prefix and http URLs
+  let url: string;
+  if (storageKey.startsWith('http://') || storageKey.startsWith('https://')) {
+    url = storageKey;
+  } else if (storageKey.startsWith('bunny:')) {
+    url = `${cdnUrl}/${storageKey.replace('bunny:', '')}`;
+  } else {
+    url = `${cdnUrl}/${storageKey}`;
+  }
+  
+  console.log(`[Export Worker] Downloading from Bunny CDN: ${url}`);
+  
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to download from Bunny: ${response.status} ${response.statusText}`);
+  }
+  
+  const buffer = Buffer.from(await response.arrayBuffer());
+  await fs.writeFile(localPath, buffer);
+}
+
+// Download file from local storage
+async function downloadFromLocal(storageKey: string, localPath: string): Promise<void> {
+  const uploadsDir = process.env.LOCAL_UPLOAD_DIR || join(process.cwd(), 'uploads');
+  const sourcePath = join(uploadsDir, storageKey);
+  const content = await fs.readFile(sourcePath);
+  await fs.writeFile(localPath, content);
+}
+
+// Download file from storage (supports Bunny, Local, S3/R2)
+async function downloadFileFromStorage(key: string, localPath: string, storageProvider?: string): Promise<void> {
+  // Check if it's a Bunny URL/key
+  if (isBunnyStorage(key)) {
+    await downloadFromBunny(key, localPath);
+    return;
+  }
+  
+  // Check if local storage (explicit provider or no R2 config)
+  if (storageProvider === 'local' || (!key.startsWith('http') && !process.env.R2_BUCKET_NAME)) {
+    await downloadFromLocal(key, localPath);
+    return;
+  }
+  
+  // S3/R2 storage
   const client = getStorageClient();
   const bucket = getBucketName();
 
@@ -153,7 +206,11 @@ async function processExportJob(job: Job<ExportJobData>) {
       throw new Error("Shop not found");
     }
 
-    const storageConfig = getStorageConfig(shop.storageConfig as any);
+    const storageConfig = getStorageConfig({
+      storageProvider: shop.storageProvider,
+      storageConfig: shop.storageConfig as Record<string, string> | null,
+    });
+    const storageProvider = shop.storageProvider || 'local';
 
     // Get uploads with items
     const uploads = await prisma.upload.findMany({
@@ -215,7 +272,7 @@ async function processExportJob(job: Job<ExportJobData>) {
             try {
               // Download original file from storage to temp
               const localFilePath = join(tempDir, `temp_${item.id}`);
-              await downloadFileFromStorage(item.storageKey, localFilePath);
+              await downloadFileFromStorage(item.storageKey, localFilePath, storageProvider);
               const fileBuffer = await fs.readFile(localFilePath);
 
               // Determine file extension

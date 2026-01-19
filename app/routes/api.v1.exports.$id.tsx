@@ -83,7 +83,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     // Check if it's a storage key (not a full URL)
     if (!exportRecord.downloadUrl.startsWith("http")) {
       try {
-        const storageConfig = getStorageConfig(shop.storageConfig as any);
+        const storageConfig = getStorageConfig({
+          storageProvider: shop.storageProvider,
+          storageConfig: shop.storageConfig as Record<string, string> | null,
+        });
         downloadUrl = await getDownloadSignedUrl(
           storageConfig,
           exportRecord.downloadUrl,

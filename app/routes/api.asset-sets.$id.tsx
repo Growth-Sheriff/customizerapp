@@ -30,6 +30,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         select: {
           shopDomain: true,
           storageConfig: true,
+          storageProvider: true,
         },
       },
     },
@@ -45,7 +46,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   let modelUrl = (schema.model as any)?.source || "";
   if (modelUrl && !modelUrl.startsWith("http") && !modelUrl.startsWith("default_")) {
     try {
-      const storageConfig = getStorageConfig(assetSet.shop.storageConfig as any);
+      const storageConfig = getStorageConfig({
+        storageProvider: assetSet.shop.storageProvider || 'local',
+        storageConfig: assetSet.shop.storageConfig as Record<string, string> | null,
+      });
       modelUrl = await getDownloadSignedUrl(storageConfig, modelUrl, 3600);
     } catch (e) {
       console.error("Failed to get model URL:", e);

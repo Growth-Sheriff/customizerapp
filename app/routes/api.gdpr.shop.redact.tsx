@@ -29,7 +29,10 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     // Delete files from storage
-    const storageConfig = getStorageConfig(shopRecord.storageConfig as any);
+    const storageConfig = getStorageConfig({
+      storageProvider: shopRecord.storageProvider,
+      storageConfig: shopRecord.storageConfig as Record<string, string> | null,
+    });
     let deletedFiles = 0;
     let failedFiles = 0;
 

@@ -1,6 +1,6 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import prisma from "~/lib/prisma.server";
-import { readLocalFile } from "~/lib/storage.server";
+import { readLocalFile, isBunnyUrl } from "~/lib/storage.server";
 import mime from "mime-types";
 
 /**
@@ -12,7 +12,8 @@ import mime from "mime-types";
  * This endpoint:
  * 1. Looks up the upload by ID
  * 2. Gets the first upload item's storage key
- * 3. Serves the file from local storage
+ * 3. For Bunny storage: Redirects to CDN
+ * 4. For Local storage: Serves from filesystem
  */
 export async function loader({ params, request }: LoaderFunctionArgs) {
   // Handle CORS preflight
@@ -63,6 +64,21 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
         status: 404,
         headers: { "Access-Control-Allow-Origin": "*" },
       });
+    }
+
+    // If storageKey is a Bunny URL or bunny: prefixed, redirect to CDN
+    if (isBunnyUrl(storageKey) || storageKey.startsWith('bunny:')) {
+      const cdnUrl = process.env.BUNNY_CDN_URL || 'https://customizerappdev.b-cdn.net';
+      let redirectUrl: string;
+      
+      if (storageKey.startsWith('http')) {
+        redirectUrl = storageKey;
+      } else {
+        const cleanKey = storageKey.replace('bunny:', '');
+        redirectUrl = `${cdnUrl}/${cleanKey}`;
+      }
+      
+      return Response.redirect(redirectUrl, 302);
     }
 
     // Read file from local storage

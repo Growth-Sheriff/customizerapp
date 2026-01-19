@@ -46,7 +46,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   }
 
   // Generate signed URLs for thumbnails/previews
-  const storageConfig = getStorageConfig(shop.storageConfig as any);
+  const storageConfig = getStorageConfig({
+    storageProvider: shop.storageProvider,
+    storageConfig: shop.storageConfig as Record<string, string> | null,
+  });
   const itemsWithUrls = await Promise.all(
     upload.items.map(async (item) => {
       let thumbnailUrl = null;

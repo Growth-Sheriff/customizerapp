@@ -115,7 +115,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const countsMap = new Map(statusCounts.map((s: { status: string; _count: number }) => [s.status, s._count]));
 
   // Generate signed URLs for thumbnails
-  const storageConfig = getStorageConfig(shop.storageConfig as any);
+  const storageConfig = getStorageConfig({
+    storageProvider: shop.storageProvider,
+    storageConfig: shop.storageConfig as Record<string, string> | null,
+  });
   const uploadsWithThumbnails = await Promise.all(
     uploads.map(async (u) => {
       let thumbnailUrl: string | null = null;
