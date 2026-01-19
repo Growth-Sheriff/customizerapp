@@ -751,6 +751,7 @@
     // 3. Complete upload
     if (progressCallback) progressCallback({ phase: 'complete', percent: 85, text: 'Finalizing...' });
     
+    const uploadDurationMs = Date.now() - uploadStartTime;
     const completeResponse = await fetch(`${apiBase}/api/upload/complete`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -761,7 +762,8 @@
           itemId,
           location: 'front',
           fileUrl: publicUrl || null,
-          storageProvider: storageProvider || 'local'
+          storageProvider: storageProvider || 'local',
+          uploadDurationMs: uploadDurationMs
         }]
       })
     });
@@ -771,7 +773,7 @@
     }
 
     // Calculate total upload duration
-    const uploadDuration = ((Date.now() - uploadStartTime) / 1000).toFixed(1);
+    const uploadDuration = (uploadDurationMs / 1000).toFixed(1);
     
     if (progressCallback) progressCallback({ phase: 'done', percent: 100, text: `Uploaded in ${uploadDuration}s` });
 

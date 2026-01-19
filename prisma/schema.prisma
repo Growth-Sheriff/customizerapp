@@ -194,6 +194,7 @@ model UploadItem {
   originalName    String?  @map("original_name")
   mimeType        String?  @map("mime_type")
   fileSize        Int?     @map("file_size")
+  uploadDurationMs Int?    @map("upload_duration_ms") // Upload time in milliseconds
   transform       Json?    @map("transform_json") // scale, rotation, position
   preflightStatus String   @default("pending") @map("preflight_status") // pending, ok, warning, error
   preflightResult Json?    @map("preflight_result_json")

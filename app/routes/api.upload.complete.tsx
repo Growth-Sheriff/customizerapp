@@ -127,6 +127,11 @@ export async function action({ request }: ActionFunctionArgs) {
           transform: item.transform || null,
         };
         
+        // Upload duration in milliseconds (from client)
+        if (item.uploadDurationMs && typeof item.uploadDurationMs === 'number') {
+          updateData.uploadDurationMs = Math.round(item.uploadDurationMs);
+        }
+        
         // MULTI-STORAGE: Handle different storage providers
         const provider = item.storageProvider || 'local';
         

@@ -1171,6 +1171,7 @@ console.log('[ULTShirtModal] Script loading...');
         progressCallback({ phase: 'complete', percent: 100, text: 'Finalizing...' });
       }
       
+      const uploadDurationMs = Date.now() - uploadStartTime;
       const completeRes = await fetch(`${apiBase}/api/upload/complete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1181,7 +1182,8 @@ console.log('[ULTShirtModal] Script loading...');
             itemId,
             location: 'front',
             fileUrl: publicUrl || null,
-            storageProvider: storageProvider || 'local'
+            storageProvider: storageProvider || 'local',
+            uploadDurationMs: uploadDurationMs
           }]
         })
       });
@@ -1192,7 +1194,7 @@ console.log('[ULTShirtModal] Script loading...');
       }
       
       // Calculate upload duration
-      const uploadDuration = ((Date.now() - uploadStartTime) / 1000).toFixed(1);
+      const uploadDuration = (uploadDurationMs / 1000).toFixed(1);
       
       // Create object URL for preview (NO server fetch needed - avoids 401!)
       const thumbnailUrl = URL.createObjectURL(file);

@@ -58,6 +58,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
             thumbnailKey: true,
             storageKey: true,
             fileSize: true,
+            uploadDurationMs: true,
           },
         },
         visitor: {
@@ -113,6 +114,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
       // Calculate total file size
       const totalFileSize = u.items.reduce((sum, item) => sum + (item.fileSize || 0), 0);
 
+      // Calculate total upload duration (sum of all items)
+      const totalUploadDurationMs = u.items.reduce((sum, item) => sum + (item.uploadDurationMs || 0), 0);
+
       // Build UTM info
       const utmInfo = u.session ? {
         source: u.session.utmSource,
@@ -141,6 +145,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         itemCount: u.items.length,
         thumbnailUrl,
         totalFileSize,
+        totalUploadDurationMs,
         utmInfo,
         visitorInfo,
         preflightStatus: u.items.some(i => i.preflightStatus === "error")
@@ -212,6 +217,17 @@ function formatBytes(bytes: number): string {
   const sizes = ["B", "KB", "MB", "GB"];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+}
+
+// Format duration (ms to seconds)
+function formatDuration(ms: number): string {
+  if (!ms || ms === 0) return "-";
+  const seconds = ms / 1000;
+  if (seconds < 1) return `${Math.round(ms)}ms`;
+  if (seconds < 60) return `${seconds.toFixed(1)}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = Math.round(seconds % 60);
+  return `${minutes}m ${remainingSeconds}s`;
 }
 
 // UTM Badge component
@@ -361,6 +377,10 @@ export default function UploadsPage() {
     <Text key={`${upload.id}-size`} as="span" variant="bodySm">
       {formatBytes(upload.totalFileSize)}
     </Text>,
+    // Upload Duration
+    <Text key={`${upload.id}-duration`} as="span" variant="bodySm" tone={upload.totalUploadDurationMs > 10000 ? "caution" : "subdued"}>
+      {formatDuration(upload.totalUploadDurationMs)}
+    </Text>,
     // Items
     upload.itemCount,
     // UTM / Source
@@ -458,8 +478,8 @@ export default function UploadsPage() {
                 {/* Table */}
                 {uploads.length > 0 ? (
                   <DataTable
-                    columnContentTypes={["text", "text", "text", "text", "text", "numeric", "text", "text", "text"]}
-                    headings={["Upload", "Mode", "Status", "Quality", "Size", "Items", "Source", "Customer", "Date"]}
+                    columnContentTypes={["text", "text", "text", "text", "text", "text", "numeric", "text", "text", "text"]}
+                    headings={["Upload", "Mode", "Status", "Quality", "Size", "Time", "Items", "Source", "Customer", "Date"]}
                     rows={rows}
                   />
                 ) : (

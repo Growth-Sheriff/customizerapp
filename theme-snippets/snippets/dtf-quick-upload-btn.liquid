@@ -1018,6 +1018,7 @@
       progressText.textContent = 'Processing...';
       
       // Step 3: Complete upload (provider-aware)
+      const uploadDurationMs = Date.now() - startTime;
       const completeResponse = await fetch(`${apiBase}/api/upload/complete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1028,7 +1029,8 @@
             itemId: itemId,
             location: 'front',
             fileUrl: publicUrl || null,
-            storageProvider: storageProvider || 'local'
+            storageProvider: storageProvider || 'local',
+            uploadDurationMs: uploadDurationMs
           }]
         })
       });
