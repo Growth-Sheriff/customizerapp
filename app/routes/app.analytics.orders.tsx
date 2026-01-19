@@ -168,10 +168,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const orderIdsForQuery = uniqueOrderIds.slice(0, 50); // Limit to 50 for performance
     
     if (orderIdsForQuery.length > 0) {
+      // Build proper query: numeric IDs need to be searched individually
+      // Format: "id:123 OR id:456 OR id:789"
+      const queryStr = orderIdsForQuery.map(id => `id:${id}`).join(" OR ");
+      console.log("[Analytics] Shopify orders query:", queryStr);
+      
       const response = await admin.graphql(ORDERS_QUERY, {
         variables: {
           first: 50,
-          query: `id:${orderIdsForQuery.join(" OR id:")}`,
+          query: queryStr,
         },
       });
 

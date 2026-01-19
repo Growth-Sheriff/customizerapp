@@ -74,10 +74,16 @@ export function AppFrame({ shop, pendingUploads = 0, pendingQueue = 0 }: AppFram
             selected: isSelected("/app") && !location.pathname.includes("/app/"),
           },
           {
+            url: "/app/analytics/orders",
+            label: "Orders",
+            icon: OrderIcon,
+            selected: isSelected("/app/analytics/orders"),
+          },
+          {
             url: "/app/analytics",
             label: "Reports",
             icon: ChartVerticalFilledIcon,
-            selected: isSelected("/app/analytics"),
+            selected: isSelected("/app/analytics") && !isSelected("/app/analytics/orders"),
             subNavigationItems: [
               {
                 url: "/app/analytics",
