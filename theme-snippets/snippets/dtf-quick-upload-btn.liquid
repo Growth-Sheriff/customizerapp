@@ -915,32 +915,93 @@
       const intentData = await intentResponse.json();
       const { uploadId, itemId, uploadUrl, storageProvider, uploadHeaders, publicUrl, key } = intentData;
       
-      progressFill.style.width = '30%';
-      progressText.textContent = 'Uploading file...';
+      // Progress tracking variables
+      const startTime = Date.now();
+      const totalBytes = file.size;
       
-      // Step 2: Upload file (provider-aware)
+      progressFill.style.width = '30%';
+      progressText.textContent = 'Uploading... 0%';
+      
+      // Step 2: Upload file with progress tracking (XHR for progress events)
       let uploadResponse;
       if (storageProvider === 'bunny' || storageProvider === 'r2') {
-        // Direct PUT to CDN storage
-        const headers = { 'Content-Type': file.type || 'application/octet-stream' };
-        if (uploadHeaders) {
-          Object.entries(uploadHeaders).forEach(([k, v]) => headers[k] = v);
-        }
-        uploadResponse = await fetch(uploadUrl, {
-          method: 'PUT',
-          headers,
-          body: file
+        // Direct PUT to CDN storage with progress
+        uploadResponse = await new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          
+          xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable) {
+              const percent = Math.round((e.loaded / e.total) * 100);
+              const elapsed = (Date.now() - startTime) / 1000;
+              const speed = elapsed > 0 ? e.loaded / elapsed : 0;
+              const remaining = speed > 0 ? (e.total - e.loaded) / speed : 0;
+              
+              // Update progress bar (30% to 80% range for upload phase)
+              progressFill.style.width = `${Math.min(30 + (percent * 0.5), 80)}%`;
+              
+              const speedMB = (speed / (1024 * 1024)).toFixed(1);
+              const remainingSec = Math.ceil(remaining);
+              
+              if (remainingSec > 60) {
+                progressText.textContent = `Uploading... ${percent}% • ${speedMB} MB/s • ~${Math.ceil(remainingSec/60)}m remaining`;
+              } else if (remainingSec > 0) {
+                progressText.textContent = `Uploading... ${percent}% • ${speedMB} MB/s • ~${remainingSec}s remaining`;
+              } else {
+                progressText.textContent = `Uploading... ${percent}%`;
+              }
+            }
+          };
+          
+          xhr.onload = () => resolve({ ok: xhr.status >= 200 && xhr.status < 300, status: xhr.status });
+          xhr.onerror = () => reject(new Error('Network error during upload'));
+          xhr.ontimeout = () => reject(new Error('Upload timeout'));
+          
+          xhr.open('PUT', uploadUrl);
+          xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+          if (uploadHeaders) {
+            Object.entries(uploadHeaders).forEach(([k, v]) => xhr.setRequestHeader(k, v));
+          }
+          xhr.send(file);
         });
       } else {
-        // Local storage - POST with FormData
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('key', key);
-        formData.append('uploadId', uploadId);
-        formData.append('itemId', itemId);
-        uploadResponse = await fetch(uploadUrl, {
-          method: 'POST',
-          body: formData
+        // Local storage with progress - POST with FormData
+        uploadResponse = await new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          const formData = new FormData();
+          formData.append('file', file);
+          formData.append('key', key);
+          formData.append('uploadId', uploadId);
+          formData.append('itemId', itemId);
+          
+          xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable) {
+              const percent = Math.round((e.loaded / e.total) * 100);
+              const elapsed = (Date.now() - startTime) / 1000;
+              const speed = elapsed > 0 ? e.loaded / elapsed : 0;
+              const remaining = speed > 0 ? (e.total - e.loaded) / speed : 0;
+              
+              // Update progress bar (30% to 80% range for upload phase)
+              progressFill.style.width = `${Math.min(30 + (percent * 0.5), 80)}%`;
+              
+              const speedMB = (speed / (1024 * 1024)).toFixed(1);
+              const remainingSec = Math.ceil(remaining);
+              
+              if (remainingSec > 60) {
+                progressText.textContent = `Uploading... ${percent}% • ${speedMB} MB/s • ~${Math.ceil(remainingSec/60)}m remaining`;
+              } else if (remainingSec > 0) {
+                progressText.textContent = `Uploading... ${percent}% • ${speedMB} MB/s • ~${remainingSec}s remaining`;
+              } else {
+                progressText.textContent = `Uploading... ${percent}%`;
+              }
+            }
+          };
+          
+          xhr.onload = () => resolve({ ok: xhr.status >= 200 && xhr.status < 300, status: xhr.status });
+          xhr.onerror = () => reject(new Error('Network error during upload'));
+          xhr.ontimeout = () => reject(new Error('Upload timeout'));
+          
+          xhr.open('POST', uploadUrl);
+          xhr.send(formData);
         });
       }
       
