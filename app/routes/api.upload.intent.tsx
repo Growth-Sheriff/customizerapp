@@ -1,7 +1,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { nanoid } from "nanoid";
-import { getStorageConfig, getUploadSignedUrl, buildStorageKey } from "~/lib/storage.server";
+import { getStorageConfig, getUploadSignedUrl, buildStorageKey, type UploadUrlResult } from "~/lib/storage.server";
 import { rateLimitGuard, getIdentifier } from "~/lib/rateLimit.server";
 import { checkUploadAllowed } from "~/lib/billing.server";
 import { handleCorsOptions, corsJson } from "~/lib/cors.server";
@@ -197,10 +197,13 @@ export async function action({ request }: ActionFunctionArgs) {
   const uploadId = nanoid(12);
   const itemId = nanoid(8);
 
-  // LOCAL-ONLY STORAGE - No provider selection needed
-  const storageConfig = getStorageConfig();
+  // MULTI-STORAGE: Get config from shop settings
+  const storageConfig = getStorageConfig({
+    storageProvider: shop.storageProvider,
+    storageConfig: shop.storageConfig as Record<string, string> | null,
+  });
   
-  console.log(`[Upload Intent] Shop: ${shopDomain}, Storage: local`);
+  console.log(`[Upload Intent] Shop: ${shopDomain}, Storage: ${storageConfig.provider}`);
 
   // Build storage key
   const key = buildStorageKey(shopDomain, uploadId, itemId, fileName);
@@ -232,20 +235,22 @@ export async function action({ request }: ActionFunctionArgs) {
       },
     });
 
-    // Generate signed upload URL (always local)
-    const { url: uploadUrl, isLocal } = await getUploadSignedUrl(storageConfig, key, contentType);
+    // Generate signed upload URL (provider-aware)
+    const uploadResult: UploadUrlResult = await getUploadSignedUrl(storageConfig, key, contentType);
 
     return corsJson({
       uploadId,
       itemId,
-      uploadUrl,
-      key,
+      uploadUrl: uploadResult.url,
+      key: uploadResult.key,
+      publicUrl: uploadResult.publicUrl,
       fileName,
       fileSize,
       mimeType: contentType,
-      expiresIn: 900, // 15 minutes
-      isLocal: true,
-      storageProvider: "local",
+      expiresIn: 3600, // 1 hour for large files
+      storageProvider: uploadResult.provider,
+      uploadMethod: uploadResult.method,
+      uploadHeaders: uploadResult.headers || {},
     }, request);
   } catch (error) {
     console.error("[Upload Intent] Error:", error);
