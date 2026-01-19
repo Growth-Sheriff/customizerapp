@@ -544,9 +544,15 @@
 <!-- JavaScript - Full API Integration with Event Delegation -->
 <script>
 (function() {
+  console.log('[UL Quick Upload] Script starting...');
+  
   // Prevent multiple initializations
-  if (window.ULQuickUploadInit) return;
+  if (window.ULQuickUploadInit) {
+    console.log('[UL Quick Upload] Already initialized, skipping');
+    return;
+  }
   window.ULQuickUploadInit = true;
+  console.log('[UL Quick Upload] Initializing...');
   
   // Hide all modals function (for theme editor events)
   function hideAllModals() {
@@ -578,14 +584,21 @@
   let isInitializing = false;
   
   function initModals() {
+    console.log('[UL Quick Upload] initModals called');
+    
     // Prevent re-entry during initialization
-    if (isInitializing) return;
+    if (isInitializing) {
+      console.log('[UL Quick Upload] Already initializing, skipping');
+      return;
+    }
     isInitializing = true;
     
     // Collect templates first, then process (to avoid mutation during iteration)
     const templates = Array.from(document.querySelectorAll('template[id$="-tpl"]:not([data-moved])'));
+    console.log('[UL Quick Upload] Found templates:', templates.length, templates.map(t => t.id));
     
     if (templates.length === 0) {
+      console.log('[UL Quick Upload] No templates to move');
       isInitializing = false;
       return;
     }
@@ -594,12 +607,14 @@
     if (observer) observer.disconnect();
     
     templates.forEach(tpl => {
+      console.log('[UL Quick Upload] Moving template:', tpl.id);
       // Mark as moved immediately
       tpl.dataset.moved = 'true';
       
       // Clone content and append to body container
       const content = tpl.content.cloneNode(true);
       modalContainer.appendChild(content);
+      console.log('[UL Quick Upload] Template moved to body');
       
       // CRITICAL: Remove original template from section to prevent duplicate modals
       tpl.remove();
@@ -652,10 +667,12 @@
   // Event delegation for all clicks
   document.addEventListener('click', function(e) {
     const target = e.target;
+    console.log('[UL Quick Upload] Click detected on:', target.tagName, target.className);
     
     // Open modal button - highest priority
     const openBtn = target.closest('.ul-quick-btn-trigger');
     if (openBtn) {
+      console.log('[UL Quick Upload] Open button clicked, modal:', openBtn.dataset.modal);
       e.preventDefault();
       e.stopPropagation();
       e.stopImmediatePropagation();
@@ -780,15 +797,22 @@
   let openTimestamp = 0;
   
   function openModal(id) {
+    console.log('[UL Quick Upload] openModal called with id:', id);
+    
     // Don't open modal in Shopify theme editor/preview mode
     if (window.Shopify && window.Shopify.designMode) {
-      console.log('[Upload Lift] Design mode detected, modal disabled');
+      console.log('[UL Quick Upload] Design mode detected, modal disabled');
       return;
     }
     
     const modal = document.getElementById(id);
+    console.log('[UL Quick Upload] Modal element found:', !!modal);
+    
     if (!modal) {
-      console.error('Modal not found:', id);
+      console.error('[UL Quick Upload] Modal not found:', id);
+      // Debug: List all modals in the page
+      const allModals = document.querySelectorAll('.ul-quick-modal');
+      console.log('[UL Quick Upload] All modals in page:', allModals.length, Array.from(allModals).map(m => m.id));
       return;
     }
     
