@@ -178,7 +178,27 @@ export async function loader({ request }: LoaderFunctionArgs) {
       GROUP BY DATE(first_seen_at)
       ORDER BY date ASC
     ` as Promise<Array<{ date: Date; count: bigint }>>,
+
+    // Visitors with add to cart (for funnel)
+    prisma.visitorSession.count({
+      where: {
+        shopId: shop.id,
+        addToCartCount: { gt: 0 },
+      },
+    }),
   ]);
+
+  // Get unique visitors who added to cart
+  const visitorsWithAddToCart = await prisma.visitor.count({
+    where: {
+      shopId: shop.id,
+      sessions: {
+        some: {
+          addToCartCount: { gt: 0 },
+        },
+      },
+    },
+  });
 
   // Calculate metrics
   const returningRate = totalVisitors > 0 
@@ -227,6 +247,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
       date: d.date,
       count: Number(d.count),
     })),
+    // Funnel data
+    funnel: {
+      visitors: totalVisitors,
+      uploaded: visitorsWithUploads,
+      addedToCart: visitorsWithAddToCart,
+      ordered: visitorsWithOrders,
+    },
   });
 }
 
@@ -258,6 +285,8 @@ export default function VisitorAnalytics() {
   const topCountries = "topCountries" in data ? data.topCountries : [];
   const topDevices = "topDevices" in data ? data.topDevices : [];
   const visitors = "visitors" in data ? data.visitors : [];
+  const visitorsByDay = "visitorsByDay" in data ? data.visitorsByDay : [];
+  const funnel = "funnel" in data ? data.funnel : null;
 
   if (!stats || stats.totalVisitors === 0) {
     return (
@@ -388,6 +417,130 @@ export default function VisitorAnalytics() {
             </Box>
           </InlineStack>
         </Layout.Section>
+
+        {/* Conversion Funnel */}
+        {funnel && (
+          <Layout.Section>
+            <Card>
+              <BlockStack gap="400">
+                <Text as="h3" variant="headingMd">
+                  Conversion Funnel
+                </Text>
+                <Divider />
+                <BlockStack gap="300">
+                  {/* Visitors */}
+                  <BlockStack gap="100">
+                    <InlineStack align="space-between">
+                      <Text as="span" fontWeight="semibold">Visitors</Text>
+                      <Text as="span">{funnel.visitors.toLocaleString()} (100%)</Text>
+                    </InlineStack>
+                    <ProgressBar progress={100} tone="primary" size="small" />
+                  </BlockStack>
+
+                  {/* Uploaded Design */}
+                  <BlockStack gap="100">
+                    <InlineStack align="space-between">
+                      <Text as="span" fontWeight="semibold">Uploaded Design</Text>
+                      <Text as="span">
+                        {funnel.uploaded.toLocaleString()} ({funnel.visitors > 0 ? Math.round((funnel.uploaded / funnel.visitors) * 100) : 0}%)
+                      </Text>
+                    </InlineStack>
+                    <ProgressBar 
+                      progress={funnel.visitors > 0 ? (funnel.uploaded / funnel.visitors) * 100 : 0} 
+                      tone="primary" 
+                      size="small" 
+                    />
+                  </BlockStack>
+
+                  {/* Added to Cart */}
+                  <BlockStack gap="100">
+                    <InlineStack align="space-between">
+                      <Text as="span" fontWeight="semibold">Added to Cart</Text>
+                      <Text as="span">
+                        {funnel.addedToCart.toLocaleString()} ({funnel.visitors > 0 ? Math.round((funnel.addedToCart / funnel.visitors) * 100) : 0}%)
+                      </Text>
+                    </InlineStack>
+                    <ProgressBar 
+                      progress={funnel.visitors > 0 ? (funnel.addedToCart / funnel.visitors) * 100 : 0} 
+                      tone="success" 
+                      size="small" 
+                    />
+                  </BlockStack>
+
+                  {/* Completed Order */}
+                  <BlockStack gap="100">
+                    <InlineStack align="space-between">
+                      <Text as="span" fontWeight="semibold">Completed Order</Text>
+                      <Text as="span">
+                        {funnel.ordered.toLocaleString()} ({funnel.visitors > 0 ? Math.round((funnel.ordered / funnel.visitors) * 100) : 0}%)
+                      </Text>
+                    </InlineStack>
+                    <ProgressBar 
+                      progress={funnel.visitors > 0 ? (funnel.ordered / funnel.visitors) * 100 : 0} 
+                      tone="success" 
+                      size="small" 
+                    />
+                  </BlockStack>
+                </BlockStack>
+              </BlockStack>
+            </Card>
+          </Layout.Section>
+        )}
+
+        {/* Visitors Over Time Chart */}
+        {visitorsByDay.length > 0 && (
+          <Layout.Section>
+            <Card>
+              <BlockStack gap="400">
+                <Text as="h3" variant="headingMd">
+                  New Visitors Over Time
+                </Text>
+                <Divider />
+                <Box paddingBlockStart="200">
+                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: '4px', height: '120px' }}>
+                    {visitorsByDay.map((day, i) => {
+                      const maxCount = Math.max(...visitorsByDay.map(d => d.count), 1);
+                      const heightPercent = (day.count / maxCount) * 100;
+                      const dateStr = new Date(day.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                      return (
+                        <div
+                          key={i}
+                          style={{
+                            flex: 1,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            gap: '4px',
+                          }}
+                        >
+                          <Text as="span" variant="bodySm" tone="subdued">
+                            {day.count}
+                          </Text>
+                          <div
+                            style={{
+                              width: '100%',
+                              maxWidth: '40px',
+                              height: `${Math.max(heightPercent, 5)}%`,
+                              backgroundColor: '#2563eb',
+                              borderRadius: '4px 4px 0 0',
+                              minHeight: '4px',
+                            }}
+                            title={`${dateStr}: ${day.count} visitors`}
+                          />
+                          {i % Math.ceil(visitorsByDay.length / 7) === 0 && (
+                            <Text as="span" variant="bodySm" tone="subdued">
+                              {dateStr}
+                            </Text>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </Box>
+              </BlockStack>
+            </Card>
+          </Layout.Section>
+        )}
 
         {/* Top Countries & Devices */}
         <Layout.Section variant="oneHalf">
