@@ -1,10 +1,10 @@
 /**
  * Live Shipping Rates Fetcher
- * Version: 2.1.0 - Fixed Price Normalization (cent vs dolar)
+ * Version: 2.0.0 - Fixed Price Normalization & localStorage Safety
  * 
  * Bu dosya Shopify'dan gerçek zamanlı kargo tarifelerini çeker.
- * DÜZELTMELER v2.1:
- * - Fiyat normalizasyonu düzeltildi (nokta yoksa HER ZAMAN cent)
+ * DÜZELTMELER:
+ * - Fiyat normalizasyonu düzeltildi (99 cent sorunu çözüldü)
  * - localStorage sandbox hatası düzeltildi
  * - Province ZIP'ten otomatik tespit
  */
@@ -32,33 +32,63 @@
   }
 
   // ============================================
-  // PRICE NORMALIZATION - FIXED v2.1
+  // PRICE NORMALIZATION - FIXED
   // ============================================
   /**
-   * Shopify shipping API fiyat formatları:
-   * - "19.00" veya "19.99" → Dolar (string with decimal)
-   * - 1900 veya 1999 → Cent (integer)
-   * - "1900" → Cent (string without decimal)
+   * Shopify API'den gelen fiyatları normalize eder
    * 
-   * KURAL: 
-   * - Nokta varsa → Dolar
-   * - Nokta yoksa → HER ZAMAN Cent olarak kabul et
+   * Shopify tutarsız formatlar döner:
+   * - "12.99" (string, dolar)
+   * - 12.99 (number, dolar)
+   * - 1299 (number, cent)
+   * - "1299" (string, cent)
+   * 
+   * Bu fonksiyon hepsini doğru şekilde işler.
    */
   function normalizePrice(price) {
     if (price === null || price === undefined || price === '') return 0;
     
-    const strPrice = String(price).trim();
-    const numPrice = parseFloat(strPrice);
+    const strPrice = String(price);
+    const numPrice = parseFloat(price);
     
     if (isNaN(numPrice)) return 0;
-    if (numPrice === 0) return 0;
     
-    // Nokta varsa zaten dolar formatında
+    // Eğer string'de nokta varsa, zaten dolar formatında
     if (strPrice.includes('.')) {
       return numPrice;
     }
     
-    // Nokta yoksa - Shopify shipping API HER ZAMAN cent döner
+    // Nokta yoksa:
+    // - 100'den küçükse muhtemelen dolar ($99 gibi nadir bir durum)
+    // - 100 veya daha büyükse cent (Shopify'ın varsayılan cent formatı)
+    // 
+    // Önemli: $99 dolar çok nadirdir, genellikle free shipping veya $9.99 gibi
+    // fiyatlar kullanılır. Ancak güvenli olmak için 1000 eşiğini kullanalım:
+    // - < 1000: Muhtemelen dolar (0-999 arası nadir olsa da mümkün)
+    // - >= 1000: Kesinlikle cent (1000 cent = $10.00)
+    
+    // Daha güvenli yaklaşım: 4 haneli ve üstü sayıları cent kabul et
+    if (numPrice >= 1000) {
+      return numPrice / 100;
+    }
+    
+    // 3 haneli sayılar (100-999): Belirsiz, ama genellikle cent
+    // $5.00 = 500 cent, $9.99 = 999 cent
+    // $1.00 - $9.99 arası çok yaygın
+    if (numPrice >= 100) {
+      return numPrice / 100;
+    }
+    
+    // 2 haneli ve altı (0-99): 
+    // Bu ya çok düşük cent ($0.99 = 99 cent) 
+    // ya da nadir bir dolar değeri ($5, $10 gibi)
+    // Shopify genelde cent kullandığı için cent kabul edelim
+    // ANCAK free shipping (0) özel durum
+    if (numPrice === 0) {
+      return 0;
+    }
+    
+    // 1-99 arası: Muhtemelen cent
     return numPrice / 100;
   }
 

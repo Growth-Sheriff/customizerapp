@@ -1,13 +1,13 @@
 /**
  * Delivery Badge UI Component
- * Version: 2.1.0 - Added Holidays & International Support
+ * Version: 2.0.0 - Fixed GeoIP Fallback & localStorage Safety
  * 
  * Bu dosya teslimat tarihini gösteren badge UI'ını yönetir.
- * DÜZELTMELER v2.1:
- * - US Federal Holidays eklendi (2025-2027)
- * - Ship date hesaplaması düzeltildi (cutoff + processing + holidays)
- * - ABD dışı lokasyonlar için uyarı eklendi
- * - International badge render eklendi
+ * DÜZELTMELER:
+ * - Province fallback düzeltildi (customerLocation null durumu)
+ * - GeoIP çağrısı cache'lendi (gereksiz çağrılar engellendi)
+ * - localStorage sandbox hatası düzeltildi
+ * - Country formatı standardize edildi
  */
 
 (function() {
@@ -160,20 +160,6 @@
   // ============================================
   // DATE CALCULATIONS
   // ============================================
-  
-  // US Federal Holidays (2025-2027)
-  const US_HOLIDAYS = [
-    // 2025
-    '2025-01-01', '2025-01-20', '2025-02-17', '2025-05-26', '2025-07-04',
-    '2025-09-01', '2025-10-13', '2025-11-11', '2025-11-27', '2025-12-25',
-    // 2026
-    '2026-01-01', '2026-01-19', '2026-02-16', '2026-05-25', '2026-07-03',
-    '2026-07-04', '2026-09-07', '2026-10-12', '2026-11-11', '2026-11-26', '2026-12-25',
-    // 2027
-    '2027-01-01', '2027-01-18', '2027-02-15', '2027-05-31', '2027-07-05',
-    '2027-09-06', '2027-10-11', '2027-11-11', '2027-11-25', '2027-12-24', '2027-12-25'
-  ];
-
   function getETHour() {
     try {
       const options = { timeZone: CONFIG.timezone, hour: 'numeric', hour12: false };
@@ -192,41 +178,18 @@
     return day === 0 || day === 6;
   }
 
-  function isHoliday(date) {
-    const dateStr = date.toISOString().split('T')[0];
-    return US_HOLIDAYS.includes(dateStr);
-  }
-
-  function isBusinessDay(date) {
-    return !isWeekend(date) && !isHoliday(date);
-  }
-
-  /**
-   * Get ship date considering cutoff, weekends, and holidays
-   */
-  function getShipDate() {
-    let shipDate = new Date();
-    
-    // If past cutoff, start from tomorrow
-    if (isPastCutoff()) {
-      shipDate.setDate(shipDate.getDate() + 1);
-    }
-    
-    // Skip weekends and holidays
-    while (!isBusinessDay(shipDate)) {
-      shipDate.setDate(shipDate.getDate() + 1);
-    }
-    
-    return shipDate;
-  }
-
   function addBusinessDays(startDate, days) {
     const result = new Date(startDate);
     let added = 0;
     
+    // If past cutoff, start from tomorrow
+    if (isPastCutoff()) {
+      result.setDate(result.getDate() + 1);
+    }
+    
     while (added < days) {
       result.setDate(result.getDate() + 1);
-      if (isBusinessDay(result)) {
+      if (!isWeekend(result)) {
         added++;
       }
     }
@@ -295,30 +258,12 @@
       const response = await fetch('https://ipapi.co/json/', { timeout: 3000 });
       if (response.ok) {
         const data = await response.json();
-        
-        // ABD dışı ülke kontrolü
-        if (data.country_code && data.country_code !== 'US') {
-          const location = {
-            zip: null,
-            state: null,
-            city: data.city,
-            country: data.country_code,
-            countryName: data.country_name,
-            isInternational: true,
-            source: 'geoip'
-          };
-          customerLocation = location;
-          setCachedGeoIP(location);
-          return location;
-        }
-        
         if (data.country_code === 'US' && data.postal) {
           const location = {
             zip: data.postal,
             state: data.region_code || getStateFromZip(data.postal),
             city: data.city,
             country: 'US',
-            isInternational: false,
             source: 'geoip'
           };
           customerLocation = location;
@@ -368,14 +313,11 @@
     const zone = getZone(state);
     const baseDays = getBaseDaysForZone(zone);
     
-    // Processing time (1 day) + Transit time
-    const processingDays = 1;
-    const totalDays = processingDays + baseDays;
+    // Add processing time (1 day)
+    const totalDays = baseDays + 1;
     
-    // Start from ship date (handles cutoff, weekends, holidays)
-    const shipDate = getShipDate();
-    const minDate = addBusinessDays(shipDate, baseDays);
-    const maxDate = addBusinessDays(shipDate, baseDays + 1);
+    const minDate = addBusinessDays(new Date(), totalDays);
+    const maxDate = addBusinessDays(new Date(), totalDays + 1);
     
     return {
       zone,
@@ -400,28 +342,6 @@
   // ============================================
   function renderDeliveryBadge(container, options = {}) {
     if (!container) return;
-    
-    // Check if international location
-    if (customerLocation && customerLocation.isInternational) {
-      const html = `
-        <div class="delivery-badge delivery-badge--international">
-          <div class="delivery-badge__icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10"/>
-              <line x1="2" y1="12" x2="22" y2="12"/>
-              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-            </svg>
-          </div>
-          <div class="delivery-badge__content">
-            <div class="delivery-badge__label">International Shipping</div>
-            <div class="delivery-badge__date">${customerLocation.city || customerLocation.countryName || 'International'}</div>
-            <div class="delivery-badge__note">Contact us for shipping rates to ${customerLocation.countryName || 'your country'}</div>
-          </div>
-        </div>
-      `;
-      container.innerHTML = html;
-      return { isInternational: true, location: customerLocation };
-    }
     
     const estimate = calculateDeliveryEstimate(options);
     
