@@ -192,6 +192,36 @@ export async function action({ request }: ActionFunctionArgs) {
       items: upload.items.map((i: { location: string }) => ({ location: i.location })),
     });
 
+    // 📊 Update visitor and session metrics if linked
+    if (upload.visitorId) {
+      try {
+        // Increment visitor's total uploads
+        await prisma.visitor.update({
+          where: { id: upload.visitorId },
+          data: {
+            totalUploads: { increment: 1 },
+            lastSeenAt: new Date(),
+          },
+        });
+        
+        // Increment session's uploads count if session exists
+        if (upload.sessionId) {
+          await prisma.visitorSession.update({
+            where: { id: upload.sessionId },
+            data: {
+              uploadsInSession: { increment: 1 },
+              lastActivityAt: new Date(),
+            },
+          });
+        }
+        
+        console.log(`[Upload Complete] Updated visitor ${upload.visitorId} metrics`);
+      } catch (visitorErr) {
+        // Non-blocking: visitor tracking is optional
+        console.warn("[Upload Complete] Failed to update visitor metrics:", visitorErr);
+      }
+    }
+
     return corsJson({
       success: true,
       uploadId,

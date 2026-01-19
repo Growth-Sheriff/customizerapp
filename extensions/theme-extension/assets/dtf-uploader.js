@@ -682,6 +682,10 @@
         const customerId = window.ULCustomer?.id || null;
         const customerEmail = window.ULCustomer?.email || null;
         
+        // Get visitor tracking info (from ul-visitor.js)
+        const visitorId = window.ULVisitor?.getVisitorId?.() || null;
+        const sessionId = window.ULVisitor?.getSessionId?.() || null;
+        
         // Step 1: Get signed URL from API
         const intentResponse = await fetch(`${apiBase}/api/upload/intent`, {
           method: 'POST',
@@ -694,7 +698,9 @@
             contentType: file.type || 'application/octet-stream',
             fileSize: file.size,
             customerId: customerId ? String(customerId) : null,
-            customerEmail: customerEmail
+            customerEmail: customerEmail,
+            visitorId: visitorId,
+            sessionId: sessionId
           })
         });
 

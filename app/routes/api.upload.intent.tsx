@@ -70,7 +70,7 @@ export async function action({ request }: ActionFunctionArgs) {
     return corsJson({ error: "Invalid JSON body" }, request, { status: 400 });
   }
 
-  const { shopDomain, productId, variantId, mode, contentType, fileName, fileSize, customerId, customerEmail } = body;
+  const { shopDomain, productId, variantId, mode, contentType, fileName, fileSize, customerId, customerEmail, visitorId, sessionId } = body;
 
   // Validate required fields
   if (!shopDomain) {
@@ -209,7 +209,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const key = buildStorageKey(shopDomain, uploadId, itemId, fileName);
 
   try {
-    // Create upload record
+    // Create upload record with visitor tracking
     const upload = await prisma.upload.create({
       data: {
         id: uploadId,
@@ -220,8 +220,15 @@ export async function action({ request }: ActionFunctionArgs) {
         status: "draft",
         customerId: customerId || null,
         customerEmail: customerEmail || null,
+        visitorId: visitorId || null,
+        sessionId: sessionId || null,
       },
     });
+    
+    // Log visitor tracking if present
+    if (visitorId) {
+      console.log(`[Upload Intent] Upload ${uploadId} linked to visitor ${visitorId}, session ${sessionId || 'N/A'}`);
+    }
 
     // Create upload item record
     await prisma.uploadItem.create({

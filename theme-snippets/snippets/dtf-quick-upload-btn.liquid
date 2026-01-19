@@ -954,6 +954,10 @@
     // Get MIME type with fallback for unsupported types (PSD, AI, EPS etc.)
     const mimeType = file.type || 'application/octet-stream';
     
+    // Get visitor tracking info (from ul-visitor.js)
+    const visitorId = window.ULVisitor?.getVisitorId?.() || null;
+    const sessionId = window.ULVisitor?.getSessionId?.() || null;
+    
     try {
       // Step 1: Get upload intent
       const intentResponse = await fetch(`${apiBase}/api/upload/intent`, {
@@ -967,7 +971,9 @@
           fileName: file.name,
           fileSize: file.size,
           customerId: customerId,
-          customerEmail: customerEmail
+          customerEmail: customerEmail,
+          visitorId: visitorId,
+          sessionId: sessionId
         })
       });
       

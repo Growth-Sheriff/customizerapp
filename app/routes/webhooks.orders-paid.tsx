@@ -119,14 +119,22 @@ export async function action({ request }: ActionFunctionArgs) {
             },
           });
 
-          // Update upload status
+          // Update upload status with order revenue data
+          const orderTotal = parseFloat(order.total_price) || 0;
+          const orderCurrency = order.currency || "USD";
+          
           await prisma.upload.update({
             where: { id: upload.id },
             data: {
               status: "approved",
               orderId: String(order.id),
+              orderTotal: orderTotal,
+              orderCurrency: orderCurrency,
+              orderPaidAt: new Date(),
             },
           });
+          
+          console.log(`[Webhook] Upload ${upload.id} updated with order data: ${orderTotal} ${orderCurrency}`);
 
           // Add to designs array
           for (const item of upload.items) {
