@@ -1,0 +1,46 @@
+{% comment %}
+  Upload Lift - Visitor Tracking Block
+  =====================================
+  Purpose: Load visitor tracking script for attribution & analytics
+  
+  This block should be added to theme.liquid or any page where 
+  visitor tracking is needed.
+  
+  SAFE: This is a NEW file - does not modify any existing flows
+  
+  Version: 1.0.0
+{% endcomment %}
+
+{% comment %}
+  Only load on storefront (not in theme editor preview)
+{% endcomment %}
+{% unless request.design_mode %}
+  <script 
+    src="{{ 'ul-visitor.js' | asset_url }}" 
+    defer
+    data-shop-domain="{{ shop.permanent_domain }}"
+  ></script>
+{% endunless %}
+
+{% schema %}
+{
+  "name": "UL Visitor Tracking",
+  "target": "body",
+  "javascript": "ul-visitor.js",
+  "settings": [
+    {
+      "type": "checkbox",
+      "id": "enabled",
+      "label": "Enable Visitor Tracking",
+      "default": true
+    },
+    {
+      "type": "checkbox",
+      "id": "debug_mode",
+      "label": "Debug Mode",
+      "default": false,
+      "info": "Enable console logging for troubleshooting"
+    }
+  ]
+}
+{% endschema %}
