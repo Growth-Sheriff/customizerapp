@@ -999,8 +999,8 @@
       }
       
       // Use the signed URL from API, fallback to constructed URL if not available
-      const publicUrl = finalDownloadUrl || `https://customizerapp.dev/api/upload/file/${uploadId}`;
-      if (uploadUrlInput) uploadUrlInput.value = publicUrl;
+      const finalUrl = finalDownloadUrl || publicUrl || `https://customizerapp.dev/api/upload/file/${uploadId}`;
+      if (uploadUrlInput) uploadUrlInput.value = finalUrl;
       
       // Show preview
       progress.style.display = 'none';
