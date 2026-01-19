@@ -118,7 +118,7 @@ export async function action({ request }: ActionFunctionArgs) {
       },
     });
 
-    // Update items with location, transform, and fileUrl/fileId (for Shopify uploads)
+    // Update items with location, transform, and fileUrl (for CDN uploads)
     // If items array is provided, use it; otherwise skip item updates (quick mode)
     if (items && Array.isArray(items) && items.length > 0) {
       for (const item of items) {
@@ -127,15 +127,30 @@ export async function action({ request }: ActionFunctionArgs) {
           transform: item.transform || null,
         };
         
-        // For Shopify uploads: prefer fileUrl, fallback to fileId for later resolution
+        // MULTI-STORAGE: Handle different storage providers
+        const provider = item.storageProvider || 'local';
+        
         if (item.fileUrl) {
-          updateData.storageKey = item.fileUrl;
-          console.log(`[Upload Complete] Updated storageKey with Shopify URL: ${item.fileUrl}`);
-        } else if (item.fileId && item.storageProvider === 'shopify') {
-          // Store fileId as storageKey with shopify: prefix for later resolution
+          // CDN uploads (Bunny/R2): Store the public URL directly
+          if (provider === 'bunny') {
+            // Store with bunny: prefix for provider identification
+            updateData.storageKey = `bunny:${item.fileUrl.replace(/^https?:\/\/[^/]+\//, '')}`;
+            console.log(`[Upload Complete] Stored Bunny CDN key: ${updateData.storageKey}`);
+          } else if (provider === 'r2') {
+            // Store R2 URL directly
+            updateData.storageKey = item.fileUrl;
+            console.log(`[Upload Complete] Stored R2 URL: ${item.fileUrl}`);
+          } else {
+            // Local or other - store URL as-is
+            updateData.storageKey = item.fileUrl;
+            console.log(`[Upload Complete] Updated storageKey: ${item.fileUrl}`);
+          }
+        } else if (item.fileId && provider === 'shopify') {
+          // Legacy Shopify: Store fileId with prefix for later resolution
           updateData.storageKey = `shopify:${item.fileId}`;
           console.log(`[Upload Complete] Stored Shopify fileId for later resolution: ${item.fileId}`);
         }
+        // For local storage, storageKey was already set during intent - no update needed
         
         await prisma.uploadItem.update({
           where: { id: item.itemId },
