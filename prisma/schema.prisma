@@ -158,6 +158,14 @@ model Upload {
   visitorId String? @map("visitor_id")
   sessionId String? @map("session_id")
 
+  // ─────────────────────────────────────────────────────────────
+  // Revenue Attribution (NULLABLE - for analytics)
+  // ─────────────────────────────────────────────────────────────
+  cartAddedAt   DateTime? @map("cart_added_at")
+  orderPaidAt   DateTime? @map("order_paid_at")
+  orderTotal    Decimal?  @map("order_total") @db.Decimal(10, 2)
+  orderCurrency String?   @map("order_currency") // USD, EUR, etc.
+
   // Relations
   shop       Shop            @relation(fields: [shopId], references: [id], onDelete: Cascade)
   items      UploadItem[]
@@ -169,6 +177,7 @@ model Upload {
   @@index([shopId, createdAt])
   @@index([visitorId])
   @@index([sessionId])
+  @@index([orderPaidAt])
   @@map("uploads")
 }
 
