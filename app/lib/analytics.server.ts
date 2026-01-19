@@ -7,6 +7,14 @@
  */
 
 import prisma from "./prisma.server";
+import type { Decimal } from "@prisma/client/runtime/library";
+
+// Helper to convert Decimal to number
+function toNumber(value: number | Decimal | null | undefined): number {
+  if (value === null || value === undefined) return 0;
+  if (typeof value === 'number') return value;
+  return Number(value);
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // HELPER: Get Shop ID from domain
@@ -746,4 +754,847 @@ export async function getUploadStats(
     totalDataTransferred: itemStats._sum?.fileSize ?? 0,
     totalItems: itemStats._count?.id ?? 0,
   };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CUSTOMER SEGMENTATION ANALYTICS
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface CustomerSegmentation {
+  loggedInCustomers: number;
+  anonymousVisitors: number;
+  loggedInPercentage: number;
+  loggedInUploads: number;
+  anonymousUploads: number;
+  loggedInOrders: number;
+  anonymousOrders: number;
+  loggedInRevenue: number;
+  anonymousRevenue: number;
+  loggedInConversionRate: number;
+  anonymousConversionRate: number;
+}
+
+export interface CustomerMetrics {
+  uniqueCustomers: number;
+  repeatCustomers: number;
+  newCustomers: number;
+  avgUploadsPerCustomer: number;
+  avgOrdersPerCustomer: number;
+  avgRevenuePerCustomer: number;
+  topCustomerRevenue: number;
+}
+
+export interface CustomerByValue {
+  customerId: string;
+  customerEmail: string | null;
+  totalUploads: number;
+  totalOrders: number;
+  totalRevenue: number;
+  firstPurchaseDate: Date | null;
+  lastPurchaseDate: Date | null;
+}
+
+export async function getCustomerSegmentation(
+  shopId: string,
+  startDate: Date,
+  endDate: Date
+): Promise<CustomerSegmentation> {
+  // Logged-in customers (have customerEmail or customerId)
+  const [
+    loggedInCustomers,
+    anonymousVisitors,
+    loggedInUploads,
+    anonymousUploads,
+    uploadsWithOrders,
+  ] = await Promise.all([
+    // Unique logged-in customers
+    prisma.upload.groupBy({
+      by: ["customerId"],
+      where: {
+        shopId,
+        createdAt: { gte: startDate, lte: endDate },
+        customerId: { not: null },
+      },
+    }).then(r => r.length),
+    
+    // Anonymous visitors (no customerId)
+    prisma.upload.count({
+      where: {
+        shopId,
+        createdAt: { gte: startDate, lte: endDate },
+        customerId: null,
+      },
+    }),
+    
+    // Uploads from logged-in customers
+    prisma.upload.count({
+      where: {
+        shopId,
+        createdAt: { gte: startDate, lte: endDate },
+        customerId: { not: null },
+      },
+    }),
+    
+    // Uploads from anonymous visitors
+    prisma.upload.count({
+      where: {
+        shopId,
+        createdAt: { gte: startDate, lte: endDate },
+        customerId: null,
+      },
+    }),
+    
+    // Uploads that resulted in orders
+    prisma.upload.findMany({
+      where: {
+        shopId,
+        createdAt: { gte: startDate, lte: endDate },
+        orderId: { not: null },
+      },
+      select: {
+        customerId: true,
+        orderTotal: true,
+      },
+    }),
+  ]);
+
+  // Calculate orders and revenue by segment
+  let loggedInOrders = 0;
+  let anonymousOrders = 0;
+  let loggedInRevenue = 0;
+  let anonymousRevenue = 0;
+
+  uploadsWithOrders.forEach((u) => {
+    if (u.customerId) {
+      loggedInOrders++;
+      loggedInRevenue += toNumber(u.orderTotal);
+    } else {
+      anonymousOrders++;
+      anonymousRevenue += toNumber(u.orderTotal);
+    }
+  });
+
+  const totalCustomers = loggedInCustomers + anonymousVisitors;
+  const loggedInPercentage = totalCustomers > 0 ? (loggedInCustomers / totalCustomers) * 100 : 0;
+  
+  const loggedInConversionRate = loggedInUploads > 0 ? (loggedInOrders / loggedInUploads) * 100 : 0;
+  const anonymousConversionRate = anonymousUploads > 0 ? (anonymousOrders / anonymousUploads) * 100 : 0;
+
+  return {
+    loggedInCustomers,
+    anonymousVisitors,
+    loggedInPercentage,
+    loggedInUploads,
+    anonymousUploads,
+    loggedInOrders,
+    anonymousOrders,
+    loggedInRevenue,
+    anonymousRevenue,
+    loggedInConversionRate,
+    anonymousConversionRate,
+  };
+}
+
+export async function getCustomerMetrics(
+  shopId: string,
+  startDate: Date,
+  endDate: Date
+): Promise<CustomerMetrics> {
+  // Get all uploads with customers
+  const uploads = await prisma.upload.findMany({
+    where: {
+      shopId,
+      createdAt: { gte: startDate, lte: endDate },
+      customerId: { not: null },
+    },
+    select: {
+      customerId: true,
+      orderId: true,
+      orderTotal: true,
+      createdAt: true,
+    },
+  });
+
+  // Group by customer
+  const customerMap = new Map<string, {
+    uploads: number;
+    orders: number;
+    revenue: number;
+    firstSeen: Date;
+    lastSeen: Date;
+  }>();
+
+  uploads.forEach((u) => {
+    if (!u.customerId) return;
+    
+    const existing = customerMap.get(u.customerId);
+    if (existing) {
+      existing.uploads++;
+      if (u.orderId) existing.orders++;
+      existing.revenue += toNumber(u.orderTotal);
+      if (u.createdAt < existing.firstSeen) existing.firstSeen = u.createdAt;
+      if (u.createdAt > existing.lastSeen) existing.lastSeen = u.createdAt;
+    } else {
+      customerMap.set(u.customerId, {
+        uploads: 1,
+        orders: u.orderId ? 1 : 0,
+        revenue: toNumber(u.orderTotal),
+        firstSeen: u.createdAt,
+        lastSeen: u.createdAt,
+      });
+    }
+  });
+
+  const uniqueCustomers = customerMap.size;
+  const repeatCustomers = Array.from(customerMap.values()).filter((c) => c.uploads > 1).length;
+  
+  // New customers (first seen in this period)
+  const newCustomers = Array.from(customerMap.values()).filter((c) => c.firstSeen >= startDate).length;
+
+  // Averages
+  let totalUploads = 0;
+  let totalOrders = 0;
+  let totalRevenue = 0;
+  let topRevenue = 0;
+
+  customerMap.forEach((c) => {
+    totalUploads += c.uploads;
+    totalOrders += c.orders;
+    totalRevenue += c.revenue;
+    if (c.revenue > topRevenue) topRevenue = c.revenue;
+  });
+
+  return {
+    uniqueCustomers,
+    repeatCustomers,
+    newCustomers,
+    avgUploadsPerCustomer: uniqueCustomers > 0 ? totalUploads / uniqueCustomers : 0,
+    avgOrdersPerCustomer: uniqueCustomers > 0 ? totalOrders / uniqueCustomers : 0,
+    avgRevenuePerCustomer: uniqueCustomers > 0 ? totalRevenue / uniqueCustomers : 0,
+    topCustomerRevenue: topRevenue,
+  };
+}
+
+export async function getTopCustomersByValue(
+  shopId: string,
+  limit = 20
+): Promise<CustomerByValue[]> {
+  const uploads = await prisma.upload.findMany({
+    where: {
+      shopId,
+      customerId: { not: null },
+    },
+    select: {
+      customerId: true,
+      customerEmail: true,
+      orderId: true,
+      orderTotal: true,
+      orderPaidAt: true,
+      createdAt: true,
+    },
+  });
+
+  // Group by customer
+  const customerMap = new Map<string, CustomerByValue>();
+
+  uploads.forEach((u) => {
+    if (!u.customerId) return;
+    
+    const existing = customerMap.get(u.customerId);
+    if (existing) {
+      existing.totalUploads++;
+      if (u.orderId) {
+        existing.totalOrders++;
+        existing.totalRevenue += toNumber(u.orderTotal);
+        if (u.orderPaidAt && (!existing.lastPurchaseDate || u.orderPaidAt > existing.lastPurchaseDate)) {
+          existing.lastPurchaseDate = u.orderPaidAt;
+        }
+        if (u.orderPaidAt && (!existing.firstPurchaseDate || u.orderPaidAt < existing.firstPurchaseDate)) {
+          existing.firstPurchaseDate = u.orderPaidAt;
+        }
+      }
+      // Update email if we have it
+      if (u.customerEmail && !existing.customerEmail) {
+        existing.customerEmail = u.customerEmail;
+      }
+    } else {
+      customerMap.set(u.customerId, {
+        customerId: u.customerId,
+        customerEmail: u.customerEmail,
+        totalUploads: 1,
+        totalOrders: u.orderId ? 1 : 0,
+        totalRevenue: toNumber(u.orderTotal),
+        firstPurchaseDate: u.orderPaidAt,
+        lastPurchaseDate: u.orderPaidAt,
+      });
+    }
+  });
+
+  // Sort by revenue and return top N
+  return Array.from(customerMap.values())
+    .sort((a, b) => b.totalRevenue - a.totalRevenue)
+    .slice(0, limit);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FILE METRICS ANALYTICS
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface FileMetrics {
+  avgFileSize: number;
+  medianFileSize: number;
+  totalDataTransferred: number;
+  avgUploadDuration: number;
+  medianUploadDuration: number;
+  fileSizeDistribution: {
+    range: string;
+    count: number;
+    percentage: number;
+  }[];
+  uploadSpeedAvg: number; // bytes per second
+}
+
+export interface FileTypeBreakdown {
+  mimeType: string;
+  count: number;
+  percentage: number;
+  avgSize: number;
+}
+
+export async function getFileMetrics(
+  shopId: string,
+  startDate: Date,
+  endDate: Date
+): Promise<FileMetrics> {
+  // Get all upload items in period
+  const items = await prisma.uploadItem.findMany({
+    where: {
+      upload: {
+        shopId,
+        createdAt: { gte: startDate, lte: endDate },
+      },
+    },
+  });
+
+  if (items.length === 0) {
+    return {
+      avgFileSize: 0,
+      medianFileSize: 0,
+      totalDataTransferred: 0,
+      avgUploadDuration: 0,
+      medianUploadDuration: 0,
+      fileSizeDistribution: [],
+      uploadSpeedAvg: 0,
+    };
+  }
+
+  // Calculate stats
+  const fileSizes = items.map((i) => i.fileSize || 0).filter((s) => s > 0);
+  const uploadDurations = items.map((i) => (i as any).uploadDurationMs || 0).filter((d: number) => d > 0);
+
+  fileSizes.sort((a, b) => a - b);
+  uploadDurations.sort((a, b) => a - b);
+
+  const avgFileSize = fileSizes.length > 0 
+    ? fileSizes.reduce((a, b) => a + b, 0) / fileSizes.length 
+    : 0;
+  const medianFileSize = fileSizes.length > 0 
+    ? fileSizes[Math.floor(fileSizes.length / 2)] 
+    : 0;
+  const totalDataTransferred = fileSizes.reduce((a, b) => a + b, 0);
+
+  const avgUploadDuration = uploadDurations.length > 0 
+    ? uploadDurations.reduce((a, b) => a + b, 0) / uploadDurations.length 
+    : 0;
+  const medianUploadDuration = uploadDurations.length > 0 
+    ? uploadDurations[Math.floor(uploadDurations.length / 2)] 
+    : 0;
+
+  // Calculate upload speed (bytes per second)
+  let totalSpeed = 0;
+  let speedCount = 0;
+  items.forEach((i) => {
+    const durationMs = (i as any).uploadDurationMs;
+    if (i.fileSize && durationMs && durationMs > 0) {
+      totalSpeed += (i.fileSize / durationMs) * 1000; // bytes per second
+      speedCount++;
+    }
+  });
+  const uploadSpeedAvg = speedCount > 0 ? totalSpeed / speedCount : 0;
+
+  // File size distribution
+  const sizeRanges = [
+    { range: "< 500 KB", min: 0, max: 500 * 1024 },
+    { range: "500 KB - 1 MB", min: 500 * 1024, max: 1024 * 1024 },
+    { range: "1 - 5 MB", min: 1024 * 1024, max: 5 * 1024 * 1024 },
+    { range: "5 - 10 MB", min: 5 * 1024 * 1024, max: 10 * 1024 * 1024 },
+    { range: "> 10 MB", min: 10 * 1024 * 1024, max: Infinity },
+  ];
+
+  const distribution = sizeRanges.map((r) => {
+    const count = fileSizes.filter((s) => s >= r.min && s < r.max).length;
+    return {
+      range: r.range,
+      count,
+      percentage: fileSizes.length > 0 ? (count / fileSizes.length) * 100 : 0,
+    };
+  });
+
+  return {
+    avgFileSize,
+    medianFileSize,
+    totalDataTransferred,
+    avgUploadDuration,
+    medianUploadDuration,
+    fileSizeDistribution: distribution,
+    uploadSpeedAvg,
+  };
+}
+
+export async function getFileTypeBreakdown(
+  shopId: string,
+  startDate: Date,
+  endDate: Date
+): Promise<FileTypeBreakdown[]> {
+  const items = await prisma.uploadItem.groupBy({
+    by: ["mimeType"],
+    where: {
+      upload: {
+        shopId,
+        createdAt: { gte: startDate, lte: endDate },
+      },
+    },
+    _count: { id: true },
+    _avg: { fileSize: true },
+    orderBy: { _count: { id: "desc" } },
+    take: 10,
+  });
+
+  const total = items.reduce((sum, i) => sum + i._count.id, 0);
+
+  return items.map((i) => ({
+    mimeType: i.mimeType || "unknown",
+    count: i._count.id,
+    percentage: total > 0 ? (i._count.id / total) * 100 : 0,
+    avgSize: i._avg.fileSize || 0,
+  }));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// VISITOR DETAIL ANALYTICS (OS, Screen Resolution)
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface VisitorOS {
+  os: string;
+  count: number;
+  percentage: number;
+}
+
+export interface ScreenResolution {
+  resolution: string;
+  count: number;
+  percentage: number;
+}
+
+export interface VisitorTimezone {
+  timezone: string;
+  count: number;
+  percentage: number;
+}
+
+export interface VisitorLanguage {
+  language: string;
+  count: number;
+  percentage: number;
+}
+
+export async function getVisitorsByOS(shopId: string): Promise<VisitorOS[]> {
+  const results = await prisma.visitor.groupBy({
+    by: ["os"],
+    where: { shopId, os: { not: null } },
+    _count: { id: true },
+    orderBy: { _count: { id: "desc" } },
+    take: 10,
+  });
+
+  const total = results.reduce((sum, r) => sum + r._count.id, 0);
+
+  return results.map((r) => ({
+    os: r.os || "Unknown",
+    count: r._count.id,
+    percentage: total > 0 ? (r._count.id / total) * 100 : 0,
+  }));
+}
+
+export async function getVisitorsByScreenResolution(shopId: string): Promise<ScreenResolution[]> {
+  const results = await prisma.visitor.groupBy({
+    by: ["screenResolution"],
+    where: { shopId, screenResolution: { not: null } },
+    _count: { id: true },
+    orderBy: { _count: { id: "desc" } },
+    take: 10,
+  });
+
+  const total = results.reduce((sum, r) => sum + r._count.id, 0);
+
+  return results.map((r) => ({
+    resolution: r.screenResolution || "Unknown",
+    count: r._count.id,
+    percentage: total > 0 ? (r._count.id / total) * 100 : 0,
+  }));
+}
+
+export async function getVisitorsByTimezone(shopId: string): Promise<VisitorTimezone[]> {
+  const results = await prisma.visitor.groupBy({
+    by: ["timezone"],
+    where: { shopId, timezone: { not: null } },
+    _count: { id: true },
+    orderBy: { _count: { id: "desc" } },
+    take: 15,
+  });
+
+  const total = results.reduce((sum, r) => sum + r._count.id, 0);
+
+  return results.map((r) => ({
+    timezone: r.timezone || "Unknown",
+    count: r._count.id,
+    percentage: total > 0 ? (r._count.id / total) * 100 : 0,
+  }));
+}
+
+export async function getVisitorsByLanguage(shopId: string): Promise<VisitorLanguage[]> {
+  const results = await prisma.visitor.groupBy({
+    by: ["language"],
+    where: { shopId, language: { not: null } },
+    _count: { id: true },
+    orderBy: { _count: { id: "desc" } },
+    take: 10,
+  });
+
+  const total = results.reduce((sum, r) => sum + r._count.id, 0);
+
+  return results.map((r) => ({
+    language: r.language || "Unknown",
+    count: r._count.id,
+    percentage: total > 0 ? (r._count.id / total) * 100 : 0,
+  }));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// REVENUE ANALYTICS
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface RevenueStats {
+  totalRevenue: number;
+  avgOrderValue: number;
+  totalOrders: number;
+  revenueByMode: { mode: string; revenue: number; orders: number }[];
+  revenueByDay: { date: string; revenue: number; orders: number }[];
+  conversionFunnel: {
+    visitors: number;
+    uploads: number;
+    cartAdds: number;
+    orders: number;
+  };
+}
+
+export async function getRevenueStats(
+  shopId: string,
+  startDate: Date,
+  endDate: Date
+): Promise<RevenueStats> {
+  // Get uploads with orders
+  const uploads = await prisma.upload.findMany({
+    where: {
+      shopId,
+      createdAt: { gte: startDate, lte: endDate },
+    },
+    select: {
+      mode: true,
+      orderId: true,
+      orderTotal: true,
+      orderCurrency: true,
+      orderPaidAt: true,
+      cartAddedAt: true,
+      createdAt: true,
+    },
+  });
+
+  // Total revenue and orders
+  let totalRevenue = 0;
+  let totalOrders = 0;
+  const ordersSet = new Set<string>();
+
+  uploads.forEach((u) => {
+    if (u.orderId && !ordersSet.has(u.orderId)) {
+      ordersSet.add(u.orderId);
+      totalRevenue += toNumber(u.orderTotal);
+      totalOrders++;
+    }
+  });
+
+  const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+
+  // Revenue by mode
+  const modeMap = new Map<string, { revenue: number; orders: Set<string> }>();
+  uploads.forEach((u) => {
+    if (!u.orderId) return;
+    const existing = modeMap.get(u.mode);
+    if (existing) {
+      if (!existing.orders.has(u.orderId)) {
+        existing.orders.add(u.orderId);
+        existing.revenue += toNumber(u.orderTotal);
+      }
+    } else {
+      const orderSet = new Set<string>();
+      orderSet.add(u.orderId);
+      modeMap.set(u.mode, {
+        revenue: toNumber(u.orderTotal),
+        orders: orderSet,
+      });
+    }
+  });
+
+  const revenueByMode = Array.from(modeMap.entries()).map(([mode, data]) => ({
+    mode,
+    revenue: data.revenue,
+    orders: data.orders.size,
+  }));
+
+  // Revenue by day
+  const dayMap = new Map<string, { revenue: number; orders: Set<string> }>();
+  uploads.forEach((u) => {
+    if (!u.orderId || !u.orderPaidAt) return;
+    const day = u.orderPaidAt.toISOString().split("T")[0];
+    const existing = dayMap.get(day);
+    if (existing) {
+      if (!existing.orders.has(u.orderId)) {
+        existing.orders.add(u.orderId);
+        existing.revenue += toNumber(u.orderTotal);
+      }
+    } else {
+      const orderSet = new Set<string>();
+      orderSet.add(u.orderId);
+      dayMap.set(day, {
+        revenue: toNumber(u.orderTotal),
+        orders: orderSet,
+      });
+    }
+  });
+
+  const revenueByDay = Array.from(dayMap.entries())
+    .map(([date, data]) => ({
+      date,
+      revenue: data.revenue,
+      orders: data.orders.size,
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  // Conversion funnel
+  const [visitors, uploadsCount, cartAdds] = await Promise.all([
+    prisma.visitor.count({
+      where: { shopId, firstSeenAt: { gte: startDate, lte: endDate } },
+    }),
+    prisma.upload.count({
+      where: { shopId, createdAt: { gte: startDate, lte: endDate } },
+    }),
+    prisma.upload.count({
+      where: {
+        shopId,
+        createdAt: { gte: startDate, lte: endDate },
+        cartAddedAt: { not: null },
+      },
+    }),
+  ]);
+
+  return {
+    totalRevenue,
+    avgOrderValue,
+    totalOrders,
+    revenueByMode,
+    revenueByDay,
+    conversionFunnel: {
+      visitors,
+      uploads: uploadsCount,
+      cartAdds,
+      orders: totalOrders,
+    },
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ENHANCED AI INSIGHTS
+// ═══════════════════════════════════════════════════════════════════════════
+
+export async function generateEnhancedAIInsights(
+  shopId: string,
+  startDate: Date,
+  endDate: Date
+): Promise<AIInsight[]> {
+  const insights: AIInsight[] = [];
+
+  // Get all data
+  const [
+    visitorStats,
+    uploadStats,
+    customerSegmentation,
+    customerMetrics,
+    fileMetrics,
+    revenueStats,
+    deviceData,
+  ] = await Promise.all([
+    getVisitorStats(shopId, startDate, endDate),
+    getUploadStats(shopId, startDate, endDate),
+    getCustomerSegmentation(shopId, startDate, endDate),
+    getCustomerMetrics(shopId, startDate, endDate),
+    getFileMetrics(shopId, startDate, endDate),
+    getRevenueStats(shopId, startDate, endDate),
+    getVisitorsByDevice(shopId),
+  ]);
+
+  // 1. Customer segmentation insight
+  if (customerSegmentation.loggedInConversionRate > customerSegmentation.anonymousConversionRate * 1.5) {
+    insights.push({
+      id: "logged-in-converts-better",
+      type: "positive",
+      title: "Logged-in Customers Convert Better",
+      description: `Logged-in customers have ${customerSegmentation.loggedInConversionRate.toFixed(1)}% conversion rate vs ${customerSegmentation.anonymousConversionRate.toFixed(1)}% for anonymous visitors. Consider adding login incentives.`,
+      metric: `${customerSegmentation.loggedInOrders} orders from logged-in users`,
+      priority: "high",
+    });
+  }
+
+  // 2. Anonymous visitors opportunity
+  if (customerSegmentation.anonymousVisitors > customerSegmentation.loggedInCustomers * 2) {
+    insights.push({
+      id: "anonymous-opportunity",
+      type: "suggestion",
+      title: "High Anonymous Traffic",
+      description: `${customerSegmentation.anonymousVisitors} anonymous uploads vs ${customerSegmentation.loggedInCustomers} logged-in customers. Implement email capture to improve conversion.`,
+      metric: `${((customerSegmentation.anonymousVisitors / (customerSegmentation.anonymousVisitors + customerSegmentation.loggedInCustomers)) * 100).toFixed(0)}% anonymous`,
+      priority: "high",
+    });
+  }
+
+  // 3. File size optimization
+  if (fileMetrics.avgFileSize > 5 * 1024 * 1024) { // > 5MB
+    insights.push({
+      id: "large-files",
+      type: "suggestion",
+      title: "Large File Uploads",
+      description: `Average file size is ${(fileMetrics.avgFileSize / 1024 / 1024).toFixed(1)} MB. Consider adding file compression guidance for faster uploads.`,
+      metric: `Avg upload: ${(fileMetrics.avgUploadDuration / 1000).toFixed(1)}s`,
+      priority: "medium",
+    });
+  }
+
+  // 4. Upload speed insight
+  if (fileMetrics.uploadSpeedAvg > 0 && fileMetrics.uploadSpeedAvg < 500 * 1024) { // < 500 KB/s
+    insights.push({
+      id: "slow-uploads",
+      type: "negative",
+      title: "Slow Upload Speeds",
+      description: `Average upload speed is ${(fileMetrics.uploadSpeedAvg / 1024).toFixed(0)} KB/s. This may be affecting user experience and abandonment.`,
+      metric: `Median duration: ${(fileMetrics.medianUploadDuration / 1000).toFixed(1)}s`,
+      priority: "high",
+    });
+  }
+
+  // 5. Repeat customer value
+  if (customerMetrics.repeatCustomers > 0 && customerMetrics.avgRevenuePerCustomer > 0) {
+    const repeatRate = customerMetrics.uniqueCustomers > 0 
+      ? (customerMetrics.repeatCustomers / customerMetrics.uniqueCustomers) * 100 
+      : 0;
+    if (repeatRate > 20) {
+      insights.push({
+        id: "good-retention",
+        type: "positive",
+        title: "Strong Customer Retention",
+        description: `${repeatRate.toFixed(0)}% of customers return for more uploads. Average customer value is $${customerMetrics.avgRevenuePerCustomer.toFixed(2)}.`,
+        metric: `${customerMetrics.repeatCustomers} repeat customers`,
+        priority: "medium",
+      });
+    }
+  }
+
+  // 6. Revenue insight
+  if (revenueStats.totalRevenue > 0) {
+    insights.push({
+      id: "revenue-summary",
+      type: "positive",
+      title: "Revenue Performance",
+      description: `Total revenue: $${revenueStats.totalRevenue.toFixed(2)} from ${revenueStats.totalOrders} orders. Average order value: $${revenueStats.avgOrderValue.toFixed(2)}.`,
+      metric: `$${revenueStats.avgOrderValue.toFixed(2)} AOV`,
+      priority: "high",
+    });
+  }
+
+  // 7. Cart abandonment
+  if (revenueStats.conversionFunnel.cartAdds > 0 && revenueStats.conversionFunnel.orders > 0) {
+    const cartToOrderRate = (revenueStats.conversionFunnel.orders / revenueStats.conversionFunnel.cartAdds) * 100;
+    if (cartToOrderRate < 50) {
+      insights.push({
+        id: "cart-abandonment",
+        type: "negative",
+        title: "High Cart Abandonment",
+        description: `Only ${cartToOrderRate.toFixed(0)}% of cart additions result in orders. Consider implementing abandoned cart recovery.`,
+        metric: `${revenueStats.conversionFunnel.cartAdds - revenueStats.conversionFunnel.orders} abandoned carts`,
+        priority: "high",
+      });
+    }
+  }
+
+  // 8. Mobile optimization
+  const mobileDevice = deviceData.find((d) => d.type === "mobile");
+  if (mobileDevice && mobileDevice.percentage > 50) {
+    insights.push({
+      id: "mobile-majority",
+      type: "neutral",
+      title: "Mobile-First Audience",
+      description: `${mobileDevice.percentage.toFixed(0)}% of visitors use mobile. Ensure upload UX is optimized for touch devices.`,
+      metric: `${mobileDevice.count} mobile visitors`,
+      priority: "medium",
+    });
+  }
+
+  // 9. Upload success rate
+  if (uploadStats.successRate < 90 && uploadStats.totalUploads > 10) {
+    insights.push({
+      id: "upload-failures",
+      type: "negative",
+      title: "Upload Success Rate Below Target",
+      description: `${uploadStats.successRate.toFixed(1)}% success rate. ${uploadStats.failedUploads} uploads failed. Investigate common failure causes.`,
+      metric: `${uploadStats.failedUploads} failed uploads`,
+      priority: "high",
+    });
+  }
+
+  // 10. Data transfer volume
+  if (fileMetrics.totalDataTransferred > 1024 * 1024 * 1024) { // > 1GB
+    insights.push({
+      id: "high-data-transfer",
+      type: "neutral",
+      title: "High Data Volume",
+      description: `${(fileMetrics.totalDataTransferred / 1024 / 1024 / 1024).toFixed(2)} GB transferred. Monitor storage costs and consider CDN optimization.`,
+      metric: `${(fileMetrics.totalDataTransferred / 1024 / 1024).toFixed(0)} MB total`,
+      priority: "low",
+    });
+  }
+
+  // Sort by priority
+  const priorityOrder = { high: 0, medium: 1, low: 2 };
+  insights.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
+
+  // Return at least one insight
+  if (insights.length === 0) {
+    insights.push({
+      id: "gathering-data",
+      type: "neutral",
+      title: "Building Insights",
+      description: "Continue collecting data to generate personalized recommendations.",
+      priority: "low",
+    });
+  }
+
+  return insights.slice(0, 10); // Return top 10 insights
 }

@@ -3,11 +3,24 @@ import { json } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 import {
   Page, Layout, Card, Text, BlockStack, InlineStack,
-  Box, Badge, DataTable, Select
+  Box, Badge, DataTable, Select, ProgressBar, Divider, InlineGrid
 } from "@shopify/polaris";
 import { useState, useCallback } from "react";
 import { authenticate } from "~/shopify.server";
 import prisma from "~/lib/prisma.server";
+import {
+  getShopIdFromDomain,
+  getCustomerSegmentation,
+  getCustomerMetrics,
+  getFileMetrics,
+  getFileTypeBreakdown,
+  getRevenueStats,
+  type CustomerSegmentation,
+  type CustomerMetrics,
+  type FileMetrics,
+  type FileTypeBreakdown,
+  type RevenueStats,
+} from "~/lib/analytics.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { session } = await authenticate.admin(request);
@@ -140,6 +153,21 @@ export async function loader({ request }: LoaderFunctionArgs) {
     }),
   ]);
 
+  // Get enhanced analytics
+  const [
+    customerSegmentation,
+    customerMetrics,
+    fileMetrics,
+    fileTypeBreakdown,
+    revenueStats,
+  ] = await Promise.all([
+    getCustomerSegmentation(shop.id, startDate, now),
+    getCustomerMetrics(shop.id, startDate, now),
+    getFileMetrics(shop.id, startDate, now),
+    getFileTypeBreakdown(shop.id, startDate, now),
+    getRevenueStats(shop.id, startDate, now),
+  ]);
+
   // Process uploads by day for chart
   const dailyCounts: Record<string, number> = {};
   uploadsByDay.forEach((u: { createdAt: Date }) => {
@@ -228,6 +256,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
       uploadStatus: o.upload?.status || "unknown",
       createdAt: o.createdAt.toISOString(),
     })),
+    // NEW: Enhanced analytics data
+    customerSegmentation,
+    customerMetrics,
+    fileMetrics,
+    fileTypeBreakdown,
+    revenueStats,
   });
 }
 
@@ -258,7 +292,7 @@ function MetricCard({ title, value, subtitle, tone }: {
   );
 }
 
-function ProgressBar({ value, color }: { value: number; color: string }) {
+function ProgressBarCustom({ value, color }: { value: number; color: string }) {
   return (
     <Box
       background="bg-surface-secondary"
@@ -278,8 +312,33 @@ function ProgressBar({ value, color }: { value: number; color: string }) {
   );
 }
 
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
+}
+
+function formatDuration(ms: number): string {
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
+  return `${(ms / 60000).toFixed(1)}m`;
+}
+
+function formatCurrency(amount: number, currency = "USD"): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency,
+  }).format(amount);
+}
+
 export default function AnalyticsPage() {
-  const { period, metrics, modeBreakdown, statusBreakdown, locationUsage, dailyTrend, recentUploads, recentOrders } = useLoaderData<typeof loader>();
+  const { 
+    period, metrics, modeBreakdown, statusBreakdown, locationUsage, dailyTrend, 
+    recentUploads, recentOrders, customerSegmentation, customerMetrics, 
+    fileMetrics, fileTypeBreakdown, revenueStats 
+  } = useLoaderData<typeof loader>();
   const [selectedPeriod, setSelectedPeriod] = useState(period);
 
   const handlePeriodChange = useCallback((value: string) => {
@@ -433,6 +492,259 @@ export default function AnalyticsPage() {
             />
           </Layout.Section>
 
+          {/* Customer Segmentation */}
+          <Layout.Section>
+            <Card>
+              <BlockStack gap="400">
+                <InlineStack align="space-between">
+                  <Text as="h2" variant="headingMd">👥 Customer Segmentation</Text>
+                  <Badge tone="info">Customer Data</Badge>
+                </InlineStack>
+                <Divider />
+                <InlineGrid columns={{ xs: 2, md: 4 }} gap="400">
+                  <Box padding="300" background="bg-surface-secondary" borderRadius="200">
+                    <BlockStack gap="200">
+                      <Text as="p" variant="bodySm" tone="subdued">Logged-in Customers</Text>
+                      <Text as="p" variant="headingLg" fontWeight="bold">
+                        {customerSegmentation?.loggedInCustomers ?? 0}
+                      </Text>
+                      <Badge tone="success">
+                        {(customerSegmentation?.loggedInPercentage ?? 0).toFixed(1)}% of uploads
+                      </Badge>
+                    </BlockStack>
+                  </Box>
+                  <Box padding="300" background="bg-surface-secondary" borderRadius="200">
+                    <BlockStack gap="200">
+                      <Text as="p" variant="bodySm" tone="subdued">Anonymous Visitors</Text>
+                      <Text as="p" variant="headingLg" fontWeight="bold">
+                        {customerSegmentation?.anonymousVisitors ?? 0}
+                      </Text>
+                      <Badge>
+                        {(100 - (customerSegmentation?.loggedInPercentage ?? 0)).toFixed(1)}% of uploads
+                      </Badge>
+                    </BlockStack>
+                  </Box>
+                  <Box padding="300" background="bg-surface-secondary" borderRadius="200">
+                    <BlockStack gap="200">
+                      <Text as="p" variant="bodySm" tone="subdued">Logged-in Conversion</Text>
+                      <Text as="p" variant="headingLg" fontWeight="bold" tone="success">
+                        {(customerSegmentation?.loggedInConversionRate ?? 0).toFixed(1)}%
+                      </Text>
+                      <Text as="p" variant="bodySm" tone="subdued">
+                        {customerSegmentation?.loggedInOrders ?? 0} orders
+                      </Text>
+                    </BlockStack>
+                  </Box>
+                  <Box padding="300" background="bg-surface-secondary" borderRadius="200">
+                    <BlockStack gap="200">
+                      <Text as="p" variant="bodySm" tone="subdued">Anonymous Conversion</Text>
+                      <Text as="p" variant="headingLg" fontWeight="bold">
+                        {(customerSegmentation?.anonymousConversionRate ?? 0).toFixed(1)}%
+                      </Text>
+                      <Text as="p" variant="bodySm" tone="subdued">
+                        {customerSegmentation?.anonymousOrders ?? 0} orders
+                      </Text>
+                    </BlockStack>
+                  </Box>
+                </InlineGrid>
+              </BlockStack>
+            </Card>
+          </Layout.Section>
+
+          {/* Revenue Stats */}
+          {(revenueStats?.totalRevenue ?? 0) > 0 && (
+            <Layout.Section>
+              <Card>
+                <BlockStack gap="400">
+                  <InlineStack align="space-between">
+                    <Text as="h2" variant="headingMd">💰 Revenue Analytics</Text>
+                    <Badge tone="success">{formatCurrency(revenueStats?.totalRevenue ?? 0)}</Badge>
+                  </InlineStack>
+                  <Divider />
+                  <InlineGrid columns={{ xs: 2, md: 4 }} gap="400">
+                    <Box padding="300" background="bg-fill-success-secondary" borderRadius="200">
+                      <BlockStack gap="200">
+                        <Text as="p" variant="bodySm" tone="subdued">Total Revenue</Text>
+                        <Text as="p" variant="headingLg" fontWeight="bold">
+                          {formatCurrency(revenueStats?.totalRevenue ?? 0)}
+                        </Text>
+                      </BlockStack>
+                    </Box>
+                    <Box padding="300" background="bg-surface-secondary" borderRadius="200">
+                      <BlockStack gap="200">
+                        <Text as="p" variant="bodySm" tone="subdued">Total Orders</Text>
+                        <Text as="p" variant="headingLg" fontWeight="bold">
+                          {revenueStats?.totalOrders ?? 0}
+                        </Text>
+                      </BlockStack>
+                    </Box>
+                    <Box padding="300" background="bg-surface-secondary" borderRadius="200">
+                      <BlockStack gap="200">
+                        <Text as="p" variant="bodySm" tone="subdued">Avg Order Value</Text>
+                        <Text as="p" variant="headingLg" fontWeight="bold">
+                          {formatCurrency(revenueStats?.avgOrderValue ?? 0)}
+                        </Text>
+                      </BlockStack>
+                    </Box>
+                    <Box padding="300" background="bg-surface-secondary" borderRadius="200">
+                      <BlockStack gap="200">
+                        <Text as="p" variant="bodySm" tone="subdued">Cart Conversions</Text>
+                        <Text as="p" variant="headingLg" fontWeight="bold">
+                          {revenueStats?.conversionFunnel?.orders ?? 0}/{revenueStats?.conversionFunnel?.cartAdds ?? 0}
+                        </Text>
+                      </BlockStack>
+                    </Box>
+                  </InlineGrid>
+                  {/* Revenue by Mode */}
+                  {(revenueStats?.revenueByMode?.length ?? 0) > 0 && (
+                    <BlockStack gap="300">
+                      <Text as="h3" variant="headingSm">Revenue by Mode</Text>
+                      {revenueStats?.revenueByMode?.map((m: any) => (
+                        <InlineStack key={m.mode} align="space-between">
+                          <Text as="span" variant="bodyMd">{m.mode}</Text>
+                          <InlineStack gap="200">
+                            <Badge>{m.orders} orders</Badge>
+                            <Text as="span" variant="bodyMd" fontWeight="semibold">
+                              {formatCurrency(m.revenue)}
+                            </Text>
+                          </InlineStack>
+                        </InlineStack>
+                      ))}
+                    </BlockStack>
+                  )}
+                </BlockStack>
+              </Card>
+            </Layout.Section>
+          )}
+
+          {/* File Metrics */}
+          <Layout.Section>
+            <Card>
+              <BlockStack gap="400">
+                <InlineStack align="space-between">
+                  <Text as="h2" variant="headingMd">📁 File Metrics</Text>
+                  <Badge>{formatBytes(fileMetrics?.totalDataTransferred ?? 0)} transferred</Badge>
+                </InlineStack>
+                <Divider />
+                <InlineGrid columns={{ xs: 2, md: 4 }} gap="400">
+                  <Box padding="300" background="bg-surface-secondary" borderRadius="200">
+                    <BlockStack gap="200">
+                      <Text as="p" variant="bodySm" tone="subdued">Avg File Size</Text>
+                      <Text as="p" variant="headingLg" fontWeight="bold">
+                        {formatBytes(fileMetrics?.avgFileSize ?? 0)}
+                      </Text>
+                    </BlockStack>
+                  </Box>
+                  <Box padding="300" background="bg-surface-secondary" borderRadius="200">
+                    <BlockStack gap="200">
+                      <Text as="p" variant="bodySm" tone="subdued">Median File Size</Text>
+                      <Text as="p" variant="headingLg" fontWeight="bold">
+                        {formatBytes(fileMetrics?.medianFileSize ?? 0)}
+                      </Text>
+                    </BlockStack>
+                  </Box>
+                  <Box padding="300" background="bg-surface-secondary" borderRadius="200">
+                    <BlockStack gap="200">
+                      <Text as="p" variant="bodySm" tone="subdued">Avg Upload Time</Text>
+                      <Text as="p" variant="headingLg" fontWeight="bold">
+                        {formatDuration(fileMetrics?.avgUploadDuration ?? 0)}
+                      </Text>
+                    </BlockStack>
+                  </Box>
+                  <Box padding="300" background="bg-surface-secondary" borderRadius="200">
+                    <BlockStack gap="200">
+                      <Text as="p" variant="bodySm" tone="subdued">Upload Speed</Text>
+                      <Text as="p" variant="headingLg" fontWeight="bold">
+                        {formatBytes(fileMetrics?.uploadSpeedAvg ?? 0)}/s
+                      </Text>
+                    </BlockStack>
+                  </Box>
+                </InlineGrid>
+                
+                {/* File Size Distribution */}
+                {(fileMetrics?.fileSizeDistribution?.length ?? 0) > 0 && (
+                  <BlockStack gap="300">
+                    <Text as="h3" variant="headingSm">File Size Distribution</Text>
+                    {fileMetrics?.fileSizeDistribution?.map((d: any) => (
+                      <BlockStack key={d.range} gap="100">
+                        <InlineStack align="space-between">
+                          <Text as="span" variant="bodySm">{d.range}</Text>
+                          <Text as="span" variant="bodySm" fontWeight="semibold">
+                            {d.count} files ({d.percentage.toFixed(1)}%)
+                          </Text>
+                        </InlineStack>
+                        <ProgressBar progress={d.percentage} size="small" />
+                      </BlockStack>
+                    ))}
+                  </BlockStack>
+                )}
+                
+                {/* File Types */}
+                {(fileTypeBreakdown?.length ?? 0) > 0 && (
+                  <BlockStack gap="300">
+                    <Text as="h3" variant="headingSm">File Types</Text>
+                    <InlineStack gap="200" wrap>
+                      {fileTypeBreakdown?.slice(0, 5).map((t: any) => (
+                        <Badge key={t.mimeType}>
+                          {t.mimeType.split("/")[1] || t.mimeType}: {t.count} ({t.percentage.toFixed(0)}%)
+                        </Badge>
+                      ))}
+                    </InlineStack>
+                  </BlockStack>
+                )}
+              </BlockStack>
+            </Card>
+          </Layout.Section>
+
+          {/* Customer Metrics */}
+          {(customerMetrics?.uniqueCustomers ?? 0) > 0 && (
+            <Layout.Section>
+              <Card>
+                <BlockStack gap="400">
+                  <Text as="h2" variant="headingMd">🎯 Customer Lifetime Value</Text>
+                  <Divider />
+                  <InlineGrid columns={{ xs: 2, md: 4 }} gap="400">
+                    <Box padding="300" background="bg-surface-secondary" borderRadius="200">
+                      <BlockStack gap="200">
+                        <Text as="p" variant="bodySm" tone="subdued">Unique Customers</Text>
+                        <Text as="p" variant="headingLg" fontWeight="bold">
+                          {customerMetrics?.uniqueCustomers ?? 0}
+                        </Text>
+                      </BlockStack>
+                    </Box>
+                    <Box padding="300" background="bg-surface-secondary" borderRadius="200">
+                      <BlockStack gap="200">
+                        <Text as="p" variant="bodySm" tone="subdued">Repeat Customers</Text>
+                        <Text as="p" variant="headingLg" fontWeight="bold">
+                          {customerMetrics?.repeatCustomers ?? 0}
+                        </Text>
+                        <Text as="p" variant="bodySm" tone="subdued">
+                          {((customerMetrics?.repeatCustomers ?? 0) / (customerMetrics?.uniqueCustomers ?? 1) * 100).toFixed(0)}% retention
+                        </Text>
+                      </BlockStack>
+                    </Box>
+                    <Box padding="300" background="bg-surface-secondary" borderRadius="200">
+                      <BlockStack gap="200">
+                        <Text as="p" variant="bodySm" tone="subdued">Avg Revenue/Customer</Text>
+                        <Text as="p" variant="headingLg" fontWeight="bold">
+                          {formatCurrency(customerMetrics?.avgRevenuePerCustomer ?? 0)}
+                        </Text>
+                      </BlockStack>
+                    </Box>
+                    <Box padding="300" background="bg-surface-secondary" borderRadius="200">
+                      <BlockStack gap="200">
+                        <Text as="p" variant="bodySm" tone="subdued">Top Customer Value</Text>
+                        <Text as="p" variant="headingLg" fontWeight="bold">
+                          {formatCurrency(customerMetrics?.topCustomerRevenue ?? 0)}
+                        </Text>
+                      </BlockStack>
+                    </Box>
+                  </InlineGrid>
+                </BlockStack>
+              </Card>
+            </Layout.Section>
+          )}
+
           {/* Mode Breakdown */}
           <Layout.Section variant="oneHalf">
             <Card>
@@ -449,7 +761,7 @@ export default function AnalyticsPage() {
                             {m.count} ({m.percentage}%)
                           </Text>
                         </InlineStack>
-                        <ProgressBar value={m.percentage} color={modeColors[m.mode] || "#637381"} />
+                        <ProgressBarCustom value={m.percentage} color={modeColors[m.mode] || "#637381"} />
                       </BlockStack>
                     ))}
                   </BlockStack>
@@ -476,7 +788,7 @@ export default function AnalyticsPage() {
                             {l.count} ({l.percentage}%)
                           </Text>
                         </InlineStack>
-                        <ProgressBar value={l.percentage} color={locationColors[l.location] || "#637381"} />
+                        <ProgressBarCustom value={l.percentage} color={locationColors[l.location] || "#637381"} />
                       </BlockStack>
                     ))}
                   </BlockStack>

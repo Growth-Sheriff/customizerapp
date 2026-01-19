@@ -40,12 +40,20 @@ import {
   getVisitorsByBrowser,
   getDailyVisitors,
   getTopVisitors,
+  getVisitorsByOS,
+  getVisitorsByScreenResolution,
+  getVisitorsByTimezone,
+  getVisitorsByLanguage,
   type VisitorStats,
   type VisitorGeo,
   type VisitorDevice,
   type VisitorBrowser,
   type DailyVisitors,
   type TopVisitor,
+  type VisitorOS,
+  type ScreenResolution,
+  type VisitorTimezone,
+  type VisitorLanguage,
 } from "~/lib/analytics.server";
 
 interface LoaderData {
@@ -53,6 +61,10 @@ interface LoaderData {
   geoData: VisitorGeo[];
   deviceData: VisitorDevice[];
   browserData: VisitorBrowser[];
+  osData: VisitorOS[];
+  screenData: ScreenResolution[];
+  timezoneData: VisitorTimezone[];
+  languageData: VisitorLanguage[];
   dailyData: DailyVisitors[];
   topVisitors: TopVisitor[];
   error?: string;
@@ -78,6 +90,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
       geoData: [],
       deviceData: [],
       browserData: [],
+      osData: [],
+      screenData: [],
+      timezoneData: [],
+      languageData: [],
       dailyData: [],
       topVisitors: [],
       error: "Shop not found",
@@ -90,11 +106,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
   startDate.setDate(startDate.getDate() - 30);
 
   try {
-    const [stats, geoData, deviceData, browserData, dailyData, topVisitors] = await Promise.all([
+    const [stats, geoData, deviceData, browserData, osData, screenData, timezoneData, languageData, dailyData, topVisitors] = await Promise.all([
       getVisitorStats(shopId, startDate, endDate),
       getVisitorsByCountry(shopId),
       getVisitorsByDevice(shopId),
       getVisitorsByBrowser(shopId),
+      getVisitorsByOS(shopId),
+      getVisitorsByScreenResolution(shopId),
+      getVisitorsByTimezone(shopId),
+      getVisitorsByLanguage(shopId),
       getDailyVisitors(shopId, startDate, endDate),
       getTopVisitors(shopId, 15),
     ]);
@@ -104,6 +124,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
       geoData,
       deviceData,
       browserData,
+      osData,
+      screenData,
+      timezoneData,
+      languageData,
       dailyData,
       topVisitors,
     });
@@ -124,6 +148,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
       geoData: [],
       deviceData: [],
       browserData: [],
+      osData: [],
+      screenData: [],
+      timezoneData: [],
+      languageData: [],
       dailyData: [],
       topVisitors: [],
       error: error instanceof Error ? error.message : "Unknown error",
@@ -161,12 +189,7 @@ function MetricCard({
           </Text>
           {trend && (
             <Badge tone={trendUp ? "success" : trendUp === false ? "critical" : undefined}>
-              <InlineStack gap="100" blockAlign="center">
-                {trendUp !== undefined && (
-                  <Icon source={trendUp ? ArrowUpIcon : ArrowDownIcon} />
-                )}
-                {trend}
-              </InlineStack>
+              {`${trendUp !== undefined ? (trendUp ? "↑ " : "↓ ") : ""}${trend}`}
             </Badge>
           )}
         </InlineStack>
@@ -189,10 +212,10 @@ function ProgressCard({
   items: { label: string; value: number; percentage: number }[];
   colorScheme?: "default" | "success" | "info";
 }) {
-  const toneMap = {
-    default: "highlight" as const,
-    success: "success" as const,
-    info: "info" as const,
+  const toneMap: Record<string, "highlight" | "success"> = {
+    default: "highlight",
+    success: "success",
+    info: "highlight",
   };
 
   return (
@@ -222,7 +245,7 @@ function ProgressCard({
 }
 
 export default function AnalyticsVisitors() {
-  const { stats, geoData, deviceData, browserData, dailyData, topVisitors, error } =
+  const { stats, geoData, deviceData, browserData, osData, screenData, timezoneData, languageData, dailyData, topVisitors, error } =
     useLoaderData<typeof loader>();
 
   if (error) {
@@ -348,6 +371,68 @@ export default function AnalyticsVisitors() {
           </InlineGrid>
         </Layout.Section>
 
+        {/* OS & Screen Resolution */}
+        <Layout.Section>
+          <InlineGrid columns={{ xs: 1, md: 2 }} gap="400">
+            <ProgressCard
+              title="💻 Operating System"
+              items={osData.slice(0, 5).map((os) => ({
+                label: os.os,
+                value: os.count,
+                percentage: os.percentage,
+              }))}
+              colorScheme="success"
+            />
+            <ProgressCard
+              title="📐 Screen Resolution"
+              items={screenData.slice(0, 5).map((s) => ({
+                label: s.resolution,
+                value: s.count,
+                percentage: s.percentage,
+              }))}
+            />
+          </InlineGrid>
+        </Layout.Section>
+
+        {/* Language & Timezone */}
+        <Layout.Section>
+          <InlineGrid columns={{ xs: 1, md: 2 }} gap="400">
+            <Card>
+              <BlockStack gap="400">
+                <InlineStack align="space-between">
+                  <Text as="h3" variant="headingSm">🌐 Languages</Text>
+                  <Badge>{`${languageData.length} languages`}</Badge>
+                </InlineStack>
+                <InlineStack gap="200" wrap>
+                  {languageData.slice(0, 8).map((l, i) => (
+                    <Badge key={i} tone={i === 0 ? "success" : undefined}>
+                      {`${l.language}: ${l.count} (${l.percentage.toFixed(0)}%)`}
+                    </Badge>
+                  ))}
+                </InlineStack>
+              </BlockStack>
+            </Card>
+            <Card>
+              <BlockStack gap="400">
+                <InlineStack align="space-between">
+                  <Text as="h3" variant="headingSm">🕐 Top Timezones</Text>
+                  <Badge>{`${timezoneData.length} timezones`}</Badge>
+                </InlineStack>
+                <BlockStack gap="200">
+                  {timezoneData.slice(0, 5).map((tz, i) => (
+                    <InlineStack key={i} align="space-between">
+                      <Text as="span" variant="bodySm">{tz.timezone}</Text>
+                      <Text as="span" variant="bodySm" fontWeight="semibold">
+                        {tz.count} ({tz.percentage.toFixed(0)}%)
+                      </Text>
+                    </InlineStack>
+                  ))}
+                </BlockStack>
+              </BlockStack>
+            </Card>
+          </InlineGrid>
+        </Layout.Section>
+
         {/* Geographic Distribution */}
         <Layout.Section>
           <Card>
@@ -356,7 +441,7 @@ export default function AnalyticsVisitors() {
                 <Text as="h3" variant="headingMd">
                   🌍 Geographic Distribution
                 </Text>
-                <Badge>{geoData.length} countries</Badge>
+                <Badge>{`${geoData.length} countries`}</Badge>
               </InlineStack>
               <Divider />
               <InlineGrid columns={{ xs: 1, sm: 2, md: 3 }} gap="300">
@@ -411,11 +496,13 @@ export default function AnalyticsVisitors() {
                           key={i}
                           content={`${day.date}: ${day.visitors} visitors, ${day.sessions} sessions`}
                         >
-                          <Box
-                            minWidth="24px"
-                            background="bg-fill-info"
-                            borderRadius="100"
-                            style={{ height: `${height}px` }}
+                          <div
+                            style={{ 
+                              minWidth: "24px", 
+                              height: `${height}px`,
+                              backgroundColor: "#5C6AC4",
+                              borderRadius: "4px",
+                            }}
                           />
                         </Tooltip>
                       );
@@ -443,7 +530,7 @@ export default function AnalyticsVisitors() {
                 <Text as="h3" variant="headingMd">
                   🏆 Top Visitors
                 </Text>
-                <Badge tone="info">{topVisitors.length} visitors</Badge>
+                <Badge tone="info">{`${topVisitors.length} visitors`}</Badge>
               </InlineStack>
               {visitorRows.length > 0 ? (
                 <DataTable

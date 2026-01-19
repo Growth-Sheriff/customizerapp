@@ -35,17 +35,26 @@ import {
   getShopIdFromDomain,
   getVisitorStats,
   getUploadStats,
-  generateAIInsights,
+  generateEnhancedAIInsights,
   getVisitorsByDevice,
+  getCustomerSegmentation,
+  getFileMetrics,
+  getRevenueStats,
   type AIInsight,
   type VisitorStats,
   type UploadStats,
+  type CustomerSegmentation,
+  type FileMetrics,
+  type RevenueStats,
 } from "~/lib/analytics.server";
 
 interface LoaderData {
   insights: AIInsight[];
   visitorStats: VisitorStats;
   uploadStats: UploadStats;
+  customerSegmentation: CustomerSegmentation | null;
+  fileMetrics: FileMetrics | null;
+  revenueStats: RevenueStats | null;
   funnelData: {
     stage: string;
     value: number;
@@ -79,7 +88,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
         successRate: 0,
         avgFileSize: 0,
         totalDataTransferred: 0,
+        totalItems: 0,
       },
+      customerSegmentation: null,
+      fileMetrics: null,
+      revenueStats: null,
       funnelData: [],
       error: "Shop not found",
     });
@@ -91,10 +104,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
   startDate.setDate(startDate.getDate() - 30);
 
   try {
-    const [insights, visitorStats, uploadStats] = await Promise.all([
-      generateAIInsights(shopId, startDate, endDate),
+    const [insights, visitorStats, uploadStats, customerSegmentation, fileMetrics, revenueStats] = await Promise.all([
+      generateEnhancedAIInsights(shopId, startDate, endDate),
       getVisitorStats(shopId, startDate, endDate),
       getUploadStats(shopId, startDate, endDate),
+      getCustomerSegmentation(shopId, startDate, endDate),
+      getFileMetrics(shopId, startDate, endDate),
+      getRevenueStats(shopId, startDate, endDate),
     ]);
 
     // Calculate funnel data
@@ -131,6 +147,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
       insights,
       visitorStats,
       uploadStats,
+      customerSegmentation,
+      fileMetrics,
+      revenueStats,
       funnelData,
     });
   } catch (error) {
@@ -155,7 +174,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
         successRate: 0,
         avgFileSize: 0,
         totalDataTransferred: 0,
+        totalItems: 0,
       },
+      customerSegmentation: null,
+      fileMetrics: null,
+      revenueStats: null,
       funnelData: [],
       error: error instanceof Error ? error.message : "Unknown error",
     });
@@ -292,7 +315,7 @@ function formatBytes(bytes: number): string {
 }
 
 export default function AnalyticsInsights() {
-  const { insights, visitorStats, uploadStats, funnelData, error } =
+  const { insights, visitorStats, uploadStats, customerSegmentation, fileMetrics, revenueStats, funnelData, error } =
     useLoaderData<typeof loader>();
 
   if (error) {
@@ -389,7 +412,7 @@ export default function AnalyticsInsights() {
                           {stage.value.toLocaleString()}
                         </Text>
                         <Badge tone={(stage.percentage ?? 0) > 50 ? "success" : (stage.percentage ?? 0) > 10 ? "warning" : "critical"}>
-                          {(stage.percentage ?? 0).toFixed(1)}%
+                          {`${(stage.percentage ?? 0).toFixed(1)}%`}
                         </Badge>
                       </InlineStack>
                     </InlineStack>
@@ -412,7 +435,7 @@ export default function AnalyticsInsights() {
               <Text as="h2" variant="headingLg">
                 💡 AI-Powered Insights
               </Text>
-              <Badge tone="success">{insights.length} insights</Badge>
+              <Badge tone="success">{`${insights.length} insights`}</Badge>
             </InlineStack>
             
             {insights.length > 0 ? (
