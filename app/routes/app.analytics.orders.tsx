@@ -33,6 +33,11 @@ const ORDERS_QUERY = `
             }
           }
           email
+          customer {
+            email
+            firstName
+            lastName
+          }
           shippingAddress {
             city
             provinceCode
@@ -200,10 +205,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
         fulfillmentStatus: shopifyOrder.displayFulfillmentStatus,
         totalPrice: parseFloat(shopifyOrder.totalPriceSet?.shopMoney?.amount || "0"),
         currency: shopifyOrder.totalPriceSet?.shopMoney?.currencyCode || "USD",
-        customer: shopifyOrder.email ? {
-          email: shopifyOrder.email,
-          name: "",
-        } : null,
+        customer: shopifyOrder.customer ? {
+          email: shopifyOrder.customer.email || shopifyOrder.email,
+          name: [shopifyOrder.customer.firstName, shopifyOrder.customer.lastName].filter(Boolean).join(" "),
+        } : (shopifyOrder.email ? { email: shopifyOrder.email, name: "" } : null),
         shipping: shopifyOrder.shippingAddress ? {
           city: shopifyOrder.shippingAddress.city,
           state: shopifyOrder.shippingAddress.provinceCode,
