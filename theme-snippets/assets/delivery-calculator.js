@@ -1,13 +1,13 @@
 /**
  * Delivery Calculator - Zone Based Static Calculation
- * Version: 2.0.0 - Aligned with Shopify Live Rates
+ * Version: 2.1.0 - Added Holidays & Ship Date
  * 
  * Bu dosya statik zone bazlı teslimat hesaplaması yapar.
- * DÜZELTMELER:
- * - Shopify Live Rates öncelikli yapıldı
+ * DÜZELTMELER v2.1:
+ * - US Federal Holidays eklendi (2025-2027)
+ * - Ship date hesaplaması düzeltildi (cutoff + processing + holidays)
+ * - isBusinessDay fonksiyonu eklendi
  * - Statik hesaplama sadece fallback olarak kullanılıyor
- * - Zone süreleri Shopify oranlarıyla uyumlu hale getirildi
- * - localStorage sandbox hatası düzeltildi
  */
 
 (function() {
@@ -151,6 +151,20 @@
   // ============================================
   // DATE UTILITIES
   // ============================================
+  
+  // US Federal Holidays (2025-2027)
+  const US_HOLIDAYS = [
+    // 2025
+    '2025-01-01', '2025-01-20', '2025-02-17', '2025-05-26', '2025-07-04',
+    '2025-09-01', '2025-10-13', '2025-11-11', '2025-11-27', '2025-12-25',
+    // 2026
+    '2026-01-01', '2026-01-19', '2026-02-16', '2026-05-25', '2026-07-03',
+    '2026-07-04', '2026-09-07', '2026-10-12', '2026-11-11', '2026-11-26', '2026-12-25',
+    // 2027
+    '2027-01-01', '2027-01-18', '2027-02-15', '2027-05-31', '2027-07-05',
+    '2027-09-06', '2027-10-11', '2027-11-11', '2027-11-25', '2027-12-24', '2027-12-25'
+  ];
+
   function getETHour() {
     try {
       const options = { timeZone: CONFIG.timezone, hour: 'numeric', hour12: false };
@@ -169,13 +183,49 @@
     return day === 0 || day === 6;
   }
 
+  function isHoliday(date) {
+    const dateStr = date.toISOString().split('T')[0];
+    return US_HOLIDAYS.includes(dateStr);
+  }
+
+  function isBusinessDay(date) {
+    return !isWeekend(date) && !isHoliday(date);
+  }
+
+  /**
+   * Get ship date considering cutoff, weekends, and holidays
+   */
+  function getShipDate() {
+    let shipDate = new Date();
+    
+    // If past cutoff, start from tomorrow
+    if (isPastCutoff()) {
+      shipDate.setDate(shipDate.getDate() + 1);
+    }
+    
+    // Skip weekends and holidays
+    while (!isBusinessDay(shipDate)) {
+      shipDate.setDate(shipDate.getDate() + 1);
+    }
+    
+    // Add processing time (1 day)
+    shipDate.setDate(shipDate.getDate() + CONFIG.processingDays);
+    
+    // If processing lands on non-business day, skip
+    while (!isBusinessDay(shipDate)) {
+      shipDate.setDate(shipDate.getDate() + 1);
+    }
+    
+    return shipDate;
+  }
+
   function addBusinessDays(startDate, days) {
     const result = new Date(startDate);
     let added = 0;
     
     while (added < days) {
       result.setDate(result.getDate() + 1);
-      if (!isWeekend(result)) {
+      if (isBusinessDay(result)) {
         added++;
       }
     }

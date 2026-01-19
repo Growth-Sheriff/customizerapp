@@ -1,12 +1,13 @@
 /**
  * Shopify Live Shipping Rates
- * Version: 2.0.0 - Fixed Province Issue
+ * Version: 2.1.0 - Fixed Price, Holidays, Ship Date
  * 
  * Bu dosya Shopify'dan gerçek kargo oranlarını çeker.
- * DÜZELTMELER:
- * - Province parametresi ZIP'ten otomatik tespit edilir
- * - localStorage sandbox hatası düzeltildi
- * - Fiyat normalizasyonu düzeltildi
+ * DÜZELTMELER v2.1:
+ * - Fiyat normalizasyonu düzeltildi (cent vs dolar)
+ * - Tatil günleri eklendi (US Federal Holidays)
+ * - Ship date doğru hesaplanıyor (cutoff + processing + holidays)
+ * - Processing time dahil edildi
  */
 
 (function() {
@@ -346,20 +347,39 @@
   }
 
   // ============================================
-  // PRICE NORMALIZATION (FIXED)
+  // PRICE NORMALIZATION (FIXED v2.1)
   // ============================================
+  /**
+   * Shopify shipping API fiyat formatları:
+   * - "19.00" veya "19.99" → Dolar (string with decimal)
+   * - 1900 veya 1999 → Cent (integer, 4+ digit)
+   * - "1900" → Cent (string without decimal, 4+ digit)
+   * 
+   * KURAL: 
+   * - Nokta varsa → Dolar
+   * - Nokta yoksa ve >= 100 → Cent (100 cent = $1.00)
+   * - Nokta yoksa ve < 100 → Edge case, muhtemelen cent
+   */
   function normalizePrice(price) {
-    const num = parseFloat(price);
+    if (price === null || price === undefined || price === '') return 0;
+    
+    const strPrice = String(price).trim();
+    const num = parseFloat(strPrice);
+    
     if (isNaN(num)) return 0;
     
-    // Shopify bazen cent (1299), bazen dolar (12.99) formatında döner
-    // Eğer string'de nokta varsa zaten dolar formatındadır
-    if (String(price).includes('.')) {
+    // Nokta varsa zaten dolar formatında
+    if (strPrice.includes('.')) {
       return num;
     }
-    // Ondalık yoksa ve 100'den büyükse cent olarak kabul et
-    // (99 cent = $0.99 olmalı, 1299 cent = $12.99 olmalı)
-    return num >= 100 ? num / 100 : num;
+    
+    // Nokta yoksa - Shopify genelde cent olarak döner
+    // Shipping fiyatları genelde $5-$100 arası
+    // Yani 500-10000 cent arası
+    // 100'den küçük değerler çok nadir ($0.99 = 99 cent gibi)
+    
+    // HER ZAMAN cent olarak kabul et (nokta yoksa)
+    return num / 100;
   }
 
   function formatPrice(price) {
@@ -506,7 +526,16 @@
      */
     processRate(rate) {
       const normalized = normalizePrice(rate.price);
-      const days = rate.delivery_days || this.estimateDeliveryDays(rate.name);
+      const transitDays = rate.delivery_days || this.estimateDeliveryDays(rate.name);
+      
+      // Processing time (1 gün) + Transit time
+      const processingDays = 1;
+      const totalDays = processingDays + transitDays;
+      
+      // Bugünden değil, processing sonrasından başla
+      const shipDate = this.getShipDate();
+      const minDate = this.addBusinessDays(shipDate, transitDays);
+      const maxDate = this.addBusinessDays(shipDate, transitDays + 1);
       
       return {
         name: rate.name,
@@ -516,13 +545,16 @@
         isFree: normalized === 0,
         carrier: this.extractCarrier(rate.name),
         delivery: {
-          minDays: days,
-          maxDays: days + 1,
-          minDate: this.addBusinessDays(new Date(), days),
-          maxDate: this.addBusinessDays(new Date(), days + 1),
-          minDateFormatted: this.formatDate(this.addBusinessDays(new Date(), days)),
-          rangeText: this.formatDeliveryRange(days),
-          countdown: this.formatCountdown(days)
+          transitDays: transitDays,
+          processingDays: processingDays,
+          totalDays: totalDays,
+          minDays: totalDays,
+          maxDays: totalDays + 1,
+          minDate: minDate,
+          maxDate: maxDate,
+          minDateFormatted: this.formatDate(minDate),
+          rangeText: this.formatDeliveryRange(totalDays),
+          countdown: this.formatCountdown(totalDays)
         },
         source: 'shopify_live'
       };
@@ -539,6 +571,167 @@
       if (n.includes('ground')) return 5;
       if (n.includes('economy') || n.includes('standard')) return 7;
       return 5;
+    }
+
+    /**
+     * US Federal Holidays (2025-2027)
+     */
+    getHolidays() {
+      return [
+        // 2025
+        '2025-01-01', // New Year's Day
+        '2025-01-20', // MLK Day
+        '2025-02-17', // Presidents Day
+        '2025-05-26', // Memorial Day
+        '2025-07-04', // Independence Day
+        '2025-09-01', // Labor Day
+        '2025-10-13', // Columbus Day
+        '2025-11-11', // Veterans Day
+        '2025-11-27', // Thanksgiving
+        '2025-12-25', // Christmas
+        // 2026
+        '2026-01-01', // New Year's Day
+        '2026-01-19', // MLK Day
+        '2026-02-16', // Presidents Day
+        '2026-05-25', // Memorial Day
+        '2026-07-03', // Independence Day (observed)
+        '2026-07-04', // Independence Day
+        '2026-09-07', // Labor Day
+        '2026-10-12', // Columbus Day
+        '2026-11-11', // Veterans Day
+        '2026-11-26', // Thanksgiving
+        '2026-12-25', // Christmas
+        // 2027
+        '2027-01-01', // New Year's Day
+        '2027-01-18', // MLK Day
+        '2027-02-15', // Presidents Day
+        '2027-05-31', // Memorial Day
+        '2027-07-05', // Independence Day (observed)
+        '2027-09-06', // Labor Day
+        '2027-10-11', // Columbus Day
+        '2027-11-11', // Veterans Day
+        '2027-11-25', // Thanksgiving
+        '2027-12-24', // Christmas (observed)
+        '2027-12-25'  // Christmas
+      ];
+    }
+
+    /**
+     * Check if date is a holiday
+     */
+    isHoliday(date) {
+      const dateStr = date.toISOString().split('T')[0];
+      return this.getHolidays().includes(dateStr);
+    }
+
+    /**
+     * Check if date is weekend
+     */
+    isWeekend(date) {
+      const day = date.getDay();
+      return day === 0 || day === 6;
+    }
+
+    /**
+     * Check if date is a business day
+     */
+    isBusinessDay(date) {
+      return !this.isWeekend(date) && !this.isHoliday(date);
+    }
+
+    /**
+     * Get cutoff hour in ET
+     */
+    getCutoffHour() {
+      return 14; // 2 PM ET
+    }
+
+    /**
+     * Check if current time is past cutoff
+     */
+    isPastCutoff() {
+      try {
+        const options = { timeZone: 'America/New_York', hour: 'numeric', hour12: false };
+        const etHour = parseInt(new Date().toLocaleString('en-US', options));
+        return etHour >= this.getCutoffHour();
+      } catch (e) {
+        return new Date().getHours() >= this.getCutoffHour();
+      }
+    }
+
+    /**
+     * Get ship date (when order will be processed)
+     * If past cutoff or weekend/holiday, ship next business day
+     */
+    getShipDate() {
+      let shipDate = new Date();
+      
+      // If past cutoff, start from tomorrow
+      if (this.isPastCutoff()) {
+        shipDate.setDate(shipDate.getDate() + 1);
+      }
+      
+      // Skip to next business day if weekend or holiday
+      while (!this.isBusinessDay(shipDate)) {
+        shipDate.setDate(shipDate.getDate() + 1);
+      }
+      
+      // Add 1 day processing time
+      shipDate.setDate(shipDate.getDate() + 1);
+      
+      // If processing day lands on non-business day, skip to next
+      while (!this.isBusinessDay(shipDate)) {
+        shipDate.setDate(shipDate.getDate() + 1);
+      }
+      
+      return shipDate;
+    }
+
+    /**
+     * Add business days to a date (skipping weekends and holidays)
+     */
+    addBusinessDays(startDate, days) {
+      const result = new Date(startDate);
+      let added = 0;
+      
+      while (added < days) {
+        result.setDate(result.getDate() + 1);
+        if (this.isBusinessDay(result)) {
+          added++;
+        }
+      }
+      
+      return result;
+    }
+
+    /**
+     * Format date for display
+     */
+    formatDate(date) {
+      return date.toLocaleDateString('en-US', {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric'
+      });
+    }
+
+    /**
+     * Format delivery range text
+     */
+    formatDeliveryRange(days) {
+      if (days <= 1) return 'Tomorrow';
+      if (days <= 2) return '1-2 business days';
+      if (days <= 3) return '2-3 business days';
+      if (days <= 5) return '3-5 business days';
+      return `${days}-${days + 2} business days`;
+    }
+
+    /**
+     * Format countdown text
+     */
+    formatCountdown(days) {
+      if (days <= 1) return 'Arrives tomorrow';
+      return `Arrives in ${days} business days`;
     }
 
     /**
