@@ -411,6 +411,7 @@ export default function AnalyticsPage() {
       title="Analytics"
       backAction={{ content: "Dashboard", url: "/app" }}
       secondaryActions={[
+        { content: "Orders", url: "/app/analytics/orders" },
         { content: "Visitors", url: "/app/analytics/visitors" },
         { content: "Attribution", url: "/app/analytics/attribution" },
         { content: "Production Queue", url: "/app/queue" },
