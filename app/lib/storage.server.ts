@@ -129,9 +129,7 @@ export function isStorageConfigured(config: StorageConfig): boolean {
  * Get effective provider with fallback
  */
 export function getEffectiveStorageProvider(config: StorageConfig): StorageProvider {
-  console.log(`[Storage Debug] provider: ${config.provider}, bunnyApiKey: ${config.bunnyApiKey ? 'SET' : 'NOT SET'}, bunnyZone: ${config.bunnyZone}`);
   if (isStorageConfigured(config)) {
-    console.log(`[Storage Debug] ${config.provider} is configured, using it`);
     return config.provider;
   }
   // Fallback to local if primary not configured
