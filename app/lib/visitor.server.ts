@@ -13,7 +13,7 @@
 
 import { prisma } from "./prisma.server";
 import {
-  extractGeoFromHeaders,
+  getGeoWithFallback,
   extractUtmParams,
   parseReferrer,
   determineReferrerType,
@@ -77,7 +77,8 @@ export async function upsertVisitorAndSession(
   attribution: AttributionData,
   request: Request
 ): Promise<VisitorUpsertResult> {
-  const geo = extractGeoFromHeaders(request);
+  // Get geo with IP-based fallback
+  const geo = await getGeoWithFallback(request);
   
   // Parse referrer
   const { referrerDomain } = parseReferrer(attribution.referrer || null);

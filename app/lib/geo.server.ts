@@ -1,10 +1,15 @@
 /**
  * Geo Location Server Utilities
  * Extracts geo information from Cloudflare/Caddy headers
+ * Falls back to IP-based geo lookup if headers unavailable
  * 
  * @module geo.server
- * @version 1.0.0
+ * @version 1.1.0
  */
+
+// Simple in-memory cache for IP lookups (5 min TTL)
+const geoCache = new Map<string, { data: GeoInfo; timestamp: number }>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 export interface GeoInfo {
   country: string | null;
@@ -45,6 +50,80 @@ export function extractGeoFromHeaders(request: Request): GeoInfo {
         headers.get("x-real-ip") || 
         null,
   };
+}
+
+/**
+ * Get geo info with IP-based fallback
+ * Uses ip-api.com (free, 45 req/min limit)
+ */
+export async function getGeoWithFallback(request: Request): Promise<GeoInfo> {
+  // First try headers (Cloudflare etc.)
+  const headerGeo = extractGeoFromHeaders(request);
+  
+  // If we have country from headers, use it
+  if (headerGeo.country) {
+    return headerGeo;
+  }
+  
+  // Get IP for lookup
+  const ip = headerGeo.ip;
+  if (!ip || ip === "127.0.0.1" || ip === "::1" || ip.startsWith("192.168.") || ip.startsWith("10.")) {
+    // Local IP, can't lookup
+    return headerGeo;
+  }
+  
+  // Check cache first
+  const cached = geoCache.get(ip);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.data;
+  }
+  
+  // Lookup via ip-api.com (free tier)
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2000); // 2s timeout
+    
+    const response = await fetch(
+      `http://ip-api.com/json/${ip}?fields=status,country,countryCode,regionName,city,timezone`,
+      { signal: controller.signal }
+    );
+    clearTimeout(timeoutId);
+    
+    if (response.ok) {
+      const data = await response.json();
+      
+      if (data.status === "success") {
+        const geoInfo: GeoInfo = {
+          country: data.countryCode || null, // ISO 3166-1 alpha-2 (US, TR, DE)
+          region: data.regionName || null,
+          city: data.city || null,
+          timezone: data.timezone || null,
+          ip,
+        };
+        
+        // Cache the result
+        geoCache.set(ip, { data: geoInfo, timestamp: Date.now() });
+        
+        // Clean old cache entries periodically
+        if (geoCache.size > 1000) {
+          const now = Date.now();
+          for (const [key, val] of geoCache.entries()) {
+            if (now - val.timestamp > CACHE_TTL) {
+              geoCache.delete(key);
+            }
+          }
+        }
+        
+        return geoInfo;
+      }
+    }
+  } catch (error) {
+    // Timeout or network error - fail silently
+    console.warn("[Geo] IP lookup failed:", error instanceof Error ? error.message : "Unknown error");
+  }
+  
+  // Return header-based info (may have partial data)
+  return headerGeo;
 }
 
 /**
