@@ -902,6 +902,9 @@
     progressFill.style.width = '10%';
     progressText.textContent = 'Getting upload URL...';
     
+    // Get MIME type with fallback for unsupported types (PSD, AI, EPS etc.)
+    const mimeType = file.type || 'application/octet-stream';
+    
     try {
       // Step 1: Get upload intent
       const intentResponse = await fetch(`${apiBase}/api/upload/intent`, {
@@ -911,7 +914,7 @@
           shopDomain: shopDomain,
           productId: productId,
           mode: 'quick',
-          contentType: file.type,
+          contentType: mimeType,
           fileName: file.name,
           fileSize: file.size,
           customerId: customerId,
@@ -968,7 +971,7 @@
           xhr.ontimeout = () => reject(new Error('Upload timeout'));
           
           xhr.open('PUT', uploadUrl);
-          xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+          xhr.setRequestHeader('Content-Type', mimeType);
           if (uploadHeaders) {
             Object.entries(uploadHeaders).forEach(([k, v]) => xhr.setRequestHeader(k, v));
           }
