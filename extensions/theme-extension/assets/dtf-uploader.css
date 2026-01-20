@@ -128,6 +128,37 @@
   opacity: 0.8;
 }
 
+/* ===== CENTERED HEADER STYLE ===== */
+.ul-section-header--centered {
+  flex-direction: column;
+  text-align: center;
+  gap: 12px;
+}
+
+.ul-section-title--hero {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--ul-text);
+  letter-spacing: -0.01em;
+}
+
+.ul-step-badge--glow {
+  width: 36px;
+  height: 36px;
+  font-size: 16px;
+  box-shadow: 0 0 20px rgba(99, 102, 241, 0.4);
+  animation: ul-glow-badge 2s ease-in-out infinite;
+}
+
+@keyframes ul-glow-badge {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(99, 102, 241, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(99, 102, 241, 0.6);
+  }
+}
+
 /* ===== DROPZONE ===== */
 .ul-dropzone {
   border: 2px dashed var(--ul-border);

@@ -62,7 +62,7 @@
   // ===== GLOBAL NAMESPACE =====
   const ULDTFUploader = {
     instances: {},
-    version: '4.3.1', // Fix: Wait for thumbnail before showing preview for non-browser formats
+    version: '4.4.0', // UI: Centered hero title, glow badge, better animations
 
     /**
      * Initialize uploader for a product
