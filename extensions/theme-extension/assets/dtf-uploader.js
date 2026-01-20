@@ -1,5 +1,5 @@
 /**
- * Product 3D Customizer - DTF Uploader v4.1.0
+ * Product 3D Customizer - DTF Uploader v4.3.0
  * ======================
  * FAZ 1: Core DTF Upload Widget
  * FAZ 4: Global State Integration
@@ -12,6 +12,7 @@
  * - Add to Cart with line item properties
  * - T-Shirt modal integration (FAZ 2)
  * - Global state sync (FAZ 4)
+ * - Non-blocking thumbnail for PSD/PDF/AI/EPS/TIFF (v4.3.0)
  * 
  * State Management Architecture:
  * - Each product has its own isolated state
@@ -61,7 +62,7 @@
   // ===== GLOBAL NAMESPACE =====
   const ULDTFUploader = {
     instances: {},
-    version: '4.2.0', // Added upload cancel support
+    version: '4.3.0', // Added non-blocking thumbnail for PSD/PDF/AI/EPS/TIFF
 
     /**
      * Initialize uploader for a product
@@ -1247,11 +1248,33 @@
         `;
       }
 
-      // Set thumbnail
+      // Set thumbnail - v4.3.0: Non-blocking thumbnail for PSD/PDF/AI/EPS/TIFF
+      const NON_BROWSER_EXTENSIONS = ['psd', 'pdf', 'ai', 'eps', 'tiff', 'tif'];
+      const fileExt = file.name.split('.').pop()?.toLowerCase() || '';
+      const isNonBrowserFormat = NON_BROWSER_EXTENSIONS.includes(fileExt);
+      
       if (result.thumbnailUrl) {
+        // Thumbnail ready from server
         elements.thumb.src = result.thumbnailUrl;
+        elements.thumb.classList.remove('loading-spinner');
+      } else if (isNonBrowserFormat) {
+        // Non-browser format: Show spinner and start background polling for thumbnail
+        console.log('[UL] Non-browser format detected, showing spinner:', fileExt);
+        elements.thumb.src = 'data:image/svg+xml,' + encodeURIComponent(`
+          <svg xmlns="http://www.w3.org/2000/svg" width="72" height="72" viewBox="0 0 50 50">
+            <circle cx="25" cy="25" r="20" fill="none" stroke="#e5e7eb" stroke-width="4"/>
+            <circle cx="25" cy="25" r="20" fill="none" stroke="#3b82f6" stroke-width="4" 
+              stroke-dasharray="80" stroke-dashoffset="60">
+              <animateTransform attributeName="transform" type="rotate" from="0 25 25" to="360 25 25" dur="1s" repeatCount="indefinite"/>
+            </circle>
+          </svg>
+        `);
+        elements.thumb.classList.add('loading-spinner');
+        
+        // Start background polling for thumbnail (non-blocking)
+        this.pollForThumbnail(productId, state.upload.uploadId);
       } else if (file.type.startsWith('image/')) {
-        // Create local preview for images
+        // Browser-supported image: Use FileReader for instant preview
         const reader = new FileReader();
         reader.onload = (e) => { elements.thumb.src = e.target.result; };
         reader.readAsDataURL(instance.lastFile || new Blob());
@@ -1272,6 +1295,88 @@
       if (state.config.tshirtEnabled) {
         elements.tshirtBtn.disabled = false;
       }
+    },
+
+    /**
+     * v4.3.0: Poll for thumbnail in background (non-blocking)
+     * Used for PSD/PDF/AI/EPS/TIFF files that need server-side thumbnail generation
+     */
+    async pollForThumbnail(productId, uploadId) {
+      const instance = this.instances[productId];
+      if (!instance || !uploadId) return;
+      
+      const { elements, apiBase, shopDomain, state } = instance;
+      const MAX_THUMBNAIL_POLLS = 60; // 60 seconds max for thumbnail
+      let pollCount = 0;
+      
+      console.log('[UL] Starting background thumbnail polling for upload:', uploadId);
+      
+      const doPoll = async () => {
+        try {
+          // Check if upload was cancelled or instance destroyed
+          if (!this.instances[productId] || instance.isCancelled) {
+            console.log('[UL] Thumbnail polling stopped - instance cancelled');
+            return;
+          }
+          
+          pollCount++;
+          if (pollCount > MAX_THUMBNAIL_POLLS) {
+            console.log('[UL] Thumbnail polling timeout - using fallback icon');
+            // Keep spinner, user can still proceed with cart
+            return;
+          }
+          
+          const response = await fetch(
+            `${apiBase}/api/upload/status/${uploadId}?shopDomain=${encodeURIComponent(shopDomain)}`
+          );
+          
+          if (!response.ok) {
+            setTimeout(doPoll, 1500);
+            return;
+          }
+          
+          const data = await response.json();
+          
+          if (data.thumbnailUrl) {
+            // Thumbnail ready!
+            console.log('[UL] Thumbnail received:', data.thumbnailUrl);
+            
+            // Update state
+            state.upload.result.thumbnailUrl = data.thumbnailUrl;
+            elements.thumbnailUrlField.value = data.thumbnailUrl;
+            
+            // Update image smoothly
+            const img = new Image();
+            img.onload = () => {
+              elements.thumb.src = data.thumbnailUrl;
+              elements.thumb.classList.remove('loading-spinner');
+            };
+            img.onerror = () => {
+              console.warn('[UL] Thumbnail image load failed');
+              // Keep spinner as fallback
+            };
+            img.src = data.thumbnailUrl;
+            
+            // Emit event for other components
+            window.dispatchEvent(new CustomEvent('ul:thumbnail:ready', {
+              detail: { uploadId, productId, thumbnailUrl: data.thumbnailUrl }
+            }));
+            
+            return; // Success - stop polling
+          }
+          
+          // No thumbnail yet, continue polling
+          setTimeout(doPoll, 1500);
+          
+        } catch (error) {
+          console.warn('[UL] Thumbnail poll error:', error);
+          // Continue polling on error
+          setTimeout(doPoll, 2000);
+        }
+      };
+      
+      // Start polling after short delay (give preflight time to start)
+      setTimeout(doPoll, 1000);
     },
 
     /**

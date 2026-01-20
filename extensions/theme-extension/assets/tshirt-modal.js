@@ -1202,8 +1202,20 @@ console.log('[ULTShirtModal] Script loading...');
       // Calculate upload duration
       const uploadDuration = (uploadDurationMs / 1000).toFixed(1);
       
-      // Create object URL for preview (NO server fetch needed - avoids 401!)
-      const thumbnailUrl = URL.createObjectURL(file);
+      // v4.3.0: Check if non-browser format (needs server-side thumbnail for 3D texture)
+      const NON_BROWSER_EXTENSIONS = ['psd', 'pdf', 'ai', 'eps', 'tiff', 'tif'];
+      const ext = file.name.split('.').pop()?.toLowerCase() || '';
+      const isNonBrowserFormat = NON_BROWSER_EXTENSIONS.includes(ext);
+      
+      let thumbnailUrl;
+      if (isNonBrowserFormat) {
+        // Non-browser format: Poll for server-generated thumbnail
+        console.log('[ULTShirtModal] Non-browser format detected, polling for thumbnail:', ext);
+        thumbnailUrl = await this.pollForThumbnail(uploadId, uploadDuration, progressCallback);
+      } else {
+        // Browser-supported format: Create object URL for instant preview
+        thumbnailUrl = URL.createObjectURL(file);
+      }
       
       // Build full public URL with https://
       const fullUrl = `${window.location.origin}${apiBase}/api/upload/file/${uploadId}`;
@@ -1216,6 +1228,84 @@ console.log('[ULTShirtModal] Script loading...');
         thumbnailUrl,
         uploadDuration
       };
+    },
+    
+    /**
+     * v4.3.0: Poll for server-generated thumbnail (for PSD/PDF/AI/EPS/TIFF)
+     * These formats need preflight processing to generate a browser-viewable thumbnail
+     */
+    async pollForThumbnail(uploadId, uploadDuration, progressCallback) {
+      const apiBase = '/apps/customizer';
+      const shopDomain = this.getShopDomain();
+      const MAX_POLLS = 60; // 60 seconds max
+      let pollCount = 0;
+      
+      if (progressCallback) {
+        progressCallback({ phase: 'processing', percent: 100, text: 'Processing design...' });
+      }
+      
+      return new Promise((resolve) => {
+        const doPoll = async () => {
+          pollCount++;
+          
+          if (pollCount > MAX_POLLS) {
+            console.log('[ULTShirtModal] Thumbnail polling timeout');
+            // Return placeholder and let user proceed (design will be on 3D model as placeholder)
+            resolve('data:image/svg+xml,' + encodeURIComponent(`
+              <svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 100 100">
+                <rect width="100" height="100" fill="#f3f4f6"/>
+                <text x="50" y="45" text-anchor="middle" fill="#6b7280" font-size="8">Preview</text>
+                <text x="50" y="55" text-anchor="middle" fill="#6b7280" font-size="8">processing...</text>
+              </svg>
+            `));
+            return;
+          }
+          
+          try {
+            const response = await fetch(
+              `${apiBase}/api/upload/status/${uploadId}?shopDomain=${encodeURIComponent(shopDomain)}`
+            );
+            
+            if (response.ok) {
+              const data = await response.json();
+              
+              if (data.thumbnailUrl) {
+                console.log('[ULTShirtModal] Thumbnail ready:', data.thumbnailUrl);
+                
+                if (progressCallback) {
+                  progressCallback({ 
+                    phase: 'complete', 
+                    percent: 100, 
+                    text: `Uploaded in ${uploadDuration}s` 
+                  });
+                }
+                
+                resolve(data.thumbnailUrl);
+                return;
+              }
+            }
+            
+            // Update progress text
+            if (progressCallback && pollCount > 3) {
+              progressCallback({ 
+                phase: 'processing', 
+                percent: 100, 
+                text: `Processing design... ${pollCount}s` 
+              });
+            }
+            
+            // Continue polling
+            setTimeout(doPoll, 1000);
+            
+          } catch (error) {
+            console.warn('[ULTShirtModal] Thumbnail poll error:', error);
+            setTimeout(doPoll, 1500);
+          }
+        };
+        
+        // Start polling
+        setTimeout(doPoll, 500);
+      });
     },
 
     updateUploadProgress(percent) {

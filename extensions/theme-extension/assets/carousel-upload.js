@@ -389,7 +389,26 @@
       }
 
       state.uploadedFile = file;
-      state.uploadedFileUrl = URL.createObjectURL(file);
+      
+      // v4.3.0: Check if non-browser format (needs server-side thumbnail)
+      const NON_BROWSER_EXTENSIONS = ['psd', 'pdf', 'ai', 'eps', 'tiff', 'tif'];
+      const isNonBrowserFormat = NON_BROWSER_EXTENSIONS.includes(ext);
+      
+      if (isNonBrowserFormat) {
+        // Use spinner placeholder - actual thumbnail will come from server after upload
+        state.uploadedFileUrl = 'data:image/svg+xml,' + encodeURIComponent(`
+          <svg xmlns="http://www.w3.org/2000/svg" width="72" height="72" viewBox="0 0 50 50">
+            <circle cx="25" cy="25" r="20" fill="none" stroke="#e5e7eb" stroke-width="4"/>
+            <circle cx="25" cy="25" r="20" fill="none" stroke="#3b82f6" stroke-width="4" 
+              stroke-dasharray="80" stroke-dashoffset="60">
+              <animateTransform attributeName="transform" type="rotate" from="0 25 25" to="360 25 25" dur="1s" repeatCount="indefinite"/>
+            </circle>
+          </svg>
+        `);
+        console.log('[UL-Carousel] Non-browser format, using spinner:', ext);
+      } else {
+        state.uploadedFileUrl = URL.createObjectURL(file);
+      }
 
       // Show preview
       if (uploadZone) uploadZone.style.display = 'none';
@@ -398,7 +417,12 @@
         const fileName = preview.querySelector('.ul-file-name');
         const fileSize = preview.querySelector('.ul-file-size');
         
-        if (previewImg) previewImg.src = state.uploadedFileUrl;
+        if (previewImg) {
+          previewImg.src = state.uploadedFileUrl;
+          if (isNonBrowserFormat) {
+            previewImg.dataset.waitingThumbnail = 'true';
+          }
+        }
         if (fileName) fileName.textContent = file.name;
         if (fileSize) fileSize.textContent = formatFileSize(file.size);
         
