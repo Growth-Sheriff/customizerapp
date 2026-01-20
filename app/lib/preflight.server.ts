@@ -191,14 +191,35 @@ export async function getPdfInfo(filePath: string): Promise<{
 // Security: -dSAFER prevents file system access, -dNOCACHE prevents disk caching
 // -dNOPLATFONTS disables platform font access, -dSANDBOX enables full sandbox mode
 export async function convertPdfToPng(inputPath: string, outputPath: string, dpi: number = 300): Promise<void> {
-  const cmd = `gs -dSAFER -dBATCH -dNOPAUSE -dNOCACHE -dNOPLATFONTS -dPARANOIDSAFER -sDEVICE=png16m -r${dpi} -dFirstPage=1 -dLastPage=1 -dMaxBitmap=500000000 -dBufferSpace=1000000 -sOutputFile="${outputPath}" "${inputPath}"`;
+  // Try multiple approaches for better PDF compatibility
+  const commands = [
+    // Standard high-quality conversion
+    `gs -dSAFER -dBATCH -dNOPAUSE -dNOCACHE -dNOPLATFONTS -dPARANOIDSAFER -sDEVICE=png16m -r${dpi} -dFirstPage=1 -dLastPage=1 -dMaxBitmap=500000000 -dBufferSpace=1000000 -sOutputFile="${outputPath}" "${inputPath}"`,
+    // Fallback: Lower DPI for problematic PDFs
+    `gs -dSAFER -dBATCH -dNOPAUSE -sDEVICE=png16m -r150 -dFirstPage=1 -dLastPage=1 -sOutputFile="${outputPath}" "${inputPath}"`,
+    // Last resort: Use ImageMagick with density
+    `convert -density 150 "${inputPath}[0]" -colorspace sRGB -flatten -quality 90 "${outputPath}"`
+  ];
 
-  try {
-    await execAsync(cmd, { timeout: 30000 }); // Reduced timeout for security
-  } catch (error) {
-    console.error("[Preflight] Ghostscript conversion failed:", error);
-    throw new Error("PDF conversion failed");
+  let lastError: Error | null = null;
+  
+  for (const cmd of commands) {
+    try {
+      await execAsync(cmd, { timeout: 60000 });
+      // Verify the output file exists and is valid
+      const stats = await fs.stat(outputPath).catch(() => null);
+      if (stats && stats.size > 100) {
+        console.log("[Preflight] PDF conversion successful with command:", cmd.substring(0, 50));
+        return;
+      }
+    } catch (error) {
+      console.warn("[Preflight] PDF conversion attempt failed:", (error as Error).message);
+      lastError = error as Error;
+    }
   }
+  
+  console.error("[Preflight] All PDF conversion methods failed");
+  throw lastError || new Error("PDF conversion failed");
 }
 
 // Get PDF page count using Ghostscript
@@ -224,14 +245,35 @@ export async function getPdfPageCount(inputPath: string): Promise<number> {
 
 // Convert AI/EPS to PNG using Ghostscript
 export async function convertEpsToPng(inputPath: string, outputPath: string, dpi: number = 300): Promise<void> {
-  const cmd = `gs -dSAFER -dBATCH -dNOPAUSE -dNOCACHE -dNOPLATFONTS -dPARANOIDSAFER -sDEVICE=png16m -r${dpi} -dEPSCrop -dMaxBitmap=500000000 -dBufferSpace=1000000 -sOutputFile="${outputPath}" "${inputPath}"`;
+  // Try multiple approaches for better AI/EPS compatibility
+  const commands = [
+    // Standard EPS conversion with crop
+    `gs -dSAFER -dBATCH -dNOPAUSE -dNOCACHE -dNOPLATFONTS -dPARANOIDSAFER -sDEVICE=png16m -r${dpi} -dEPSCrop -dMaxBitmap=500000000 -dBufferSpace=1000000 -sOutputFile="${outputPath}" "${inputPath}"`,
+    // Fallback: Without EPS crop (for AI files that are PDF-based)
+    `gs -dSAFER -dBATCH -dNOPAUSE -sDEVICE=png16m -r150 -dFirstPage=1 -dLastPage=1 -sOutputFile="${outputPath}" "${inputPath}"`,
+    // Last resort: ImageMagick (works for many AI files)
+    `convert -density 150 "${inputPath}[0]" -colorspace sRGB -flatten -quality 90 "${outputPath}"`
+  ];
 
-  try {
-    await execAsync(cmd, { timeout: 30000 }); // Reduced timeout for security
-  } catch (error) {
-    console.error("[Preflight] Ghostscript EPS conversion failed:", error);
-    throw new Error("EPS/AI conversion failed");
+  let lastError: Error | null = null;
+  
+  for (const cmd of commands) {
+    try {
+      await execAsync(cmd, { timeout: 60000 });
+      // Verify the output file exists and is valid
+      const stats = await fs.stat(outputPath).catch(() => null);
+      if (stats && stats.size > 100) {
+        console.log("[Preflight] AI/EPS conversion successful with command:", cmd.substring(0, 50));
+        return;
+      }
+    } catch (error) {
+      console.warn("[Preflight] AI/EPS conversion attempt failed:", (error as Error).message);
+      lastError = error as Error;
+    }
   }
+  
+  console.error("[Preflight] All AI/EPS conversion methods failed");
+  throw lastError || new Error("EPS/AI conversion failed");
 }
 
 // Convert TIFF to PNG using ImageMagick
@@ -269,8 +311,27 @@ export async function generateThumbnail(inputPath: string, outputPath: string, m
 
   try {
     await execAsync(cmd, { timeout: 30000 });
+    // Verify thumbnail was created and is valid
+    const stats = await fs.stat(outputPath).catch(() => null);
+    if (!stats || stats.size < 100) {
+      throw new Error("Thumbnail file is empty or too small");
+    }
   } catch (error) {
     console.error("[Preflight] Thumbnail generation failed:", error);
+    
+    // Create a fallback placeholder thumbnail
+    try {
+      console.log("[Preflight] Creating fallback placeholder thumbnail");
+      // Create a simple gray placeholder with "PDF" or "AI" text
+      const ext = path.extname(inputPath).toLowerCase().replace('.', '').toUpperCase() || 'FILE';
+      const fallbackCmd = `convert -size ${maxSize}x${maxSize} xc:#f3f4f6 -gravity center -pointsize 48 -fill "#6b7280" -annotate 0 "${ext}" -quality 85 "${outputPath}"`;
+      await execAsync(fallbackCmd, { timeout: 10000 });
+      console.log("[Preflight] Fallback thumbnail created successfully");
+      return;
+    } catch (fallbackError) {
+      console.error("[Preflight] Fallback thumbnail also failed:", fallbackError);
+    }
+    
     throw new Error("Thumbnail generation failed");
   }
 }

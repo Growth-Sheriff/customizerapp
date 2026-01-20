@@ -1,5 +1,5 @@
 /**
- * Product 3D Customizer - DTF Uploader v4.3.0
+ * Product 3D Customizer - DTF Uploader v4.5.0
  * ======================
  * FAZ 1: Core DTF Upload Widget
  * FAZ 4: Global State Integration
@@ -13,6 +13,8 @@
  * - T-Shirt modal integration (FAZ 2)
  * - Global state sync (FAZ 4)
  * - Non-blocking thumbnail for PSD/PDF/AI/EPS/TIFF (v4.3.0)
+ * - v4.4.1: Add to Cart enabled immediately after upload (no thumbnail wait)
+ * - v4.5.0: 5s timeout for thumbnail, fallback icon, better UX messages
  * 
  * State Management Architecture:
  * - Each product has its own isolated state
@@ -62,7 +64,7 @@
   // ===== GLOBAL NAMESPACE =====
   const ULDTFUploader = {
     instances: {},
-    version: '4.4.0', // UI: Centered hero title, glow badge, better animations
+    version: '4.5.0', // v4.5.0: Non-blocking Add to Cart, 5s thumbnail timeout, fallback icons
 
     /**
      * Initialize uploader for a product
@@ -750,7 +752,7 @@
 
         // Step 4: Poll for processing status
         state.upload.status = 'processing';
-        elements.progressText.textContent = 'Almost done...';
+        elements.progressText.textContent = 'Processing thumbnail...';
         await this.pollUploadStatus(productId, intentData.uploadId);
 
       } catch (error) {
@@ -1035,20 +1037,20 @@
 
           const data = await response.json();
 
-          // v4.3.1: For non-browser formats (PSD/PDF/AI/EPS/TIFF), wait for thumbnail
+          // v4.4.1: NON-BLOCKING thumbnail - Add to Cart should work immediately
+          // Don't wait for thumbnail, proceed when upload is finished
           const NON_BROWSER_FORMATS = ['psd', 'pdf', 'ai', 'eps', 'tiff', 'tif'];
           const fileExt = state.upload.file.name.split('.').pop()?.toLowerCase() || '';
           const isNonBrowserFormat = NON_BROWSER_FORMATS.includes(fileExt);
           
           // Accept all "finished" statuses - including blocked/warning (DPI issues etc.)
-          // For non-browser formats, also require thumbnailUrl to be present
           const finishedStatuses = ['ready', 'completed', 'blocked', 'needs_review', 'uploaded'];
           const isFinished = finishedStatuses.includes(data.status);
           const hasThumbnail = !!data.thumbnailUrl;
           
-          // For non-browser formats: wait for thumbnail before showing preview
-          // For browser formats: proceed immediately
-          const canProceed = isFinished && (!isNonBrowserFormat || hasThumbnail);
+          // v4.4.1: Proceed immediately when upload is finished
+          // Thumbnail will be polled in background - don't block Add to Cart
+          const canProceed = isFinished;
           
           if (canProceed) {
             // Success - upload processing complete (may have warnings)
@@ -1253,15 +1255,20 @@
       } else {
         elements.preview.classList.remove('has-warning');
         statusEl.classList.remove('warning');
+        // v4.4.1: Different message for non-browser formats
+        const NON_BROWSER_CHECK = ['psd', 'pdf', 'ai', 'eps', 'tiff', 'tif'];
+        const extCheck = file.name.split('.').pop()?.toLowerCase() || '';
+        const isNonBrowser = NON_BROWSER_CHECK.includes(extCheck);
+        
         statusEl.innerHTML = `
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
-          <span>Ready for print</span>
+          <span>${isNonBrowser ? 'Ready for Order - Thumbnail Processing' : 'Ready for print'}</span>
         `;
       }
 
-      // Set thumbnail - v4.3.0: Non-blocking thumbnail for PSD/PDF/AI/EPS/TIFF
+      // Set thumbnail - v4.4.1: Non-blocking thumbnail for PSD/PDF/AI/EPS/TIFF
       const NON_BROWSER_EXTENSIONS = ['psd', 'pdf', 'ai', 'eps', 'tiff', 'tif'];
       const fileExt = file.name.split('.').pop()?.toLowerCase() || '';
       const isNonBrowserFormat = NON_BROWSER_EXTENSIONS.includes(fileExt);
@@ -1271,21 +1278,33 @@
         elements.thumb.src = result.thumbnailUrl;
         elements.thumb.classList.remove('loading-spinner');
       } else if (isNonBrowserFormat) {
-        // Non-browser format: Show spinner and start background polling for thumbnail
-        console.log('[UL] Non-browser format detected, showing spinner:', fileExt);
+        // v4.4.1: Non-browser format - Show processing message and file type icon
+        // Add to Cart is already enabled - thumbnail is non-blocking
+        console.log('[UL] Non-browser format detected, showing processing state:', fileExt);
+        
+        // Show file type specific icon with spinner overlay
+        const fileTypeLabel = fileExt.toUpperCase();
         elements.thumb.src = 'data:image/svg+xml,' + encodeURIComponent(`
-          <svg xmlns="http://www.w3.org/2000/svg" width="72" height="72" viewBox="0 0 50 50">
-            <circle cx="25" cy="25" r="20" fill="none" stroke="#e5e7eb" stroke-width="4"/>
-            <circle cx="25" cy="25" r="20" fill="none" stroke="#3b82f6" stroke-width="4" 
-              stroke-dasharray="80" stroke-dashoffset="60">
-              <animateTransform attributeName="transform" type="rotate" from="0 25 25" to="360 25 25" dur="1s" repeatCount="indefinite"/>
+          <svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
+            <!-- Background -->
+            <rect width="100" height="100" rx="8" fill="#f9fafb"/>
+            <!-- File icon -->
+            <path d="M30 20 L60 20 L70 30 L70 80 L30 80 Z" fill="#e5e7eb" stroke="#9ca3af" stroke-width="2"/>
+            <path d="M60 20 L60 30 L70 30" fill="#d1d5db" stroke="#9ca3af" stroke-width="2"/>
+            <!-- File type label -->
+            <text x="50" y="58" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#374151" text-anchor="middle">${fileTypeLabel}</text>
+            <!-- Spinner ring -->
+            <circle cx="75" cy="75" r="12" fill="white" stroke="#e5e7eb" stroke-width="2"/>
+            <circle cx="75" cy="75" r="8" fill="none" stroke="#3b82f6" stroke-width="2" stroke-dasharray="25" stroke-dashoffset="15">
+              <animateTransform attributeName="transform" type="rotate" from="0 75 75" to="360 75 75" dur="1s" repeatCount="indefinite"/>
             </circle>
           </svg>
         `);
         elements.thumb.classList.add('loading-spinner');
         
         // Start background polling for thumbnail (non-blocking)
-        this.pollForThumbnail(productId, state.upload.uploadId);
+        // 5 second timeout: if no thumbnail after 5s, show fallback icon
+        this.pollForThumbnailWithTimeout(productId, state.upload.uploadId, 5000);
       } else if (file.type.startsWith('image/')) {
         // Browser-supported image: Use FileReader for instant preview
         const reader = new FileReader();
@@ -1390,6 +1409,141 @@
       
       // Start polling after short delay (give preflight time to start)
       setTimeout(doPoll, 1000);
+    },
+
+    /**
+     * v4.4.1: Poll for thumbnail with timeout - shows fallback after timeout
+     * Used for PSD/PDF/AI/EPS/TIFF files that need server-side thumbnail generation
+     * After timeout, shows a nice fallback icon so user can continue with Add to Cart
+     */
+    async pollForThumbnailWithTimeout(productId, uploadId, timeoutMs = 5000) {
+      const instance = this.instances[productId];
+      if (!instance || !uploadId) return;
+      
+      const { elements, apiBase, shopDomain, state } = instance;
+      const startTime = Date.now();
+      const fileExt = state.upload.file.name.split('.').pop()?.toLowerCase() || 'file';
+      
+      console.log(`[UL] Starting thumbnail polling with ${timeoutMs}ms timeout for:`, uploadId);
+      
+      const showFallbackIcon = () => {
+        // Show a nice file type icon when thumbnail generation takes too long
+        const fileTypeLabel = fileExt.toUpperCase();
+        console.log('[UL] Thumbnail timeout - showing fallback icon for:', fileTypeLabel);
+        
+        elements.thumb.src = 'data:image/svg+xml,' + encodeURIComponent(`
+          <svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
+            <!-- Background -->
+            <rect width="100" height="100" rx="8" fill="#f0fdf4"/>
+            <!-- File icon -->
+            <path d="M30 15 L60 15 L70 25 L70 85 L30 85 Z" fill="#dcfce7" stroke="#22c55e" stroke-width="2"/>
+            <path d="M60 15 L60 25 L70 25" fill="#bbf7d0" stroke="#22c55e" stroke-width="2"/>
+            <!-- File type label -->
+            <text x="50" y="55" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#166534" text-anchor="middle">${fileTypeLabel}</text>
+            <!-- Checkmark badge -->
+            <circle cx="75" cy="75" r="12" fill="#22c55e"/>
+            <path d="M70 75 L73 78 L80 71" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        `);
+        elements.thumb.classList.remove('loading-spinner');
+        
+        // Update status message
+        const statusEl = elements.filestatus;
+        if (statusEl) {
+          statusEl.innerHTML = `
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span>Ready for Order and Print - Continue to Add to Cart</span>
+          `;
+        }
+      };
+      
+      const doPoll = async () => {
+        try {
+          // Check if upload was cancelled or instance destroyed
+          if (!this.instances[productId] || instance.isCancelled) {
+            console.log('[UL] Thumbnail polling stopped - instance cancelled');
+            return;
+          }
+          
+          // Check timeout
+          const elapsed = Date.now() - startTime;
+          if (elapsed >= timeoutMs) {
+            console.log('[UL] Thumbnail polling timeout reached after', elapsed, 'ms');
+            showFallbackIcon();
+            // Continue polling in background to update later if thumbnail becomes available
+            this.pollForThumbnail(productId, uploadId);
+            return;
+          }
+          
+          const response = await fetch(
+            `${apiBase}/api/upload/status/${uploadId}?shopDomain=${encodeURIComponent(shopDomain)}`
+          );
+          
+          if (!response.ok) {
+            setTimeout(doPoll, 1000);
+            return;
+          }
+          
+          const data = await response.json();
+          
+          if (data.thumbnailUrl) {
+            // Thumbnail ready!
+            console.log('[UL] Thumbnail received within timeout:', data.thumbnailUrl);
+            
+            // Update state
+            state.upload.result.thumbnailUrl = data.thumbnailUrl;
+            elements.thumbnailUrlField.value = data.thumbnailUrl;
+            
+            // Update image smoothly
+            const img = new Image();
+            img.onload = () => {
+              elements.thumb.src = data.thumbnailUrl;
+              elements.thumb.classList.remove('loading-spinner');
+              
+              // Update status to "Ready for print"
+              const statusEl = elements.filestatus;
+              if (statusEl && !statusEl.classList.contains('warning')) {
+                statusEl.innerHTML = `
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                  <span>Ready for print</span>
+                `;
+              }
+            };
+            img.onerror = () => {
+              console.warn('[UL] Thumbnail image load failed, using fallback');
+              showFallbackIcon();
+            };
+            img.src = data.thumbnailUrl;
+            
+            // Emit event for other components
+            window.dispatchEvent(new CustomEvent('ul:thumbnail:ready', {
+              detail: { uploadId, productId, thumbnailUrl: data.thumbnailUrl }
+            }));
+            
+            return; // Success - stop polling
+          }
+          
+          // No thumbnail yet, continue polling (faster interval for initial period)
+          setTimeout(doPoll, 1000);
+          
+        } catch (error) {
+          console.warn('[UL] Thumbnail poll error:', error);
+          // Check if we should show fallback due to repeated errors
+          const elapsed = Date.now() - startTime;
+          if (elapsed >= timeoutMs) {
+            showFallbackIcon();
+            return;
+          }
+          setTimeout(doPoll, 1500);
+        }
+      };
+      
+      // Start polling immediately
+      doPoll();
     },
 
     /**
