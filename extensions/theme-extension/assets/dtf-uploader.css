@@ -114,15 +114,18 @@
 }
 
 .ul-section-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--ul-text);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ul-text-muted);
+  letter-spacing: 0.02em;
 }
 
 .ul-section-subtitle {
-  font-size: 13px;
-  color: var(--ul-text-muted);
+  font-size: 12px;
+  color: var(--ul-text-light);
   margin-left: auto;
+  font-weight: 400;
+  opacity: 0.8;
 }
 
 /* ===== DROPZONE ===== */
@@ -151,8 +154,18 @@
   width: 56px;
   height: 56px;
   margin: 0 auto 16px;
-  color: var(--ul-text-muted);
-  opacity: 0.6;
+  color: var(--ul-primary);
+  opacity: 0.8;
+  animation: ul-bounce-icon 2s ease-in-out infinite;
+}
+
+@keyframes ul-bounce-icon {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
 }
 
 .ul-dropzone-text {
@@ -160,6 +173,18 @@
   font-weight: 500;
   color: var(--ul-text);
   margin-bottom: 6px;
+  animation: ul-pulse-text 2s ease-in-out infinite;
+}
+
+@keyframes ul-pulse-text {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.02);
+  }
 }
 
 .ul-dropzone-hint {
