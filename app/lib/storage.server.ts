@@ -306,6 +306,7 @@ export async function getDownloadSignedUrl(
 
 /**
  * Generate thumbnail URL with Bunny Optimizer
+ * IMPORTANT: URL encodes the path to handle special characters and spaces
  */
 export function getThumbnailUrl(
   config: StorageConfig,
@@ -323,10 +324,12 @@ export function getThumbnailUrl(
     return url.toString();
   }
   
-  // Bunny key
+  // Bunny key - encode path segments to handle spaces and special chars
   if (config.provider === "bunny" || key.startsWith("bunny:")) {
     const bunnyKey = key.replace("bunny:", "");
-    return `${config.bunnyCdnUrl || BUNNY_CDN_URL}/${bunnyKey}?width=${width}${height ? `&height=${height}` : ""}&format=webp&quality=85`;
+    // Encode each path segment separately to preserve slashes
+    const encodedPath = bunnyKey.split('/').map(segment => encodeURIComponent(segment)).join('/');
+    return `${config.bunnyCdnUrl || BUNNY_CDN_URL}/${encodedPath}?width=${width}${height ? `&height=${height}` : ""}&format=webp&quality=85`;
   }
   
   // Local - no optimizer, return as-is

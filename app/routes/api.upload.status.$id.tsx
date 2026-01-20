@@ -174,10 +174,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       // Already a full URL - use directly
       downloadUrl = firstItem.storageKey;
     } else if (isBunnyKey(firstItem.storageKey)) {
-      // Bunny storage - build CDN URL
+      // Bunny storage - build CDN URL with proper encoding for special chars
       const bunnyKey = firstItem.storageKey.replace('bunny:', '');
       const cdnUrl = storageConfig.bunnyCdnUrl || process.env.BUNNY_CDN_URL || 'https://customizerappdev.b-cdn.net';
-      downloadUrl = `${cdnUrl}/${bunnyKey}`;
+      // Encode each path segment to handle spaces and special characters
+      const encodedPath = bunnyKey.split('/').map(segment => encodeURIComponent(segment)).join('/');
+      downloadUrl = `${cdnUrl}/${encodedPath}`;
     } else if (isShopifyFileId(firstItem.storageKey)) {
       // Shopify fileId - resolve to URL via API
       const fileId = firstItem.storageKey.replace('shopify:', '');
