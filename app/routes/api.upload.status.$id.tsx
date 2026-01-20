@@ -224,17 +224,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       const token = generateLocalFileToken(firstItem.thumbnailKey, expiresAt);
       thumbnailUrl = `${host}/api/files/${encodeURIComponent(firstItem.thumbnailKey)}?token=${encodeURIComponent(token)}`;
     }
-  } else if (downloadUrl && isBunnyUrl(downloadUrl)) {
-    // No thumbnail but download is Bunny - use optimizer
-    thumbnailUrl = getThumbnailUrl(storageConfig, downloadUrl, 200);
-  } else if (downloadUrl) {
-    // Fallback to original file if no thumbnail
-    thumbnailUrl = downloadUrl;
-  } else if (firstItem?.storageKey && !isShopifyFileId(firstItem.storageKey) && !isExternalUrl(firstItem.storageKey)) {
-    // Local storage fallback
-    const token = generateLocalFileToken(firstItem.storageKey, expiresAt);
-    thumbnailUrl = `${host}/api/files/${encodeURIComponent(firstItem.storageKey)}?token=${encodeURIComponent(token)}`;
   }
+  // FIX: Remove fallbacks that return downloadUrl as thumbnail
+  // If no thumbnailKey exists, thumbnailUrl stays null
+  // This allows the widget to show spinner and poll for thumbnail
+  // Old code returned downloadUrl which made hasThumbnail always true for PSD/PDF etc.
 
   return corsJson({
     uploadId: upload.id,
