@@ -385,7 +385,6 @@ const preflightWorker = new Worker<PreflightJobData>(
         status: result.overall,
         checks: result.checks,
         thumbnailKey,
-        convertedKey,
       };
     } catch (error) {
       console.error(`[Preflight Worker] Error:`, error);
