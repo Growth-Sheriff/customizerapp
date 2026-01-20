@@ -310,17 +310,28 @@ const preflightWorker = new Worker<PreflightJobData>(
       const thumbnailPath = path.join(tempDir, "thumbnail.webp");
       await generateThumbnail(processedPath, thumbnailPath, 400);
 
-      // Upload thumbnail
+      // Upload thumbnail - preserve bunny: prefix for proper URL generation
+      // storageKey might be "bunny:path/to/file.psd" - we need "bunny:path/to/file_thumb.webp"
       const thumbnailKey = storageKey.replace(/\.[^.]+$/, "_thumb.webp");
-      if (storageProvider === "bunny") {
-        await uploadToBunny(thumbnailKey, thumbnailPath, "image/webp");
+      
+      // Determine actual upload path (strip bunny: prefix for upload)
+      const uploadPath = thumbnailKey.replace(/^bunny:/, "");
+      
+      if (storageProvider === "bunny" || storageKey.startsWith("bunny:")) {
+        await uploadToBunny(uploadPath, thumbnailPath, "image/webp");
       } else if (storageProvider === "local") {
-        await uploadLocalFile(thumbnailKey, thumbnailPath);
+        await uploadLocalFile(uploadPath, thumbnailPath);
       } else if (client) {
-        await uploadFile(client, thumbnailKey, thumbnailPath, "image/webp");
+        await uploadFile(client, uploadPath, thumbnailPath, "image/webp");
       }
 
       await job.updateProgress(90);
+
+      // Determine final thumbnailKey with proper prefix for URL generation
+      // If Bunny storage, ensure bunny: prefix is present
+      const finalThumbnailKey = (storageProvider === "bunny" || storageKey.startsWith("bunny:"))
+        ? (thumbnailKey.startsWith("bunny:") ? thumbnailKey : `bunny:${uploadPath}`)
+        : uploadPath;
 
       // Update database
       // IMPORTANT: previewKey = storageKey (original file) - merchant always gets original
@@ -329,7 +340,7 @@ const preflightWorker = new Worker<PreflightJobData>(
         data: {
           preflightStatus: result.overall,
           preflightResult: result as any,
-          thumbnailKey,
+          thumbnailKey: finalThumbnailKey,
           previewKey: storageKey, // Always use original file for merchant download
         },
       });
@@ -384,7 +395,7 @@ const preflightWorker = new Worker<PreflightJobData>(
       return {
         status: result.overall,
         checks: result.checks,
-        thumbnailKey,
+        thumbnailKey: finalThumbnailKey,
       };
     } catch (error) {
       console.error(`[Preflight Worker] Error:`, error);
