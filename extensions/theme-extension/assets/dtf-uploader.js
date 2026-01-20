@@ -62,7 +62,7 @@
   // ===== GLOBAL NAMESPACE =====
   const ULDTFUploader = {
     instances: {},
-    version: '4.3.0', // Added non-blocking thumbnail for PSD/PDF/AI/EPS/TIFF
+    version: '4.3.1', // Fix: Wait for thumbnail before showing preview for non-browser formats
 
     /**
      * Initialize uploader for a product
@@ -1035,9 +1035,22 @@
 
           const data = await response.json();
 
+          // v4.3.1: For non-browser formats (PSD/PDF/AI/EPS/TIFF), wait for thumbnail
+          const NON_BROWSER_FORMATS = ['psd', 'pdf', 'ai', 'eps', 'tiff', 'tif'];
+          const fileExt = state.upload.file.name.split('.').pop()?.toLowerCase() || '';
+          const isNonBrowserFormat = NON_BROWSER_FORMATS.includes(fileExt);
+          
           // Accept all "finished" statuses - including blocked/warning (DPI issues etc.)
+          // For non-browser formats, also require thumbnailUrl to be present
           const finishedStatuses = ['ready', 'completed', 'blocked', 'needs_review', 'uploaded'];
-          if (finishedStatuses.includes(data.status)) {
+          const isFinished = finishedStatuses.includes(data.status);
+          const hasThumbnail = !!data.thumbnailUrl;
+          
+          // For non-browser formats: wait for thumbnail before showing preview
+          // For browser formats: proceed immediately
+          const canProceed = isFinished && (!isNonBrowserFormat || hasThumbnail);
+          
+          if (canProceed) {
             // Success - upload processing complete (may have warnings)
             state.upload.status = 'ready';
             state.upload.uploadId = uploadId; // CRITICAL: Set uploadId for addToCart
