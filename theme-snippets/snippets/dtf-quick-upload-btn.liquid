@@ -378,6 +378,11 @@
   object-fit: cover;
   border-radius: 6px;
 }
+.ul-quick-preview img.loading-spinner {
+  object-fit: contain;
+  background: #f3f4f6;
+  padding: 4px;
+}
 .ul-preview-info {
   flex: 1;
   overflow: hidden;
@@ -1151,10 +1156,41 @@
       preview.style.display = 'flex';
       if (previewName) previewName.textContent = file.name;
       
-      if (file.type.startsWith('image/') && previewImg) {
-        const reader = new FileReader();
-        reader.onload = (e) => { previewImg.src = e.target.result; };
-        reader.readAsDataURL(file);
+      // v4.3.0: Check if non-browser format (needs server-side thumbnail)
+      const NON_BROWSER_EXTENSIONS = ['psd', 'pdf', 'ai', 'eps', 'tiff', 'tif'];
+      const fileExt = file.name.split('.').pop()?.toLowerCase() || '';
+      const isNonBrowserFormat = NON_BROWSER_EXTENSIONS.includes(fileExt);
+      
+      if (previewImg) {
+        if (isNonBrowserFormat) {
+          // Non-browser format: Show spinner and poll for thumbnail
+          console.log('[UL Quick Upload] Non-browser format detected, showing spinner:', fileExt);
+          previewImg.src = 'data:image/svg+xml,' + encodeURIComponent(`
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 50 50">
+              <circle cx="25" cy="25" r="20" fill="none" stroke="#e5e7eb" stroke-width="4"/>
+              <circle cx="25" cy="25" r="20" fill="none" stroke="#3b82f6" stroke-width="4" 
+                stroke-dasharray="80" stroke-dashoffset="60">
+                <animateTransform attributeName="transform" type="rotate" from="0 25 25" to="360 25 25" dur="1s" repeatCount="indefinite"/>
+              </circle>
+            </svg>
+          `);
+          previewImg.classList.add('loading-spinner');
+          
+          // Start background polling for thumbnail
+          pollForThumbnail(uploadId, uniqueId, apiBase, shopDomain, previewImg);
+        } else if (file.type.startsWith('image/')) {
+          // Browser-supported image: Use FileReader for instant preview
+          const reader = new FileReader();
+          reader.onload = (e) => { previewImg.src = e.target.result; };
+          reader.readAsDataURL(file);
+        } else {
+          // Generic file icon
+          previewImg.src = 'data:image/svg+xml,' + encodeURIComponent(`
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="#6b7280">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z"/>
+            </svg>
+          `);
+        }
       }
       
       // Update status badge - always show positive message to customer
@@ -1192,6 +1228,65 @@
       dropzone.style.display = 'block';
       alert('Upload failed: ' + error.message);
     }
+  }
+  
+  // v4.3.0: Poll for server-generated thumbnail (for PSD/PDF/AI/EPS/TIFF)
+  async function pollForThumbnail(uploadId, uniqueId, apiBase, shopDomain, imgElement) {
+    const MAX_POLLS = 60; // 60 seconds max
+    let pollCount = 0;
+    
+    console.log('[UL Quick Upload] Starting thumbnail polling for:', uploadId);
+    
+    const doPoll = async () => {
+      pollCount++;
+      
+      if (pollCount > MAX_POLLS) {
+        console.log('[UL Quick Upload] Thumbnail polling timeout');
+        // Show file icon as fallback
+        imgElement.src = 'data:image/svg+xml,' + encodeURIComponent(`
+          <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="#6b7280">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z"/>
+          </svg>
+        `);
+        imgElement.classList.remove('loading-spinner');
+        return;
+      }
+      
+      try {
+        const response = await fetch(`${apiBase}/api/upload/status/${uploadId}?shopDomain=${encodeURIComponent(shopDomain)}`);
+        
+        if (response.ok) {
+          const data = await response.json();
+          
+          if (data.thumbnailUrl) {
+            console.log('[UL Quick Upload] Thumbnail received:', data.thumbnailUrl);
+            
+            // Preload image to avoid flickering
+            const img = new Image();
+            img.onload = () => {
+              imgElement.src = data.thumbnailUrl;
+              imgElement.classList.remove('loading-spinner');
+            };
+            img.onerror = () => {
+              console.warn('[UL Quick Upload] Thumbnail load failed, continuing polling');
+              setTimeout(doPoll, 1500);
+            };
+            img.src = data.thumbnailUrl;
+            return;
+          }
+        }
+        
+        // Continue polling
+        setTimeout(doPoll, 1500);
+        
+      } catch (error) {
+        console.warn('[UL Quick Upload] Thumbnail poll error:', error);
+        setTimeout(doPoll, 2000);
+      }
+    };
+    
+    // Start polling after short delay
+    setTimeout(doPoll, 1000);
   }
   
   function cancelUpload(uniqueId) {
