@@ -2,6 +2,10 @@ import type { ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import crypto from "crypto";
 import prisma from "~/lib/prisma.server";
+import { Decimal } from "@prisma/client/runtime/library";
+
+// Commission rate: 1.5% = 0.015
+const COMMISSION_RATE = new Decimal(0.015);
 
 // Verify Shopify webhook signature
 function verifyWebhookSignature(body: string, hmac: string, secret: string): boolean {
@@ -49,6 +53,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
     // Process line items looking for upload_lift properties
     const processedUploads: string[] = [];
+    let hasUploadLiftItems = false;
 
     for (const lineItem of order.line_items || []) {
       const uploadLiftId = lineItem.properties?.find(
@@ -56,6 +61,7 @@ export async function action({ request }: ActionFunctionArgs) {
       )?.value;
 
       if (uploadLiftId && !processedUploads.includes(uploadLiftId)) {
+        hasUploadLiftItems = true;
         console.log(`[Webhook] Found upload ${uploadLiftId} in order ${order.id}`);
 
         // Verify upload exists and belongs to this shop
@@ -117,6 +123,56 @@ export async function action({ request }: ActionFunctionArgs) {
           console.warn(`[Webhook] Upload ${uploadLiftId} not found for shop ${shopDomain}`);
         }
       }
+    }
+
+    // Create commission record if order contains Upload Lift items
+    if (hasUploadLiftItems && processedUploads.length > 0) {
+      const orderTotal = new Decimal(order.total_price || "0");
+      const commissionAmount = orderTotal.mul(COMMISSION_RATE);
+
+      // Upsert for idempotency (Shopify may retry webhooks)
+      await prisma.commission.upsert({
+        where: {
+          commission_shop_order: {
+            shopId: shop.id,
+            orderId: String(order.id),
+          },
+        },
+        create: {
+          shopId: shop.id,
+          orderId: String(order.id),
+          orderNumber: order.name || order.order_number?.toString(),
+          orderTotal: orderTotal,
+          orderCurrency: order.currency || "USD",
+          commissionRate: COMMISSION_RATE,
+          commissionAmount: commissionAmount,
+          status: "pending",
+        },
+        update: {
+          orderTotal: orderTotal,
+          orderCurrency: order.currency || "USD",
+          commissionAmount: commissionAmount,
+        },
+      });
+
+      console.log(`[Webhook] Commission created: $${commissionAmount.toFixed(2)} (${COMMISSION_RATE.mul(100)}%) for order ${order.id}`);
+      
+      // Audit log for commission
+      await prisma.auditLog.create({
+        data: {
+          shopId: shop.id,
+          action: "commission_created",
+          resourceType: "commission",
+          resourceId: String(order.id),
+          metadata: {
+            orderId: order.id,
+            orderName: order.name,
+            orderTotal: orderTotal.toString(),
+            commissionAmount: commissionAmount.toString(),
+            currency: order.currency,
+          },
+        },
+      });
     }
 
     console.log(`[Webhook] Processed ${processedUploads.length} uploads for order ${order.id}`);

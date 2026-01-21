@@ -67,6 +67,7 @@ model Shop {
   flowTriggers     FlowTrigger[]
   visitors         Visitor[]
   visitorSessions  VisitorSession[]
+  commissions      Commission[]
 
   @@map("shops")
 }
@@ -562,4 +563,41 @@ model VisitorSession {
   @@index([shopId, referrerType])
   @@index([visitorId])
   @@map("visitor_sessions")
+}
+
+// ══════════════════════════════════════════════════════════════
+// COMMISSIONS (Per-Order Commission Tracking)
+// ══════════════════════════════════════════════════════════════
+// Commission rate: 1.5% of order total
+// Payment method: PayPal (manual)
+model Commission {
+  id            String   @id @default(cuid())
+  shopId        String   @map("shop_id")
+  orderId       String   @map("order_id") // Shopify order ID
+  orderNumber   String?  @map("order_number") // Human-readable order number
+  
+  // Order details
+  orderTotal    Decimal  @map("order_total") @db.Decimal(10, 2)
+  orderCurrency String   @default("USD") @map("order_currency")
+  
+  // Commission calculation (1.5% = 0.015)
+  commissionRate Decimal @default(0.015) @map("commission_rate") @db.Decimal(5, 4)
+  commissionAmount Decimal @map("commission_amount") @db.Decimal(10, 2)
+  
+  // Payment status
+  status        String   @default("pending") // pending, paid, waived
+  paidAt        DateTime? @map("paid_at")
+  paymentRef    String?  @map("payment_ref") // PayPal transaction ID
+  
+  // Metadata
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@unique([shopId, orderId], name: "commission_shop_order")
+  @@index([shopId, status])
+  @@index([shopId, createdAt])
+  @@map("commissions")
 }
