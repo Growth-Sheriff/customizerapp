@@ -9,7 +9,6 @@ import {
 import { useState, useCallback } from "react";
 import { authenticate } from "~/shopify.server";
 import prisma from "~/lib/prisma.server";
-import { Decimal } from "@prisma/client/runtime/library";
 
 // Fixed commission per order: $0.015 (1.5 cents)
 const COMMISSION_PER_ORDER = 0.015;
@@ -24,14 +23,11 @@ interface CommissionSummary {
   paidOrders: number;
 }
 
-interface CommissionRecord {
-  id: string;
+interface OrderRecord {
   orderId: string;
   orderNumber: string | null;
-  orderTotal: string;
-  orderCurrency: string;
-  commissionAmount: string;
-  status: string;
+  commissionAmount: number;
+  status: string; // pending or paid
   createdAt: string;
   paidAt: string | null;
   paymentRef: string | null;
@@ -50,7 +46,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       data: {
         shopDomain,
         accessToken: session.accessToken || "",
-        plan: "commission", // Commission-based plan
+        plan: "commission",
         billingStatus: "active",
         storageProvider: "bunny",
         settings: {},
@@ -58,49 +54,74 @@ export async function loader({ request }: LoaderFunctionArgs) {
     });
   }
 
-  // Get commission records for this shop
-  const commissions = await prisma.commission.findMany({
+  // Get ALL unique orders from OrderLink table (this is the source of truth)
+  // Each unique orderId = 1 commission of $0.015
+  const orderLinks = await prisma.orderLink.findMany({
     where: { shopId: shop.id },
+    select: {
+      orderId: true,
+      createdAt: true,
+    },
     orderBy: { createdAt: "desc" },
-    take: 100,
   });
 
-  // Calculate summary
-  const summary: CommissionSummary = {
-    totalCommission: 0,
-    pendingAmount: 0,
-    paidAmount: 0,
-    totalOrders: commissions.length,
-    pendingOrders: 0,
-    paidOrders: 0,
-  };
-
-  for (const c of commissions) {
-    const amount = new Decimal(c.commissionAmount).toNumber();
-    summary.totalCommission += amount;
-    
-    if (c.status === "pending") {
-      summary.pendingAmount += amount;
-      summary.pendingOrders++;
-    } else if (c.status === "paid") {
-      summary.paidAmount += amount;
-      summary.paidOrders++;
+  // Get unique order IDs (one commission per order, not per upload)
+  const uniqueOrderIds = [...new Set(orderLinks.map(ol => ol.orderId))];
+  
+  // Create a map of orderId -> earliest createdAt
+  const orderDateMap = new Map<string, Date>();
+  for (const ol of orderLinks) {
+    if (!orderDateMap.has(ol.orderId) || ol.createdAt < orderDateMap.get(ol.orderId)!) {
+      orderDateMap.set(ol.orderId, ol.createdAt);
     }
   }
 
-  // Format records for display
-  const records: CommissionRecord[] = commissions.map(c => ({
-    id: c.id,
-    orderId: c.orderId,
-    orderNumber: c.orderNumber,
-    orderTotal: new Decimal(c.orderTotal).toFixed(2),
-    orderCurrency: c.orderCurrency,
-    commissionAmount: new Decimal(c.commissionAmount).toFixed(2),
-    status: c.status,
-    createdAt: c.createdAt.toISOString(),
-    paidAt: c.paidAt?.toISOString() || null,
-    paymentRef: c.paymentRef,
-  }));
+  // Get paid commissions from Commission table
+  const paidCommissions = await prisma.commission.findMany({
+    where: { 
+      shopId: shop.id,
+      status: "paid",
+    },
+    select: {
+      orderId: true,
+      paidAt: true,
+      paymentRef: true,
+    },
+  });
+  
+  const paidOrderIds = new Set(paidCommissions.map(c => c.orderId));
+  const paidOrderInfo = new Map(paidCommissions.map(c => [c.orderId, { paidAt: c.paidAt, paymentRef: c.paymentRef }]));
+
+  // Build records list
+  const records: OrderRecord[] = uniqueOrderIds.map(orderId => {
+    const isPaid = paidOrderIds.has(orderId);
+    const paidInfo = paidOrderInfo.get(orderId);
+    const createdAt = orderDateMap.get(orderId) || new Date();
+    
+    return {
+      orderId,
+      orderNumber: `#${orderId.slice(-6)}`, // Last 6 chars as order number display
+      commissionAmount: COMMISSION_PER_ORDER,
+      status: isPaid ? "paid" : "pending",
+      createdAt: createdAt.toISOString(),
+      paidAt: paidInfo?.paidAt?.toISOString() || null,
+      paymentRef: paidInfo?.paymentRef || null,
+    };
+  });
+
+  // Calculate summary
+  const totalOrders = uniqueOrderIds.length;
+  const paidOrders = paidOrderIds.size;
+  const pendingOrders = totalOrders - paidOrders;
+  
+  const summary: CommissionSummary = {
+    totalCommission: totalOrders * COMMISSION_PER_ORDER,
+    pendingAmount: pendingOrders * COMMISSION_PER_ORDER,
+    paidAmount: paidOrders * COMMISSION_PER_ORDER,
+    totalOrders,
+    pendingOrders,
+    paidOrders,
+  };
 
   return json({
     shopDomain,
@@ -126,29 +147,45 @@ export async function action({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
   const actionType = formData.get("_action") as string;
 
-  // Mark commissions as paid (admin action - for now manual)
+  // Mark orders as paid - creates/updates commission records
   if (actionType === "mark_paid") {
     const paymentRef = formData.get("paymentRef") as string;
-    const commissionIds = formData.get("commissionIds") as string;
+    const orderIds = formData.get("orderIds") as string;
     
-    if (!paymentRef || !commissionIds) {
-      return json({ error: "Payment reference and commission IDs required" }, { status: 400 });
+    if (!paymentRef || !orderIds) {
+      return json({ error: "Payment reference and order IDs required" }, { status: 400 });
     }
 
-    const ids = commissionIds.split(",").filter(Boolean);
+    const ids = orderIds.split(",").filter(Boolean);
     
-    await prisma.commission.updateMany({
-      where: {
-        id: { in: ids },
-        shopId: shop.id,
-        status: "pending",
-      },
-      data: {
-        status: "paid",
-        paidAt: new Date(),
-        paymentRef: paymentRef,
-      },
-    });
+    // Create or update commission records for each order
+    for (const orderId of ids) {
+      await prisma.commission.upsert({
+        where: {
+          commission_shop_order: {
+            shopId: shop.id,
+            orderId: orderId,
+          },
+        },
+        create: {
+          shopId: shop.id,
+          orderId: orderId,
+          orderNumber: `#${orderId.slice(-6)}`,
+          orderTotal: 0, // Not tracking order total anymore
+          orderCurrency: "USD",
+          commissionRate: 0,
+          commissionAmount: COMMISSION_PER_ORDER,
+          status: "paid",
+          paidAt: new Date(),
+          paymentRef: paymentRef,
+        },
+        update: {
+          status: "paid",
+          paidAt: new Date(),
+          paymentRef: paymentRef,
+        },
+      });
+    }
 
     // Audit log
     await prisma.auditLog.create({
@@ -158,14 +195,15 @@ export async function action({ request }: ActionFunctionArgs) {
         resourceType: "commission",
         resourceId: paymentRef,
         metadata: {
-          commissionIds: ids,
+          orderIds: ids,
           paymentRef,
           count: ids.length,
+          totalAmount: ids.length * COMMISSION_PER_ORDER,
         },
       },
     });
 
-    return json({ success: true, message: `${ids.length} commissions marked as paid` });
+    return json({ success: true, message: `${ids.length} orders marked as paid` });
   }
 
   return json({ error: "Unknown action" }, { status: 400 });
@@ -195,18 +233,17 @@ export default function BillingPage() {
     });
   };
 
-  // Get pending commission IDs for payment
-  const pendingIds = records
+  // Get pending order IDs for payment
+  const pendingOrderIds = records
     .filter(r => r.status === "pending")
-    .map(r => r.id)
+    .map(r => r.orderId)
     .join(",");
 
-  // DataTable rows
+  // DataTable rows - simplified without order total
   const tableRows = records.map(r => [
-    r.orderNumber || `#${r.orderId.slice(-8)}`,
-    `${r.orderCurrency} ${r.orderTotal}`,
-    `$${r.commissionAmount}`,
-    <Badge key={r.id} tone={r.status === "paid" ? "success" : "warning"}>
+    r.orderNumber,
+    `$${r.commissionAmount.toFixed(3)}`,
+    <Badge key={r.orderId} tone={r.status === "paid" ? "success" : "warning"}>
       {r.status === "paid" ? "Paid" : "Pending"}
     </Badge>,
     formatDate(r.createdAt),
@@ -333,8 +370,8 @@ export default function BillingPage() {
                 </EmptyState>
               ) : (
                 <DataTable
-                  columnContentTypes={["text", "text", "text", "text", "text", "text"]}
-                  headings={["Order", "Order Total", "Commission", "Status", "Date", "Paid Date"]}
+                  columnContentTypes={["text", "text", "text", "text", "text"]}
+                  headings={["Order", "Commission", "Status", "Order Date", "Paid Date"]}
                   rows={tableRows}
                 />
               )}
@@ -393,11 +430,11 @@ export default function BillingPage() {
           <Modal.Section>
             <BlockStack gap="400">
               <Text as="p" variant="bodyMd">
-                Enter your PayPal transaction ID to confirm payment of <strong>${summary.pendingAmount.toFixed(2)}</strong>.
+                Enter your PayPal transaction ID to confirm payment of <strong>${summary.pendingAmount.toFixed(2)}</strong> for {summary.pendingOrders} orders.
               </Text>
               
               <input type="hidden" name="_action" value="mark_paid" />
-              <input type="hidden" name="commissionIds" value={pendingIds} />
+              <input type="hidden" name="orderIds" value={pendingOrderIds} />
               
               <TextField
                 label="PayPal Transaction ID"
