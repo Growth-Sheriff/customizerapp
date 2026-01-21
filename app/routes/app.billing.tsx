@@ -55,7 +55,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
 
   // Get ALL unique orders from OrderLink table (this is the source of truth)
-  // Each unique orderId = 1 commission of $0.015
+  // Each unique orderId = 1 commission of $0.10
   const orderLinks = await prisma.orderLink.findMany({
     where: { shopId: shop.id },
     select: {
@@ -76,36 +76,58 @@ export async function loader({ request }: LoaderFunctionArgs) {
     }
   }
 
-  // Get paid commissions from Commission table
-  const paidCommissions = await prisma.commission.findMany({
-    where: { 
-      shopId: shop.id,
-      status: "paid",
-    },
+  // Get ALL commissions from Commission table (includes orderNumber)
+  const allCommissions = await prisma.commission.findMany({
+    where: { shopId: shop.id },
     select: {
       orderId: true,
+      orderNumber: true,
+      status: true,
       paidAt: true,
       paymentRef: true,
     },
   });
   
-  const paidOrderIds = new Set(paidCommissions.map(c => c.orderId));
-  const paidOrderInfo = new Map(paidCommissions.map(c => [c.orderId, { paidAt: c.paidAt, paymentRef: c.paymentRef }]));
+  // Create maps for commission info
+  const commissionInfo = new Map(allCommissions.map(c => [c.orderId, {
+    orderNumber: c.orderNumber,
+    status: c.status,
+    paidAt: c.paidAt,
+    paymentRef: c.paymentRef,
+  }]));
+  
+  const paidOrderIds = new Set(allCommissions.filter(c => c.status === "paid").map(c => c.orderId));
+
+  // Calculate total transfer size from uploads
+  const uploadStats = await prisma.uploadItem.aggregate({
+    where: {
+      upload: {
+        shopId: shop.id,
+      },
+    },
+    _sum: {
+      fileSize: true,
+    },
+    _count: true,
+  });
+  
+  const totalTransferBytes = uploadStats._sum.fileSize || 0;
+  const totalTransferGB = Number(totalTransferBytes) / (1024 * 1024 * 1024); // Convert to GB
 
   // Build records list
   const records: OrderRecord[] = uniqueOrderIds.map(orderId => {
+    const commission = commissionInfo.get(orderId);
     const isPaid = paidOrderIds.has(orderId);
-    const paidInfo = paidOrderInfo.get(orderId);
     const createdAt = orderDateMap.get(orderId) || new Date();
     
     return {
       orderId,
-      orderNumber: `#${orderId.slice(-6)}`, // Last 6 chars as order number display
+      orderNumber: commission?.orderNumber || `#${orderId.slice(-6)}`, // Use real orderNumber from Commission
       commissionAmount: COMMISSION_PER_ORDER,
       status: isPaid ? "paid" : "pending",
       createdAt: createdAt.toISOString(),
-      paidAt: paidInfo?.paidAt?.toISOString() || null,
-      paymentRef: paidInfo?.paymentRef || null,
+      paidAt: commission?.paidAt?.toISOString() || null,
+      paymentRef: commission?.paymentRef || null,
     };
   });
 
@@ -127,6 +149,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     shopDomain,
     summary,
     records,
+    totalTransferGB,
+    totalFiles: uploadStats._count,
     commissionPerOrder: COMMISSION_PER_ORDER,
     paypalEmail: PAYPAL_EMAIL,
   });
@@ -210,7 +234,7 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function BillingPage() {
-  const { shopDomain, summary, records, commissionPerOrder, paypalEmail } = useLoaderData<typeof loader>();
+  const { shopDomain, summary, records, totalTransferGB, totalFiles, commissionPerOrder, paypalEmail } = useLoaderData<typeof loader>();
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
 
@@ -267,7 +291,7 @@ export default function BillingPage() {
         <Layout.Section>
           <InlineStack gap="400" align="start" wrap={false}>
             {/* Total Commission */}
-            <Box width="33%">
+            <Box width="25%">
               <Card>
                 <BlockStack gap="200">
                   <Text as="p" variant="bodySm" tone="subdued">Total Commission</Text>
@@ -280,7 +304,7 @@ export default function BillingPage() {
             </Box>
 
             {/* Pending Payment */}
-            <Box width="33%">
+            <Box width="25%">
               <Card>
                 <BlockStack gap="200">
                   <Text as="p" variant="bodySm" tone="subdued">Pending Payment</Text>
@@ -295,7 +319,7 @@ export default function BillingPage() {
             </Box>
 
             {/* Paid */}
-            <Box width="33%">
+            <Box width="25%">
               <Card>
                 <BlockStack gap="200">
                   <Text as="p" variant="bodySm" tone="subdued">Paid</Text>
@@ -304,6 +328,23 @@ export default function BillingPage() {
                   </Text>
                   <Text as="p" variant="bodySm" tone="subdued">
                     {summary.paidOrders} orders
+                  </Text>
+                </BlockStack>
+              </Card>
+            </Box>
+
+            {/* Total Transfer */}
+            <Box width="25%">
+              <Card>
+                <BlockStack gap="200">
+                  <Text as="p" variant="bodySm" tone="subdued">Total Transfer</Text>
+                  <Text as="p" variant="headingXl">
+                    {totalTransferGB >= 1 
+                      ? `${totalTransferGB.toFixed(2)} GB` 
+                      : `${(totalTransferGB * 1024).toFixed(0)} MB`}
+                  </Text>
+                  <Text as="p" variant="bodySm" tone="subdued">
+                    {totalFiles} files uploaded
                   </Text>
                 </BlockStack>
               </Card>
