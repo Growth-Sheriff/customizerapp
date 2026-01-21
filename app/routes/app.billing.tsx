@@ -11,7 +11,7 @@ import { authenticate } from "~/shopify.server";
 import prisma from "~/lib/prisma.server";
 
 // Fixed commission per order: $0.015 (1.5 cents)
-const COMMISSION_PER_ORDER = 0.015;
+const COMMISSION_PER_ORDER = 0.10;
 const PAYPAL_EMAIL = "payments@customizerapp.dev"; // PayPal hesabı
 
 interface CommissionSummary {
