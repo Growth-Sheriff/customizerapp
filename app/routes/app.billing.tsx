@@ -11,8 +11,8 @@ import { authenticate } from "~/shopify.server";
 import prisma from "~/lib/prisma.server";
 import { Decimal } from "@prisma/client/runtime/library";
 
-// Commission rate: 1.5%
-const COMMISSION_RATE = 0.015;
+// Fixed commission per order: $0.015 (1.5 cents)
+const COMMISSION_PER_ORDER = 0.015;
 const PAYPAL_EMAIL = "payments@customizerapp.dev"; // PayPal hesabı
 
 interface CommissionSummary {
@@ -106,7 +106,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     shopDomain,
     summary,
     records,
-    commissionRate: COMMISSION_RATE,
+    commissionPerOrder: COMMISSION_PER_ORDER,
     paypalEmail: PAYPAL_EMAIL,
   });
 }
@@ -172,7 +172,7 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function BillingPage() {
-  const { shopDomain, summary, records, commissionRate, paypalEmail } = useLoaderData<typeof loader>();
+  const { shopDomain, summary, records, commissionPerOrder, paypalEmail } = useLoaderData<typeof loader>();
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
 
@@ -216,11 +216,11 @@ export default function BillingPage() {
   return (
     <Page title="Billing & Commissions" backAction={{ content: "Dashboard", url: "/app" }}>
       <Layout>
-        {/* Commission Rate Info */}
+        {/* Commission Info */}
         <Layout.Section>
           <Banner tone="info">
             <p>
-              <strong>Commission Rate:</strong> {(commissionRate * 100).toFixed(1)}% per order with Upload Lift items.
+              <strong>Commission:</strong> ${commissionPerOrder.toFixed(3)} per order with Upload Lift items (fixed fee).
               Payments are collected manually via PayPal.
             </p>
           </Banner>
@@ -352,7 +352,7 @@ export default function BillingPage() {
                   1. <strong>Order Placed</strong> - Customer places order with Upload Lift items
                 </Text>
                 <Text as="p" variant="bodyMd">
-                  2. <strong>Commission Calculated</strong> - {(commissionRate * 100).toFixed(1)}% of order total is recorded
+                  2. <strong>Commission Recorded</strong> - Fixed fee of ${commissionPerOrder.toFixed(3)} per order
                 </Text>
                 <Text as="p" variant="bodyMd">
                   3. <strong>Monthly Payment</strong> - Send pending commission via PayPal

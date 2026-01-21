@@ -4,8 +4,8 @@ import crypto from "crypto";
 import prisma from "~/lib/prisma.server";
 import { Decimal } from "@prisma/client/runtime/library";
 
-// Commission rate: 1.5% = 0.015
-const COMMISSION_RATE = new Decimal(0.015);
+// Fixed commission per order: $0.015 (1.5 cents)
+const COMMISSION_PER_ORDER = new Decimal(0.015);
 
 // Verify Shopify webhook signature
 function verifyWebhookSignature(body: string, hmac: string, secret: string): boolean {
@@ -126,9 +126,10 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     // Create commission record if order contains Upload Lift items
+    // Fixed fee: $0.015 per order (not percentage based)
     if (hasUploadLiftItems && processedUploads.length > 0) {
       const orderTotal = new Decimal(order.total_price || "0");
-      const commissionAmount = orderTotal.mul(COMMISSION_RATE);
+      const commissionAmount = COMMISSION_PER_ORDER; // Fixed $0.015 per order
 
       // Upsert for idempotency (Shopify may retry webhooks)
       await prisma.commission.upsert({
@@ -144,7 +145,7 @@ export async function action({ request }: ActionFunctionArgs) {
           orderNumber: order.name || order.order_number?.toString(),
           orderTotal: orderTotal,
           orderCurrency: order.currency || "USD",
-          commissionRate: COMMISSION_RATE,
+          commissionRate: new Decimal(0), // Not percentage based
           commissionAmount: commissionAmount,
           status: "pending",
         },
@@ -155,7 +156,7 @@ export async function action({ request }: ActionFunctionArgs) {
         },
       });
 
-      console.log(`[Webhook] Commission created: $${commissionAmount.toFixed(2)} (${COMMISSION_RATE.mul(100)}%) for order ${order.id}`);
+      console.log(`[Webhook] Commission created: $${commissionAmount.toFixed(3)} (fixed fee) for order ${order.id}`);
       
       // Audit log for commission
       await prisma.auditLog.create({
