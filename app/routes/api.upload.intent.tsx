@@ -10,7 +10,7 @@ import prisma from "~/lib/prisma.server";
 // Plan limits - Updated for 1GB standard, 1453MB pro
 const PLAN_LIMITS = {
   free: { maxSizeMB: 1024, uploadsPerMonth: 100 },       // Free: 1GB (1024MB)
-  starter: { maxSizeMB: 1024, uploadsPerMonth: 1000 },   // Starter: 1GB (1024MB)
+  starter: { maxSizeMB: 1024, uploadsPerMonth: 10000 },  // Starter: 1GB (1024MB), 10K/ay
   pro: { maxSizeMB: 1453, uploadsPerMonth: -1 },         // Pro: 1453MB unlimited
   enterprise: { maxSizeMB: 1453, uploadsPerMonth: -1 },  // Enterprise: 1453MB unlimited
 };
