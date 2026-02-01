@@ -60,9 +60,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
     case "90d":
       startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
       break;
+    case "all":
+      startDate = new Date(0); // Beginning of time
+      break;
     default:
       startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
   }
+
+  // Format dates for display
+  const dateRangeText = period === "all" 
+    ? "All time"
+    : `${startDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} - ${now.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
 
   // Get basic metrics
   const [
@@ -204,6 +212,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   return json({
     period,
+    dateRangeText,
     metrics: {
       totalUploads,
       completedUploads,
@@ -335,7 +344,7 @@ function formatCurrency(amount: number, currency = "USD"): string {
 
 export default function AnalyticsPage() {
   const { 
-    period, metrics, modeBreakdown, statusBreakdown, locationUsage, dailyTrend, 
+    period, dateRangeText, metrics, modeBreakdown, statusBreakdown, locationUsage, dailyTrend, 
     recentUploads, recentOrders, customerSegmentation, customerMetrics, 
     fileMetrics, fileTypeBreakdown, revenueStats 
   } = useLoaderData<typeof loader>();
@@ -422,7 +431,10 @@ export default function AnalyticsPage() {
           <Layout.Section>
             <Card>
               <InlineStack align="space-between">
-                <Text as="h2" variant="headingMd">Upload Analytics</Text>
+                <BlockStack gap="100">
+                  <Text as="h2" variant="headingMd">Upload Analytics</Text>
+                  <Text as="p" variant="bodySm" tone="subdued">📅 {dateRangeText}</Text>
+                </BlockStack>
                 <Select
                   label=""
                   labelHidden
@@ -430,6 +442,7 @@ export default function AnalyticsPage() {
                     { label: "Last 7 days", value: "7d" },
                     { label: "Last 30 days", value: "30d" },
                     { label: "Last 90 days", value: "90d" },
+                    { label: "All time", value: "all" },
                   ]}
                   value={selectedPeriod}
                   onChange={handlePeriodChange}
@@ -443,7 +456,7 @@ export default function AnalyticsPage() {
             <MetricCard
               title="Total Uploads"
               value={metrics.totalUploads}
-              subtitle={`in last ${selectedPeriod}`}
+              subtitle={selectedPeriod === "all" ? "all time" : `in selected period`}
             />
           </Layout.Section>
 

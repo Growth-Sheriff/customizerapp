@@ -101,6 +101,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
       startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
   }
 
+  // Format dates for display
+  const dateRangeText = period === "all" 
+    ? "All time"
+    : `${startDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} - ${now.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
+
   // Get order links from our database (these are orders with custom uploads)
   const orderLinks = await prisma.orderLink.findMany({
     where: {
@@ -281,6 +286,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   return json({
     period,
+    dateRangeText,
     summary: {
       totalOrders,
       totalRevenue,
@@ -368,7 +374,7 @@ export default function OrderAnalyticsPage() {
     window.location.href = `/app/analytics/orders?period=${value}`;
   }, []);
 
-  const { summary, locationBreakdown, modeBreakdown, dailyTrend, orders } = data;
+  const { summary, locationBreakdown, modeBreakdown, dailyTrend, orders, dateRangeText } = data;
 
   const locationColors: Record<string, string> = {
     "front": "#5C6AC4",
@@ -417,7 +423,10 @@ export default function OrderAnalyticsPage() {
         <Layout.Section>
           <Card>
             <InlineStack align="space-between">
-              <Text as="h2" variant="headingMd">📦 Orders with Custom Uploads</Text>
+              <BlockStack gap="100">
+                <Text as="h2" variant="headingMd">📦 Orders with Custom Uploads</Text>
+                <Text as="p" variant="bodySm" tone="subdued">📅 {dateRangeText}</Text>
+              </BlockStack>
               <Select
                 label=""
                 labelHidden
