@@ -1,6 +1,6 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useLoaderData } from "@remix-run/react";
+import { useLoaderData, useNavigate } from "@remix-run/react";
 import {
   Page, Layout, Card, Text, BlockStack, InlineStack,
   Box, Badge, DataTable, Select, ProgressBar, Divider, InlineGrid
@@ -349,11 +349,12 @@ export default function AnalyticsPage() {
     fileMetrics, fileTypeBreakdown, revenueStats 
   } = useLoaderData<typeof loader>();
   const [selectedPeriod, setSelectedPeriod] = useState(period);
+  const navigate = useNavigate();
 
   const handlePeriodChange = useCallback((value: string) => {
     setSelectedPeriod(value);
-    window.location.href = `/app/analytics?period=${value}`;
-  }, []);
+    navigate(`/app/analytics?period=${value}`);
+  }, [navigate]);
 
   const modeColors: Record<string, string> = {
     "dtf": "#5C6AC4",

@@ -5,7 +5,7 @@
 
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useLoaderData } from "@remix-run/react";
+import { useLoaderData, useNavigate, useSearchParams } from "@remix-run/react";
 import {
   Page, Layout, Card, Text, BlockStack, InlineStack,
   Box, Badge, DataTable, Select, Divider, InlineGrid,
@@ -368,11 +368,12 @@ export default function OrderAnalyticsPage() {
   }
 
   const [selectedPeriod, setSelectedPeriod] = useState(data.period);
+  const navigate = useNavigate();
 
   const handlePeriodChange = useCallback((value: string) => {
     setSelectedPeriod(value);
-    window.location.href = `/app/analytics/orders?period=${value}`;
-  }, []);
+    navigate(`/app/analytics/orders?period=${value}`);
+  }, [navigate]);
 
   const { summary, locationBreakdown, modeBreakdown, dailyTrend, orders, dateRangeText } = data;
 
