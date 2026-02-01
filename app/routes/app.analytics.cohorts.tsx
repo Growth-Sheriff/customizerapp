@@ -4,7 +4,7 @@
  */
 
 import { json, type LoaderFunctionArgs } from "@remix-run/node";
-import { useLoaderData } from "@remix-run/react";
+import { useLoaderData, useNavigate } from "@remix-run/react";
 import {
   Page,
   Layout,
@@ -16,7 +16,9 @@ import {
   Badge,
   Divider,
   Banner,
+  Select,
 } from "@shopify/polaris";
+import { useState, useCallback } from "react";
 import { authenticate } from "~/shopify.server";
 import {
   getShopIdFromDomain,
@@ -26,6 +28,7 @@ import {
 
 interface LoaderData {
   cohorts: WeeklyCohort[];
+  weeks: number;
   error?: string;
 }
 
@@ -36,17 +39,24 @@ export async function loader({ request }: LoaderFunctionArgs) {
   if (!shopId) {
     return json<LoaderData>({
       cohorts: [],
+      weeks: 8,
       error: "Shop not found",
     });
   }
 
+  // Get weeks from URL
+  const url = new URL(request.url);
+  const weeksParam = url.searchParams.get("weeks");
+  const weeks = weeksParam ? parseInt(weeksParam, 10) : 8;
+
   try {
-    const cohorts = await getWeeklyCohorts(shopId, 8);
-    return json<LoaderData>({ cohorts });
+    const cohorts = await getWeeklyCohorts(shopId, weeks);
+    return json<LoaderData>({ cohorts, weeks });
   } catch (error) {
     console.error("Cohorts analytics error:", error);
     return json<LoaderData>({
       cohorts: [],
+      weeks: 8,
       error: error instanceof Error ? error.message : "Unknown error",
     });
   }
@@ -108,7 +118,14 @@ function CohortCell({ value, isHeader }: { value: number | string; isHeader?: bo
 }
 
 export default function AnalyticsCohorts() {
-  const { cohorts, error } = useLoaderData<typeof loader>();
+  const { cohorts, weeks, error } = useLoaderData<typeof loader>();
+  const [selectedWeeks, setSelectedWeeks] = useState(weeks.toString());
+  const navigate = useNavigate();
+
+  const handleWeeksChange = useCallback((value: string) => {
+    setSelectedWeeks(value);
+    navigate(`/app/analytics/cohorts?weeks=${value}`);
+  }, [navigate]);
 
   if (error) {
     return (
@@ -133,6 +150,30 @@ export default function AnalyticsCohorts() {
       backAction={{ url: "/app/analytics" }}
     >
       <Layout>
+        {/* Period Selector */}
+        <Layout.Section>
+          <Card>
+            <InlineStack align="space-between">
+              <BlockStack gap="100">
+                <Text as="h2" variant="headingMd">📈 Retention Cohorts</Text>
+                <Text as="p" variant="bodySm" tone="subdued">Analyzing {cohorts.length} weeks of data</Text>
+              </BlockStack>
+              <Select
+                label=""
+                labelHidden
+                options={[
+                  { label: "Last 4 weeks", value: "4" },
+                  { label: "Last 8 weeks", value: "8" },
+                  { label: "Last 12 weeks", value: "12" },
+                  { label: "Last 24 weeks", value: "24" },
+                ]}
+                value={selectedWeeks}
+                onChange={handleWeeksChange}
+              />
+            </InlineStack>
+          </Card>
+        </Layout.Section>
+
         {/* Legend */}
         <Layout.Section>
           <Card>

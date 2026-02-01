@@ -4,7 +4,7 @@
  */
 
 import { json, type LoaderFunctionArgs } from "@remix-run/node";
-import { useLoaderData } from "@remix-run/react";
+import { useLoaderData, useNavigate } from "@remix-run/react";
 import {
   Page,
   Layout,
@@ -20,7 +20,9 @@ import {
   Banner,
   Button,
   ProgressBar,
+  Select,
 } from "@shopify/polaris";
+import { useState, useCallback } from "react";
 import {
   LightbulbIcon,
   ChartVerticalIcon,
@@ -60,6 +62,8 @@ interface LoaderData {
     value: number;
     percentage: number;
   }[];
+  period: string;
+  dateRangeText: string;
   error?: string;
 }
 
@@ -94,14 +98,40 @@ export async function loader({ request }: LoaderFunctionArgs) {
       fileMetrics: null,
       revenueStats: null,
       funnelData: [],
+      period: "30d",
+      dateRangeText: "",
       error: "Shop not found",
     });
   }
 
-  // Last 30 days
+  // Get period from URL
+  const url = new URL(request.url);
+  const period = url.searchParams.get("period") || "30d";
+
+  // Calculate date range
   const endDate = new Date();
-  const startDate = new Date();
-  startDate.setDate(startDate.getDate() - 30);
+  let startDate: Date;
+
+  switch (period) {
+    case "7d":
+      startDate = new Date(endDate.getTime() - 7 * 24 * 60 * 60 * 1000);
+      break;
+    case "30d":
+      startDate = new Date(endDate.getTime() - 30 * 24 * 60 * 60 * 1000);
+      break;
+    case "90d":
+      startDate = new Date(endDate.getTime() - 90 * 24 * 60 * 60 * 1000);
+      break;
+    case "all":
+      startDate = new Date(0);
+      break;
+    default:
+      startDate = new Date(endDate.getTime() - 30 * 24 * 60 * 60 * 1000);
+  }
+
+  const dateRangeText = period === "all" 
+    ? "All time"
+    : `${startDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} - ${endDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
 
   try {
     const [insights, visitorStats, uploadStats, customerSegmentation, fileMetrics, revenueStats] = await Promise.all([
@@ -151,6 +181,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
       fileMetrics,
       revenueStats,
       funnelData,
+      period,
+      dateRangeText,
     });
   } catch (error) {
     console.error("AI Insights error:", error);
@@ -180,6 +212,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
       fileMetrics: null,
       revenueStats: null,
       funnelData: [],
+      period: "30d",
+      dateRangeText: "",
       error: error instanceof Error ? error.message : "Unknown error",
     });
   }
@@ -315,8 +349,15 @@ function formatBytes(bytes: number): string {
 }
 
 export default function AnalyticsInsights() {
-  const { insights, visitorStats, uploadStats, customerSegmentation, fileMetrics, revenueStats, funnelData, error } =
+  const { insights, visitorStats, uploadStats, customerSegmentation, fileMetrics, revenueStats, funnelData, period, dateRangeText, error } =
     useLoaderData<typeof loader>();
+  const [selectedPeriod, setSelectedPeriod] = useState(period);
+  const navigate = useNavigate();
+
+  const handlePeriodChange = useCallback((value: string) => {
+    setSelectedPeriod(value);
+    navigate(`/app/analytics/insights?period=${value}`);
+  }, [navigate]);
 
   if (error) {
     return (
@@ -339,6 +380,30 @@ export default function AnalyticsInsights() {
       backAction={{ url: "/app/analytics" }}
     >
       <Layout>
+        {/* Period Selector */}
+        <Layout.Section>
+          <Card>
+            <InlineStack align="space-between">
+              <BlockStack gap="100">
+                <Text as="h2" variant="headingMd">🧠 AI Insights</Text>
+                <Text as="p" variant="bodySm" tone="subdued">📅 {dateRangeText}</Text>
+              </BlockStack>
+              <Select
+                label=""
+                labelHidden
+                options={[
+                  { label: "Last 7 days", value: "7d" },
+                  { label: "Last 30 days", value: "30d" },
+                  { label: "Last 90 days", value: "90d" },
+                  { label: "All time", value: "all" },
+                ]}
+                value={selectedPeriod}
+                onChange={handlePeriodChange}
+              />
+            </InlineStack>
+          </Card>
+        </Layout.Section>
+
         {/* Key Metrics Overview */}
         <Layout.Section>
           <Card>
@@ -347,7 +412,6 @@ export default function AnalyticsInsights() {
                 <Text as="h3" variant="headingMd">
                   📊 Key Performance Metrics
                 </Text>
-                <Badge tone="info">Last 30 days</Badge>
               </InlineStack>
               <Divider />
               <InlineGrid columns={{ xs: 2, md: 4 }} gap="400">
