@@ -90,7 +90,7 @@ model ProductConfig {
   // T-Shirt Addon Settings
   tshirtEnabled Boolean @default(false) @map("tshirt_enabled")
   tshirtConfig  Json?   @map("tshirt_config_json")
-  // Format: { 
+  // Format: {
   //   colorVariantOption: "Color",  // Shopify option name for color
   //   sizeVariantOption: "Size",    // Shopify option name for size
   //   priceAddon: 15.00,            // Extra price for t-shirt
@@ -575,20 +575,20 @@ model Commission {
   shopId        String   @map("shop_id")
   orderId       String   @map("order_id") // Shopify order ID
   orderNumber   String?  @map("order_number") // Human-readable order number
-  
+
   // Order details
   orderTotal    Decimal  @map("order_total") @db.Decimal(10, 2)
   orderCurrency String   @default("USD") @map("order_currency")
-  
+
   // Commission calculation (1.5% = 0.015)
   commissionRate Decimal @default(0.015) @map("commission_rate") @db.Decimal(5, 4)
   commissionAmount Decimal @map("commission_amount") @db.Decimal(10, 2)
-  
+
   // Payment status
   status        String   @default("pending") // pending, paid, waived
   paidAt        DateTime? @map("paid_at")
   paymentRef    String?  @map("payment_ref") // PayPal transaction ID
-  
+
   // Metadata
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")

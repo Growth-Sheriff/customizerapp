@@ -21,6 +21,8 @@ import {
   InlineGrid,
   Tooltip,
   Select,
+  TextField,
+  Button,
 } from "@shopify/polaris";
 import { useState, useCallback } from "react";
 import {
@@ -109,26 +111,34 @@ export async function loader({ request }: LoaderFunctionArgs) {
   // Get period from URL
   const url = new URL(request.url);
   const period = url.searchParams.get("period") || "30d";
+  const customStart = url.searchParams.get("startDate");
+  const customEnd = url.searchParams.get("endDate");
 
   // Calculate date range
-  const endDate = new Date();
+  let endDate = new Date();
   let startDate: Date;
 
-  switch (period) {
-    case "7d":
-      startDate = new Date(endDate.getTime() - 7 * 24 * 60 * 60 * 1000);
-      break;
-    case "30d":
-      startDate = new Date(endDate.getTime() - 30 * 24 * 60 * 60 * 1000);
-      break;
-    case "90d":
-      startDate = new Date(endDate.getTime() - 90 * 24 * 60 * 60 * 1000);
-      break;
-    case "all":
-      startDate = new Date(0);
-      break;
-    default:
-      startDate = new Date(endDate.getTime() - 30 * 24 * 60 * 60 * 1000);
+  if (period === "custom" && customStart && customEnd) {
+    startDate = new Date(customStart);
+    endDate = new Date(customEnd);
+    endDate.setHours(23, 59, 59, 999);
+  } else {
+    switch (period) {
+      case "7d":
+        startDate = new Date(endDate.getTime() - 7 * 24 * 60 * 60 * 1000);
+        break;
+      case "30d":
+        startDate = new Date(endDate.getTime() - 30 * 24 * 60 * 60 * 1000);
+        break;
+      case "90d":
+        startDate = new Date(endDate.getTime() - 90 * 24 * 60 * 60 * 1000);
+        break;
+      case "all":
+        startDate = new Date(0);
+        break;
+      default:
+        startDate = new Date(endDate.getTime() - 30 * 24 * 60 * 60 * 1000);
+    }
   }
 
   const dateRangeText = period === "all" 
@@ -282,12 +292,26 @@ export default function AnalyticsVisitors() {
   const { stats, geoData, deviceData, browserData, osData, screenData, timezoneData, languageData, dailyData, topVisitors, period, dateRangeText, error } =
     useLoaderData<typeof loader>();
   const [selectedPeriod, setSelectedPeriod] = useState(period);
+  const [customStartDate, setCustomStartDate] = useState("");
+  const [customEndDate, setCustomEndDate] = useState("");
+  const [showCustomDatePicker, setShowCustomDatePicker] = useState(period === "custom");
   const navigate = useNavigate();
 
   const handlePeriodChange = useCallback((value: string) => {
     setSelectedPeriod(value);
-    navigate(`/app/analytics/visitors?period=${value}`);
+    if (value === "custom") {
+      setShowCustomDatePicker(true);
+    } else {
+      setShowCustomDatePicker(false);
+      navigate(`/app/analytics/visitors?period=${value}`);
+    }
   }, [navigate]);
+
+  const handleApplyCustomDate = useCallback(() => {
+    if (customStartDate && customEndDate) {
+      navigate(`/app/analytics/visitors?period=custom&startDate=${customStartDate}&endDate=${customEndDate}`);
+    }
+  }, [navigate, customStartDate, customEndDate]);
 
   if (error) {
     return (
@@ -332,24 +356,50 @@ export default function AnalyticsVisitors() {
         {/* Period Selector */}
         <Layout.Section>
           <Card>
-            <InlineStack align="space-between">
-              <BlockStack gap="100">
-                <Text as="h2" variant="headingMd">👥 Visitor Analytics</Text>
-                <Text as="p" variant="bodySm" tone="subdued">📅 {dateRangeText}</Text>
-              </BlockStack>
-              <Select
-                label=""
-                labelHidden
-                options={[
-                  { label: "Last 7 days", value: "7d" },
-                  { label: "Last 30 days", value: "30d" },
-                  { label: "Last 90 days", value: "90d" },
-                  { label: "All time", value: "all" },
-                ]}
-                value={selectedPeriod}
-                onChange={handlePeriodChange}
-              />
-            </InlineStack>
+            <BlockStack gap="400">
+              <InlineStack align="space-between">
+                <BlockStack gap="100">
+                  <Text as="h2" variant="headingMd">👥 Visitor Analytics</Text>
+                  <Text as="p" variant="bodySm" tone="subdued">📅 {dateRangeText}</Text>
+                </BlockStack>
+                <Select
+                  label=""
+                  labelHidden
+                  options={[
+                    { label: "Last 7 days", value: "7d" },
+                    { label: "Last 30 days", value: "30d" },
+                    { label: "Last 90 days", value: "90d" },
+                    { label: "All time", value: "all" },
+                    { label: "Custom range", value: "custom" },
+                  ]}
+                  value={selectedPeriod}
+                  onChange={handlePeriodChange}
+                />
+              </InlineStack>
+              {showCustomDatePicker && (
+                <InlineStack gap="300" align="end">
+                  <TextField
+                    label="Start date"
+                    type="date"
+                    value={customStartDate}
+                    onChange={setCustomStartDate}
+                    autoComplete="off"
+                  />
+                  <TextField
+                    label="End date"
+                    type="date"
+                    value={customEndDate}
+                    onChange={setCustomEndDate}
+                    autoComplete="off"
+                  />
+                  <div style={{ paddingTop: "24px" }}>
+                    <Button variant="primary" onClick={handleApplyCustomDate} disabled={!customStartDate || !customEndDate}>
+                      Apply
+                    </Button>
+                  </div>
+                </InlineStack>
+              )}
+            </BlockStack>
           </Card>
         </Layout.Section>
 

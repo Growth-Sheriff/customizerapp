@@ -3,65 +3,59 @@
  * UTM, Click IDs, and Traffic Source Analytics
  */
 
-import { json, type LoaderFunctionArgs } from "@remix-run/node";
-import { useLoaderData, useNavigate } from "@remix-run/react";
+import { json, type LoaderFunctionArgs } from '@remix-run/node'
+import { useLoaderData, useNavigate } from '@remix-run/react'
 import {
-  Page,
-  Layout,
-  Card,
-  Text,
-  BlockStack,
-  InlineStack,
-  Box,
   Badge,
+  Banner,
+  BlockStack,
+  Box,
+  Button,
+  Card,
   DataTable,
-  ProgressBar,
-  Icon,
   Divider,
   InlineGrid,
-  Banner,
+  InlineStack,
+  Layout,
+  Page,
+  ProgressBar,
   Select,
-} from "@shopify/polaris";
-import { useState, useCallback } from "react";
+  Text,
+  TextField,
+} from '@shopify/polaris'
+import { useCallback, useState } from 'react'
 import {
-  LinkIcon,
-  TargetIcon,
-  SearchIcon,
-  SocialAdIcon,
-  AnalyticsIcon,
-} from "@shopify/polaris-icons";
-import { authenticate } from "~/shopify.server";
-import {
-  getShopIdFromDomain,
   getAttributionStats,
-  getSourceBreakdown,
-  getMediumBreakdown,
   getCampaignBreakdown,
   getClickIdStats,
+  getMediumBreakdown,
   getReferrerBreakdown,
+  getShopIdFromDomain,
+  getSourceBreakdown,
   type AttributionStats,
-  type SourceBreakdown,
-  type MediumBreakdown,
   type CampaignBreakdown,
   type ClickIdStats,
+  type MediumBreakdown,
   type ReferrerBreakdown,
-} from "~/lib/analytics.server";
+  type SourceBreakdown,
+} from '~/lib/analytics.server'
+import { authenticate } from '~/shopify.server'
 
 interface LoaderData {
-  stats: AttributionStats;
-  sources: SourceBreakdown[];
-  mediums: MediumBreakdown[];
-  campaigns: CampaignBreakdown[];
-  clickIds: ClickIdStats;
-  referrers: ReferrerBreakdown[];
-  period: string;
-  dateRangeText: string;
-  error?: string;
+  stats: AttributionStats
+  sources: SourceBreakdown[]
+  mediums: MediumBreakdown[]
+  campaigns: CampaignBreakdown[]
+  clickIds: ClickIdStats
+  referrers: ReferrerBreakdown[]
+  period: string
+  dateRangeText: string
+  error?: string
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const { session } = await authenticate.admin(request);
-  const shopId = await getShopIdFromDomain(session.shop);
+  const { session } = await authenticate.admin(request)
+  const shopId = await getShopIdFromDomain(session.shop)
 
   if (!shopId) {
     return json<LoaderData>({
@@ -69,8 +63,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
         totalSessions: 0,
         sessionsWithUTM: 0,
         utmPercentage: 0,
-        topSource: "N/A",
-        topMedium: "N/A",
+        topSource: 'N/A',
+        topMedium: 'N/A',
         paidClicks: 0,
       },
       sources: [],
@@ -78,40 +72,49 @@ export async function loader({ request }: LoaderFunctionArgs) {
       campaigns: [],
       clickIds: { gclid: 0, fbclid: 0, msclkid: 0, ttclid: 0, total: 0 },
       referrers: [],
-      period: "30d",
-      dateRangeText: "",
-      error: "Shop not found",
-    });
+      period: '30d',
+      dateRangeText: '',
+      error: 'Shop not found',
+    })
   }
 
   // Get period from URL
-  const url = new URL(request.url);
-  const period = url.searchParams.get("period") || "30d";
+  const url = new URL(request.url)
+  const period = url.searchParams.get('period') || '30d'
+  const customStart = url.searchParams.get('startDate')
+  const customEnd = url.searchParams.get('endDate')
 
   // Calculate date range
-  const endDate = new Date();
-  let startDate: Date;
+  let endDate = new Date()
+  let startDate: Date
 
-  switch (period) {
-    case "7d":
-      startDate = new Date(endDate.getTime() - 7 * 24 * 60 * 60 * 1000);
-      break;
-    case "30d":
-      startDate = new Date(endDate.getTime() - 30 * 24 * 60 * 60 * 1000);
-      break;
-    case "90d":
-      startDate = new Date(endDate.getTime() - 90 * 24 * 60 * 60 * 1000);
-      break;
-    case "all":
-      startDate = new Date(0);
-      break;
-    default:
-      startDate = new Date(endDate.getTime() - 30 * 24 * 60 * 60 * 1000);
+  if (period === 'custom' && customStart && customEnd) {
+    startDate = new Date(customStart)
+    endDate = new Date(customEnd)
+    endDate.setHours(23, 59, 59, 999)
+  } else {
+    switch (period) {
+      case '7d':
+        startDate = new Date(endDate.getTime() - 7 * 24 * 60 * 60 * 1000)
+        break
+      case '30d':
+        startDate = new Date(endDate.getTime() - 30 * 24 * 60 * 60 * 1000)
+        break
+      case '90d':
+        startDate = new Date(endDate.getTime() - 90 * 24 * 60 * 60 * 1000)
+        break
+      case 'all':
+        startDate = new Date(0)
+        break
+      default:
+        startDate = new Date(endDate.getTime() - 30 * 24 * 60 * 60 * 1000)
+    }
   }
 
-  const dateRangeText = period === "all" 
-    ? "All time"
-    : `${startDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} - ${endDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
+  const dateRangeText =
+    period === 'all'
+      ? 'All time'
+      : `${startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} - ${endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
 
   try {
     const [stats, sources, mediums, campaigns, clickIds, referrers] = await Promise.all([
@@ -121,7 +124,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       getCampaignBreakdown(shopId, startDate, endDate),
       getClickIdStats(shopId, startDate, endDate),
       getReferrerBreakdown(shopId, startDate, endDate),
-    ]);
+    ])
 
     return json<LoaderData>({
       stats,
@@ -132,16 +135,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
       referrers,
       period,
       dateRangeText,
-    });
+    })
   } catch (error) {
-    console.error("Attribution analytics error:", error);
+    console.error('Attribution analytics error:', error)
     return json<LoaderData>({
       stats: {
         totalSessions: 0,
         sessionsWithUTM: 0,
         utmPercentage: 0,
-        topSource: "N/A",
-        topMedium: "N/A",
+        topSource: 'N/A',
+        topMedium: 'N/A',
         paidClicks: 0,
       },
       sources: [],
@@ -149,10 +152,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
       campaigns: [],
       clickIds: { gclid: 0, fbclid: 0, msclkid: 0, ttclid: 0, total: 0 },
       referrers: [],
-      period: "30d",
-      dateRangeText: "",
-      error: error instanceof Error ? error.message : "Unknown error",
-    });
+      period: '30d',
+      dateRangeText: '',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    })
   }
 }
 
@@ -163,11 +166,11 @@ function StatCard({
   badge,
   badgeTone,
 }: {
-  title: string;
-  value: string | number;
-  subtitle?: string;
-  badge?: string;
-  badgeTone?: "success" | "info" | "warning" | "critical";
+  title: string
+  value: string | number
+  subtitle?: string
+  badge?: string
+  badgeTone?: 'success' | 'info' | 'warning' | 'critical'
 }) {
   return (
     <Card>
@@ -179,7 +182,7 @@ function StatCard({
           {badge && <Badge tone={badgeTone}>{badge}</Badge>}
         </InlineStack>
         <Text as="p" variant="headingXl" fontWeight="bold">
-          {typeof value === "number" ? value.toLocaleString() : value}
+          {typeof value === 'number' ? value.toLocaleString() : value}
         </Text>
         {subtitle && (
           <Text as="p" variant="bodySm" tone="subdued">
@@ -188,7 +191,7 @@ function StatCard({
         )}
       </BlockStack>
     </Card>
-  );
+  )
 }
 
 function PlatformCard({
@@ -197,17 +200,13 @@ function PlatformCard({
   clicks,
   color,
 }: {
-  platform: string;
-  icon: string;
-  clicks: number;
-  color: string;
+  platform: string
+  icon: string
+  clicks: number
+  color: string
 }) {
   return (
-    <Box
-      padding="400"
-      background="bg-surface-secondary"
-      borderRadius="300"
-    >
+    <Box padding="400" background="bg-surface-secondary" borderRadius="300">
       <BlockStack gap="200" inlineAlign="center">
         <Text as="span" variant="headingLg">
           {icon}
@@ -223,23 +222,42 @@ function PlatformCard({
         </Text>
       </BlockStack>
     </Box>
-  );
+  )
 }
 
 export default function AnalyticsAttribution() {
   const { stats, sources, mediums, campaigns, clickIds, referrers, period, dateRangeText, error } =
-    useLoaderData<typeof loader>();
-  const [selectedPeriod, setSelectedPeriod] = useState(period);
-  const navigate = useNavigate();
+    useLoaderData<typeof loader>()
+  const [selectedPeriod, setSelectedPeriod] = useState(period)
+  const [customStartDate, setCustomStartDate] = useState('')
+  const [customEndDate, setCustomEndDate] = useState('')
+  const [showCustomDatePicker, setShowCustomDatePicker] = useState(period === 'custom')
+  const navigate = useNavigate()
 
-  const handlePeriodChange = useCallback((value: string) => {
-    setSelectedPeriod(value);
-    navigate(`/app/analytics/attribution?period=${value}`);
-  }, [navigate]);
+  const handlePeriodChange = useCallback(
+    (value: string) => {
+      setSelectedPeriod(value)
+      if (value === 'custom') {
+        setShowCustomDatePicker(true)
+      } else {
+        setShowCustomDatePicker(false)
+        navigate(`/app/analytics/attribution?period=${value}`)
+      }
+    },
+    [navigate]
+  )
+
+  const handleApplyCustomDate = useCallback(() => {
+    if (customStartDate && customEndDate) {
+      navigate(
+        `/app/analytics/attribution?period=custom&startDate=${customStartDate}&endDate=${customEndDate}`
+      )
+    }
+  }, [navigate, customStartDate, customEndDate])
 
   if (error) {
     return (
-      <Page title="Attribution Analytics" backAction={{ url: "/app/analytics" }}>
+      <Page title="Attribution Analytics" backAction={{ url: '/app/analytics' }}>
         <Layout>
           <Layout.Section>
             <Banner tone="critical">
@@ -248,7 +266,7 @@ export default function AnalyticsAttribution() {
           </Layout.Section>
         </Layout>
       </Page>
-    );
+    )
   }
 
   // Prepare table rows
@@ -257,60 +275,90 @@ export default function AnalyticsAttribution() {
     s.sessions.toString(),
     s.uploads.toString(),
     `${s.conversionRate.toFixed(1)}%`,
-  ]);
+  ])
 
   const campaignRows = campaigns.map((c) => [
     c.campaign,
-    c.source || "-",
+    c.source || '-',
     c.sessions.toString(),
     c.uploads.toString(),
-  ]);
+  ])
 
   return (
     <Page
       title="Attribution Analytics"
       subtitle="Track traffic sources, UTM campaigns, and ad performance"
-      backAction={{ url: "/app/analytics" }}
+      backAction={{ url: '/app/analytics' }}
     >
       <Layout>
         {/* Period Selector */}
         <Layout.Section>
           <Card>
-            <InlineStack align="space-between">
-              <BlockStack gap="100">
-                <Text as="h2" variant="headingMd">🎯 Attribution Analytics</Text>
-                <Text as="p" variant="bodySm" tone="subdued">📅 {dateRangeText}</Text>
-              </BlockStack>
-              <Select
-                label=""
-                labelHidden
-                options={[
-                  { label: "Last 7 days", value: "7d" },
-                  { label: "Last 30 days", value: "30d" },
-                  { label: "Last 90 days", value: "90d" },
-                  { label: "All time", value: "all" },
-                ]}
-                value={selectedPeriod}
-                onChange={handlePeriodChange}
-              />
-            </InlineStack>
+            <BlockStack gap="400">
+              <InlineStack align="space-between">
+                <BlockStack gap="100">
+                  <Text as="h2" variant="headingMd">
+                    🎯 Attribution Analytics
+                  </Text>
+                  <Text as="p" variant="bodySm" tone="subdued">
+                    📅 {dateRangeText}
+                  </Text>
+                </BlockStack>
+                <Select
+                  label=""
+                  labelHidden
+                  options={[
+                    { label: 'Last 7 days', value: '7d' },
+                    { label: 'Last 30 days', value: '30d' },
+                    { label: 'Last 90 days', value: '90d' },
+                    { label: 'All time', value: 'all' },
+                    { label: 'Custom range', value: 'custom' },
+                  ]}
+                  value={selectedPeriod}
+                  onChange={handlePeriodChange}
+                />
+              </InlineStack>
+              {showCustomDatePicker && (
+                <InlineStack gap="300" align="end">
+                  <TextField
+                    label="Start date"
+                    type="date"
+                    value={customStartDate}
+                    onChange={setCustomStartDate}
+                    autoComplete="off"
+                  />
+                  <TextField
+                    label="End date"
+                    type="date"
+                    value={customEndDate}
+                    onChange={setCustomEndDate}
+                    autoComplete="off"
+                  />
+                  <div style={{ paddingTop: '24px' }}>
+                    <Button
+                      variant="primary"
+                      onClick={handleApplyCustomDate}
+                      disabled={!customStartDate || !customEndDate}
+                    >
+                      Apply
+                    </Button>
+                  </div>
+                </InlineStack>
+              )}
+            </BlockStack>
           </Card>
         </Layout.Section>
 
         {/* Overview Stats */}
         <Layout.Section>
           <InlineGrid columns={{ xs: 1, sm: 2, md: 4 }} gap="400">
-            <StatCard
-              title="Total Sessions"
-              value={stats.totalSessions}
-              subtitle="Last 30 days"
-            />
+            <StatCard title="Total Sessions" value={stats.totalSessions} subtitle="Last 30 days" />
             <StatCard
               title="UTM Tagged"
               value={stats.sessionsWithUTM}
               subtitle={`${stats.utmPercentage.toFixed(1)}% of sessions`}
-              badge={stats.utmPercentage > 30 ? "Good tracking" : "Low tracking"}
-              badgeTone={stats.utmPercentage > 30 ? "success" : "warning"}
+              badge={stats.utmPercentage > 30 ? 'Good tracking' : 'Low tracking'}
+              badgeTone={stats.utmPercentage > 30 ? 'success' : 'warning'}
             />
             <StatCard
               title="Top Source"
@@ -323,8 +371,8 @@ export default function AnalyticsAttribution() {
               title="Paid Ad Clicks"
               value={stats.paidClicks}
               subtitle="Google, Facebook, Microsoft, TikTok"
-              badge={stats.paidClicks > 0 ? "Active" : "None"}
-              badgeTone={stats.paidClicks > 0 ? "success" : undefined}
+              badge={stats.paidClicks > 0 ? 'Active' : 'None'}
+              badgeTone={stats.paidClicks > 0 ? 'success' : undefined}
             />
           </InlineGrid>
         </Layout.Section>
@@ -386,8 +434,8 @@ export default function AnalyticsAttribution() {
                 </Text>
                 {sourceRows.length > 0 ? (
                   <DataTable
-                    columnContentTypes={["text", "numeric", "numeric", "text"]}
-                    headings={["Source", "Sessions", "Uploads", "Conv Rate"]}
+                    columnContentTypes={['text', 'numeric', 'numeric', 'text']}
+                    headings={['Source', 'Sessions', 'Uploads', 'Conv Rate']}
                     rows={sourceRows}
                   />
                 ) : (
@@ -412,7 +460,7 @@ export default function AnalyticsAttribution() {
                       <BlockStack gap="200" key={i}>
                         <InlineStack align="space-between">
                           <Text as="span" variant="bodyMd">
-                            {m.medium === "none" ? "Direct" : m.medium}
+                            {m.medium === 'none' ? 'Direct' : m.medium}
                           </Text>
                           <Text as="span" variant="bodyMd" fontWeight="semibold">
                             {m.sessions.toLocaleString()} ({m.percentage.toFixed(1)}%)
@@ -444,22 +492,23 @@ export default function AnalyticsAttribution() {
               <Divider />
               <InlineGrid columns={{ xs: 2, sm: 3, md: 6 }} gap="300">
                 {referrers.map((r, i) => (
-                  <Box
-                    key={i}
-                    padding="300"
-                    background="bg-surface-secondary"
-                    borderRadius="200"
-                  >
+                  <Box key={i} padding="300" background="bg-surface-secondary" borderRadius="200">
                     <BlockStack gap="100" inlineAlign="center">
                       <Text as="span" variant="headingLg">
-                        {r.type === "direct" ? "🏠" :
-                         r.type === "search" ? "🔍" :
-                         r.type === "social" ? "📱" :
-                         r.type === "email" ? "📧" :
-                         r.type === "referral" ? "🔗" : "❓"}
+                        {r.type === 'direct'
+                          ? '🏠'
+                          : r.type === 'search'
+                            ? '🔍'
+                            : r.type === 'social'
+                              ? '📱'
+                              : r.type === 'email'
+                                ? '📧'
+                                : r.type === 'referral'
+                                  ? '🔗'
+                                  : '❓'}
                       </Text>
                       <Text as="p" variant="bodySm" fontWeight="semibold">
-                        {r.type || "Unknown"}
+                        {r.type || 'Unknown'}
                       </Text>
                       <Text as="p" variant="bodyMd" fontWeight="bold">
                         {r.sessions.toLocaleString()}
@@ -487,8 +536,8 @@ export default function AnalyticsAttribution() {
               </InlineStack>
               {campaignRows.length > 0 ? (
                 <DataTable
-                  columnContentTypes={["text", "text", "numeric", "numeric"]}
-                  headings={["Campaign", "Source", "Sessions", "Uploads"]}
+                  columnContentTypes={['text', 'text', 'numeric', 'numeric']}
+                  headings={['Campaign', 'Source', 'Sessions', 'Uploads']}
                   rows={campaignRows}
                   footerContent={`Showing ${campaigns.length} campaigns with UTM tracking`}
                 />
@@ -513,10 +562,7 @@ export default function AnalyticsAttribution() {
 
         {/* UTM Guide */}
         <Layout.Section>
-          <Banner
-            title="UTM Tracking Guide"
-            tone="info"
-          >
+          <Banner title="UTM Tracking Guide" tone="info">
             <BlockStack gap="200">
               <Text as="p" variant="bodySm">
                 Add these parameters to your marketing URLs:
@@ -529,5 +575,5 @@ export default function AnalyticsAttribution() {
         </Layout.Section>
       </Layout>
     </Page>
-  );
+  )
 }

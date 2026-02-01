@@ -1,13 +1,13 @@
-import { writeFile, mkdir, readFile, unlink } from "fs/promises";
-import { join, dirname } from "path";
-import { existsSync } from "fs";
-import crypto from "crypto";
+import crypto from 'crypto'
+import { existsSync } from 'fs'
+import { mkdir, readFile, unlink, writeFile } from 'fs/promises'
+import { dirname, join } from 'path'
 
 /**
  * MULTI-STORAGE SYSTEM v2.0
  * =========================
  * Supports: Bunny.net (primary), Local (fallback), R2 (optional)
- * 
+ *
  * Environment Variables:
  * - DEFAULT_STORAGE_PROVIDER: bunny | local | r2
  * - BUNNY_STORAGE_ZONE: Storage zone name
@@ -21,51 +21,51 @@ import crypto from "crypto";
 // CONFIGURATION
 // ============================================================
 
-const LOCAL_STORAGE_BASE = process.env.LOCAL_STORAGE_PATH || "./uploads";
-const LOCAL_FILE_SECRET = process.env.SECRET_KEY || "fallback-secret-key";
+const LOCAL_STORAGE_BASE = process.env.LOCAL_STORAGE_PATH || './uploads'
+const LOCAL_FILE_SECRET = process.env.SECRET_KEY || 'fallback-secret-key'
 
 // Bunny.net Configuration
-const BUNNY_STORAGE_ZONE = process.env.BUNNY_STORAGE_ZONE || "customizerappdev";
-const BUNNY_API_KEY = process.env.BUNNY_API_KEY || "";
-const BUNNY_CDN_URL = process.env.BUNNY_CDN_URL || "https://customizerappdev.b-cdn.net";
-const BUNNY_STORAGE_HOST = "storage.bunnycdn.com";
+const BUNNY_STORAGE_ZONE = process.env.BUNNY_STORAGE_ZONE || 'customizerappdev'
+const BUNNY_API_KEY = process.env.BUNNY_API_KEY || ''
+const BUNNY_CDN_URL = process.env.BUNNY_CDN_URL || 'https://customizerappdev.b-cdn.net'
+const BUNNY_STORAGE_HOST = 'storage.bunnycdn.com'
 
 // R2 Configuration (for future use)
-const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID || "";
-const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID || "";
-const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY || "";
-const R2_BUCKET_NAME = process.env.R2_BUCKET_NAME || "";
-const R2_PUBLIC_URL = process.env.R2_PUBLIC_URL || "";
+const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID || ''
+const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID || ''
+const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY || ''
+const R2_BUCKET_NAME = process.env.R2_BUCKET_NAME || ''
+const R2_PUBLIC_URL = process.env.R2_PUBLIC_URL || ''
 
 // ============================================================
 // TYPES
 // ============================================================
 
-export type StorageProvider = "local" | "bunny" | "r2";
+export type StorageProvider = 'local' | 'bunny' | 'r2'
 
 export interface StorageConfig {
-  provider: StorageProvider;
+  provider: StorageProvider
   // Local
-  localPath?: string;
+  localPath?: string
   // Bunny
-  bunnyZone?: string;
-  bunnyApiKey?: string;
-  bunnyCdnUrl?: string;
+  bunnyZone?: string
+  bunnyApiKey?: string
+  bunnyCdnUrl?: string
   // R2
-  r2AccountId?: string;
-  r2AccessKeyId?: string;
-  r2SecretAccessKey?: string;
-  r2BucketName?: string;
-  r2PublicUrl?: string;
+  r2AccountId?: string
+  r2AccessKeyId?: string
+  r2SecretAccessKey?: string
+  r2BucketName?: string
+  r2PublicUrl?: string
 }
 
 export interface UploadUrlResult {
-  url: string;
-  key: string;
-  provider: StorageProvider;
-  publicUrl: string;
-  method: "PUT" | "POST";
-  headers?: Record<string, string>;
+  url: string
+  key: string
+  provider: StorageProvider
+  publicUrl: string
+  method: 'PUT' | 'POST'
+  headers?: Record<string, string>
 }
 
 // ============================================================
@@ -77,22 +77,23 @@ export interface UploadUrlResult {
  * NOTE: We read process.env directly here to ensure we get the latest values
  * after dotenv has loaded the .env file
  */
-export function getStorageConfig(shopConfig?: { 
-  storageProvider?: string; 
-  storageConfig?: Record<string, string> | null;
+export function getStorageConfig(shopConfig?: {
+  storageProvider?: string
+  storageConfig?: Record<string, string> | null
 }): StorageConfig {
   // Shop-level override
-  const provider = (shopConfig?.storageProvider as StorageProvider) || 
-                   (process.env.DEFAULT_STORAGE_PROVIDER as StorageProvider) || 
-                   "local";
-  
-  const shopStorageConfig = shopConfig?.storageConfig || {};
-  
+  const provider =
+    (shopConfig?.storageProvider as StorageProvider) ||
+    (process.env.DEFAULT_STORAGE_PROVIDER as StorageProvider) ||
+    'local'
+
+  const shopStorageConfig = shopConfig?.storageConfig || {}
+
   // Read env vars directly to ensure we get values after dotenv loads
-  const envBunnyZone = process.env.BUNNY_STORAGE_ZONE || "customizerappdev";
-  const envBunnyApiKey = process.env.BUNNY_API_KEY || "";
-  const envBunnyCdnUrl = process.env.BUNNY_CDN_URL || "https://customizerappdev.b-cdn.net";
-  
+  const envBunnyZone = process.env.BUNNY_STORAGE_ZONE || 'customizerappdev'
+  const envBunnyApiKey = process.env.BUNNY_API_KEY || ''
+  const envBunnyCdnUrl = process.env.BUNNY_CDN_URL || 'https://customizerappdev.b-cdn.net'
+
   return {
     provider,
     // Local
@@ -107,7 +108,7 @@ export function getStorageConfig(shopConfig?: {
     r2SecretAccessKey: shopStorageConfig.r2SecretAccessKey || R2_SECRET_ACCESS_KEY,
     r2BucketName: shopStorageConfig.r2BucketName || R2_BUCKET_NAME,
     r2PublicUrl: shopStorageConfig.r2PublicUrl || R2_PUBLIC_URL,
-  };
+  }
 }
 
 /**
@@ -115,13 +116,18 @@ export function getStorageConfig(shopConfig?: {
  */
 export function isStorageConfigured(config: StorageConfig): boolean {
   switch (config.provider) {
-    case "bunny":
-      return !!(config.bunnyZone && config.bunnyApiKey);
-    case "r2":
-      return !!(config.r2AccountId && config.r2AccessKeyId && config.r2SecretAccessKey && config.r2BucketName);
-    case "local":
+    case 'bunny':
+      return !!(config.bunnyZone && config.bunnyApiKey)
+    case 'r2':
+      return !!(
+        config.r2AccountId &&
+        config.r2AccessKeyId &&
+        config.r2SecretAccessKey &&
+        config.r2BucketName
+      )
+    case 'local':
     default:
-      return true;
+      return true
   }
 }
 
@@ -130,11 +136,11 @@ export function isStorageConfigured(config: StorageConfig): boolean {
  */
 export function getEffectiveStorageProvider(config: StorageConfig): StorageProvider {
   if (isStorageConfigured(config)) {
-    return config.provider;
+    return config.provider
   }
   // Fallback to local if primary not configured
-  console.warn(`[Storage] ${config.provider} not configured, falling back to local`);
-  return "local";
+  console.warn(`[Storage] ${config.provider} not configured, falling back to local`)
+  return 'local'
 }
 
 // ============================================================
@@ -142,35 +148,32 @@ export function getEffectiveStorageProvider(config: StorageConfig): StorageProvi
 // ============================================================
 
 export function generateLocalFileToken(key: string, expiresAt: number): string {
-  const payload = `${key}:${expiresAt}`;
-  const signature = crypto
-    .createHmac("sha256", LOCAL_FILE_SECRET)
-    .update(payload)
-    .digest("hex");
-  return `${expiresAt}.${signature}`;
+  const payload = `${key}:${expiresAt}`
+  const signature = crypto.createHmac('sha256', LOCAL_FILE_SECRET).update(payload).digest('hex')
+  return `${expiresAt}.${signature}`
 }
 
 export function validateLocalFileToken(key: string, token: string): boolean {
-  if (!token) return false;
-  
-  const [expiresAtStr, signature] = token.split(".");
-  if (!expiresAtStr || !signature) return false;
-  
-  const expiresAt = parseInt(expiresAtStr, 10);
-  if (isNaN(expiresAt)) return false;
-  
-  if (Date.now() > expiresAt) return false;
-  
-  const expectedPayload = `${key}:${expiresAt}`;
+  if (!token) return false
+
+  const [expiresAtStr, signature] = token.split('.')
+  if (!expiresAtStr || !signature) return false
+
+  const expiresAt = parseInt(expiresAtStr, 10)
+  if (isNaN(expiresAt)) return false
+
+  if (Date.now() > expiresAt) return false
+
+  const expectedPayload = `${key}:${expiresAt}`
   const expectedSignature = crypto
-    .createHmac("sha256", LOCAL_FILE_SECRET)
+    .createHmac('sha256', LOCAL_FILE_SECRET)
     .update(expectedPayload)
-    .digest("hex");
-  
+    .digest('hex')
+
   return crypto.timingSafeEqual(
-    Buffer.from(signature, "hex"),
-    Buffer.from(expectedSignature, "hex")
-  );
+    Buffer.from(signature, 'hex'),
+    Buffer.from(expectedSignature, 'hex')
+  )
 }
 
 // ============================================================
@@ -186,16 +189,16 @@ export async function getUploadSignedUrl(
   contentType: string,
   _expiresIn: number = 3600
 ): Promise<UploadUrlResult> {
-  const effectiveProvider = getEffectiveStorageProvider(config);
-  
+  const effectiveProvider = getEffectiveStorageProvider(config)
+
   switch (effectiveProvider) {
-    case "bunny":
-      return getBunnyUploadUrl(config, key, contentType);
-    case "r2":
-      return getR2UploadUrl(config, key, contentType);
-    case "local":
+    case 'bunny':
+      return getBunnyUploadUrl(config, key, contentType)
+    case 'r2':
+      return getR2UploadUrl(config, key, contentType)
+    case 'local':
     default:
-      return getLocalUploadUrl(config, key);
+      return getLocalUploadUrl(config, key)
   }
 }
 
@@ -208,55 +211,48 @@ function getBunnyUploadUrl(
   key: string,
   _contentType: string
 ): UploadUrlResult {
-  const uploadUrl = `https://${BUNNY_STORAGE_HOST}/${config.bunnyZone}/${key}`;
-  const publicUrl = `${config.bunnyCdnUrl}/${key}`;
-  
+  const uploadUrl = `https://${BUNNY_STORAGE_HOST}/${config.bunnyZone}/${key}`
+  const publicUrl = `${config.bunnyCdnUrl}/${key}`
+
   return {
     url: uploadUrl,
     key,
-    provider: "bunny",
+    provider: 'bunny',
     publicUrl,
-    method: "PUT",
+    method: 'PUT',
     headers: {
-      "AccessKey": config.bunnyApiKey || "",
+      AccessKey: config.bunnyApiKey || '',
     },
-  };
+  }
 }
 
 /**
  * R2 Presigned Upload URL (placeholder - needs AWS SDK)
  */
-function getR2UploadUrl(
-  config: StorageConfig,
-  key: string,
-  _contentType: string
-): UploadUrlResult {
+function getR2UploadUrl(config: StorageConfig, key: string, _contentType: string): UploadUrlResult {
   // TODO: Implement R2 presigned URL with AWS SDK v3
   // For now, fallback to local
-  console.warn("[Storage] R2 presigned URL not implemented, using local");
-  return getLocalUploadUrl(config, key);
+  console.warn('[Storage] R2 presigned URL not implemented, using local')
+  return getLocalUploadUrl(config, key)
 }
 
 /**
  * Local Storage Upload URL
  * Client uploads via POST to our endpoint
  */
-function getLocalUploadUrl(
-  _config: StorageConfig,
-  key: string
-): UploadUrlResult {
-  let host = process.env.SHOPIFY_APP_URL || process.env.HOST || "https://customizerapp.dev";
-  if (!host.startsWith("http://") && !host.startsWith("https://")) {
-    host = `https://${host}`;
+function getLocalUploadUrl(_config: StorageConfig, key: string): UploadUrlResult {
+  let host = process.env.SHOPIFY_APP_URL || process.env.HOST || 'https://customizerapp.dev'
+  if (!host.startsWith('http://') && !host.startsWith('https://')) {
+    host = `https://${host}`
   }
-  
+
   return {
     url: `${host}/api/upload/local`,
     key,
-    provider: "local",
+    provider: 'local',
     publicUrl: `${host}/api/files/${encodeURIComponent(key)}`,
-    method: "POST",
-  };
+    method: 'POST',
+  }
 }
 
 // ============================================================
@@ -272,35 +268,35 @@ export async function getDownloadSignedUrl(
   expiresIn: number = 30 * 24 * 3600
 ): Promise<string> {
   // Check if key is already a full URL (external storage)
-  if (key.startsWith("http://") || key.startsWith("https://")) {
-    return key;
+  if (key.startsWith('http://') || key.startsWith('https://')) {
+    return key
   }
-  
+
   // Check if key indicates Bunny storage
-  if (key.startsWith("bunny:")) {
-    const bunnyKey = key.replace("bunny:", "");
-    return `${config.bunnyCdnUrl || BUNNY_CDN_URL}/${bunnyKey}`;
+  if (key.startsWith('bunny:')) {
+    const bunnyKey = key.replace('bunny:', '')
+    return `${config.bunnyCdnUrl || BUNNY_CDN_URL}/${bunnyKey}`
   }
-  
-  const effectiveProvider = getEffectiveStorageProvider(config);
-  
+
+  const effectiveProvider = getEffectiveStorageProvider(config)
+
   switch (effectiveProvider) {
-    case "bunny":
+    case 'bunny':
       // Bunny CDN URL (public)
-      return `${config.bunnyCdnUrl}/${key}`;
-    case "r2":
+      return `${config.bunnyCdnUrl}/${key}`
+    case 'r2':
       // R2 public URL
-      return `${config.r2PublicUrl}/${key}`;
-    case "local":
+      return `${config.r2PublicUrl}/${key}`
+    case 'local':
     default:
       // Local signed URL
-      let host = process.env.SHOPIFY_APP_URL || process.env.HOST || "https://customizerapp.dev";
-      if (!host.startsWith("http://") && !host.startsWith("https://")) {
-        host = `https://${host}`;
+      let host = process.env.SHOPIFY_APP_URL || process.env.HOST || 'https://customizerapp.dev'
+      if (!host.startsWith('http://') && !host.startsWith('https://')) {
+        host = `https://${host}`
       }
-      const expiresAt = Date.now() + expiresIn * 1000;
-      const token = generateLocalFileToken(key, expiresAt);
-      return `${host}/api/files/${encodeURIComponent(key)}?token=${token}`;
+      const expiresAt = Date.now() + expiresIn * 1000
+      const token = generateLocalFileToken(key, expiresAt)
+      return `${host}/api/files/${encodeURIComponent(key)}?token=${token}`
   }
 }
 
@@ -315,25 +311,28 @@ export function getThumbnailUrl(
   height?: number
 ): string {
   // If already a URL, add optimizer params if Bunny
-  if (key.startsWith("https://") && key.includes(".b-cdn.net")) {
-    const url = new URL(key);
-    url.searchParams.set("width", width.toString());
-    if (height) url.searchParams.set("height", height.toString());
-    url.searchParams.set("format", "webp");
-    url.searchParams.set("quality", "85");
-    return url.toString();
+  if (key.startsWith('https://') && key.includes('.b-cdn.net')) {
+    const url = new URL(key)
+    url.searchParams.set('width', width.toString())
+    if (height) url.searchParams.set('height', height.toString())
+    url.searchParams.set('format', 'webp')
+    url.searchParams.set('quality', '85')
+    return url.toString()
   }
-  
+
   // Bunny key - encode path segments to handle spaces and special chars
-  if (config.provider === "bunny" || key.startsWith("bunny:")) {
-    const bunnyKey = key.replace("bunny:", "");
+  if (config.provider === 'bunny' || key.startsWith('bunny:')) {
+    const bunnyKey = key.replace('bunny:', '')
     // Encode each path segment separately to preserve slashes
-    const encodedPath = bunnyKey.split('/').map(segment => encodeURIComponent(segment)).join('/');
-    return `${config.bunnyCdnUrl || BUNNY_CDN_URL}/${encodedPath}?width=${width}${height ? `&height=${height}` : ""}&format=webp&quality=85`;
+    const encodedPath = bunnyKey
+      .split('/')
+      .map((segment) => encodeURIComponent(segment))
+      .join('/')
+    return `${config.bunnyCdnUrl || BUNNY_CDN_URL}/${encodedPath}?width=${width}${height ? `&height=${height}` : ''}&format=webp&quality=85`
   }
-  
+
   // Local - no optimizer, return as-is
-  return key;
+  return key
 }
 
 // ============================================================
@@ -341,61 +340,58 @@ export function getThumbnailUrl(
 // ============================================================
 
 export async function saveLocalFile(key: string, data: Buffer): Promise<string> {
-  const filePath = join(LOCAL_STORAGE_BASE, key);
-  const dir = dirname(filePath);
-  
+  const filePath = join(LOCAL_STORAGE_BASE, key)
+  const dir = dirname(filePath)
+
   if (!existsSync(dir)) {
-    await mkdir(dir, { recursive: true });
+    await mkdir(dir, { recursive: true })
   }
-  
-  await writeFile(filePath, data);
-  return filePath;
+
+  await writeFile(filePath, data)
+  return filePath
 }
 
 export async function readLocalFile(key: string): Promise<Buffer> {
-  const filePath = join(LOCAL_STORAGE_BASE, key);
-  return readFile(filePath);
+  const filePath = join(LOCAL_STORAGE_BASE, key)
+  return readFile(filePath)
 }
 
 export async function deleteLocalFile(key: string): Promise<void> {
-  const filePath = join(LOCAL_STORAGE_BASE, key);
+  const filePath = join(LOCAL_STORAGE_BASE, key)
   try {
-    await unlink(filePath);
+    await unlink(filePath)
   } catch (e) {
     // File may not exist, ignore
   }
 }
 
 export async function deleteFile(config: StorageConfig, key: string): Promise<void> {
-  const effectiveProvider = getEffectiveStorageProvider(config);
-  
+  const effectiveProvider = getEffectiveStorageProvider(config)
+
   switch (effectiveProvider) {
-    case "bunny":
-      await deleteBunnyFile(config, key);
-      break;
-    case "local":
+    case 'bunny':
+      await deleteBunnyFile(config, key)
+      break
+    case 'local':
     default:
-      await deleteLocalFile(key);
+      await deleteLocalFile(key)
   }
 }
 
 async function deleteBunnyFile(config: StorageConfig, key: string): Promise<void> {
   try {
-    const bunnyKey = key.replace("bunny:", "");
-    const response = await fetch(
-      `https://${BUNNY_STORAGE_HOST}/${config.bunnyZone}/${bunnyKey}`,
-      {
-        method: "DELETE",
-        headers: {
-          "AccessKey": config.bunnyApiKey || "",
-        },
-      }
-    );
+    const bunnyKey = key.replace('bunny:', '')
+    const response = await fetch(`https://${BUNNY_STORAGE_HOST}/${config.bunnyZone}/${bunnyKey}`, {
+      method: 'DELETE',
+      headers: {
+        AccessKey: config.bunnyApiKey || '',
+      },
+    })
     if (!response.ok) {
-      console.warn(`[Bunny] Failed to delete file: ${key}`);
+      console.warn(`[Bunny] Failed to delete file: ${key}`)
     }
   } catch (e) {
-    console.error("[Bunny] Delete error:", e);
+    console.error('[Bunny] Delete error:', e)
   }
 }
 
@@ -409,35 +405,35 @@ export function buildStorageKey(
   itemId: string,
   filename: string
 ): string {
-  const env = process.env.NODE_ENV === "production" ? "prod" : "dev";
-  const safeShop = shopDomain.replace(/[^a-zA-Z0-9-]/g, "_");
-  return `${safeShop}/${env}/${uploadId}/${itemId}/${filename}`;
+  const env = process.env.NODE_ENV === 'production' ? 'prod' : 'dev'
+  const safeShop = shopDomain.replace(/[^a-zA-Z0-9-]/g, '_')
+  return `${safeShop}/${env}/${uploadId}/${itemId}/${filename}`
 }
 
 export function getLocalFilePath(key: string): string {
-  return join(LOCAL_STORAGE_BASE, key);
+  return join(LOCAL_STORAGE_BASE, key)
 }
 
 /**
  * Check if a storage key is from Bunny CDN
  */
 export function isBunnyUrl(key: string | null | undefined): boolean {
-  if (!key) return false;
-  return key.includes(".b-cdn.net") || key.includes("bunnycdn.com") || key.startsWith("bunny:");
+  if (!key) return false
+  return key.includes('.b-cdn.net') || key.includes('bunnycdn.com') || key.startsWith('bunny:')
 }
 
 /**
  * Check if a storage key is from R2
  */
 export function isR2Url(key: string | null | undefined): boolean {
-  if (!key) return false;
-  return key.includes(".r2.dev") || key.includes("r2.cloudflarestorage.com");
+  if (!key) return false
+  return key.includes('.r2.dev') || key.includes('r2.cloudflarestorage.com')
 }
 
 /**
  * Check if a storage key is an external URL
  */
 export function isExternalUrl(key: string | null | undefined): boolean {
-  if (!key) return false;
-  return key.startsWith("http://") || key.startsWith("https://");
+  if (!key) return false
+  return key.startsWith('http://') || key.startsWith('https://')
 }

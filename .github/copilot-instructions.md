@@ -1,8 +1,8 @@
 # 3D Customizer – Project Rules & Fixed Principles (MASTER DOCUMENT)
 
-> **Version:** 3.3.0  
-> **Last Updated:** January 19, 2026  
-> **Project:** 3D Customizer - DTF/Print Customizer Shopify App  
+> **Version:** 3.3.0
+> **Last Updated:** January 19, 2026
+> **Project:** 3D Customizer - DTF/Print Customizer Shopify App
 > **Domain:** customizerapp.dev
 
 ---
@@ -10,11 +10,13 @@
 ## 🔗 Repository & Access
 
 ### GitHub Repository
+
 ```
 git@github.com:Growth-Sheriff/customizerapp.git
 ```
 
 ### Server SSH Access
+
 ```powershell
 # Windows PowerShell
 ssh -i $env:USERPROFILE\.ssh\id_ed25519_customizer_app root@5.78.136.98
@@ -24,6 +26,7 @@ ssh -i ~/.ssh/id_ed25519_customizer_app root@5.78.136.98
 ```
 
 ### 3D Reference Repository
+
 ```
 https://github.com/kt946/ai-threejs-products-app-yt-jsm
 ```
@@ -33,28 +36,33 @@ https://github.com/kt946/ai-threejs-products-app-yt-jsm
 ## 🔐 API Keys & Credentials (Test Environment)
 
 ### Shopify Dev Dashboard
+
 ```
 Client ID: <SHOPIFY_CLIENT_ID>
 Secret: <SHOPIFY_CLIENT_SECRET>
 ```
 
 ### Custom App
+
 ```
 API Key: <SHOPIFY_API_KEY>
 API Secret: <SHOPIFY_API_SECRET>
 ```
 
 ### Admin API
+
 ```
 Access Token: <SHOPIFY_ADMIN_ACCESS_TOKEN>
 ```
 
 ### Storefront API
+
 ```
 Token: <SHOPIFY_STOREFRONT_TOKEN>
 ```
 
 ### Application URLs
+
 ```
 App URL: https://customizerapp.dev
 Admin: https://customizerapp.dev/app
@@ -80,12 +88,14 @@ LOCAL → GitHub → SERVER → BUILD / DEPLOY
 ```
 
 ### ❌ FORBIDDEN
+
 - SCP / rsync / sftp / ftp
 - Manual file transfer
 - Direct server code editing
 - Bypassing GitHub
 
 ### ✅ REQUIRED Workflow
+
 ```bash
 # Local
 pnpm dev && pnpm test && pnpm build
@@ -106,17 +116,18 @@ systemctl restart 3d-customizer
 
 ## 🖥️ Server & Infrastructure
 
-| Item | Value |
-|------|-------|
-| OS | Ubuntu 24 LTS |
-| Reverse Proxy | **Caddy** (auto SSL) |
-| Node.js | 20 LTS |
-| Package Manager | pnpm |
-| Database | PostgreSQL 16 |
-| Cache/Queue | Redis 7 |
-| Storage | Cloudflare R2 (default) / S3 (option) |
+| Item            | Value                                 |
+| --------------- | ------------------------------------- |
+| OS              | Ubuntu 24 LTS                         |
+| Reverse Proxy   | **Caddy** (auto SSL)                  |
+| Node.js         | 20 LTS                                |
+| Package Manager | pnpm                                  |
+| Database        | PostgreSQL 16                         |
+| Cache/Queue     | Redis 7                               |
+| Storage         | Cloudflare R2 (default) / S3 (option) |
 
 ### ❌ NGINX IS FORBIDDEN
+
 ```bash
 systemctl stop nginx && systemctl disable nginx
 apt-get remove --purge -y nginx nginx-common nginx-full
@@ -127,13 +138,14 @@ rm -rf /etc/nginx
 
 ## 🛍️ Shopify Integration Rules
 
-| Rule | Value |
-|------|-------|
-| API Type | **GraphQL ONLY** |
-| API Version | **2025-10** |
-| REST API | ❌ FORBIDDEN |
+| Rule        | Value            |
+| ----------- | ---------------- |
+| API Type    | **GraphQL ONLY** |
+| API Version | **2025-10**      |
+| REST API    | ❌ FORBIDDEN     |
 
 ### Webhooks
+
 ```
 orders/create, orders/paid, orders/cancelled, orders/fulfilled
 products/update, products/delete
@@ -157,17 +169,19 @@ shop/redact (GDPR)
 
 ## 🧩 3D Designer (Mod-1)
 
-| Component | Technology |
-|-----------|------------|
-| 3D Engine | Three.js |
+| Component         | Technology        |
+| ----------------- | ----------------- |
+| 3D Engine         | Three.js          |
 | React Integration | React Three Fiber |
-| Helpers | @react-three/drei |
-| State | Valtio / Zustand |
+| Helpers           | @react-three/drei |
+| State             | Valtio / Zustand  |
 
 ### Print Locations
+
 - front, back, left_sleeve, right_sleeve
 
 ### Add to Cart Lock
+
 - Location selected ✓
 - File uploaded ✓
 - No blocking errors ✓
@@ -178,6 +192,7 @@ shop/redact (GDPR)
 ## 🎨 UX Rules
 
 ### Step-Based Flow
+
 ```
 LOCATION → UPLOAD → POSITION → CONFIRM
 ```
@@ -202,26 +217,28 @@ LOCATION → UPLOAD → POSITION → CONFIRM
 ## ✅ Absolute Red Lines
 
 ### ❌ FORBIDDEN
-| Rule | Reason |
-|------|--------|
-| SCP | GitHub is single source |
-| NGINX | Caddy only |
-| REST API | GraphQL 2025-10 only |
-| Backend file streaming | Direct-to-storage only |
-| Skip approval step | UX requirement |
-| Bare DB queries | Tenant isolation |
-| **DELETE uploads/ folder** | Contains production files, NEVER delete |
-| **DELETE /tmp/thumbnails/** | Thumbnails used by merchant panel |
+
+| Rule                        | Reason                                  |
+| --------------------------- | --------------------------------------- |
+| SCP                         | GitHub is single source                 |
+| NGINX                       | Caddy only                              |
+| REST API                    | GraphQL 2025-10 only                    |
+| Backend file streaming      | Direct-to-storage only                  |
+| Skip approval step          | UX requirement                          |
+| Bare DB queries             | Tenant isolation                        |
+| **DELETE uploads/ folder**  | Contains production files, NEVER delete |
+| **DELETE /tmp/thumbnails/** | Thumbnails used by merchant panel       |
 
 ### ✅ REQUIRED
-| Rule | Implementation |
-|------|----------------|
-| GitHub deployment | LOCAL → GitHub → Server |
-| Caddy | Auto SSL |
-| Shopify GraphQL 2025-10 | All operations |
-| Tenant isolation | shop_id in all queries |
-| Direct-to-storage | Signed URLs |
-| Step-locked UX | 4-step flow |
+
+| Rule                    | Implementation          |
+| ----------------------- | ----------------------- |
+| GitHub deployment       | LOCAL → GitHub → Server |
+| Caddy                   | Auto SSL                |
+| Shopify GraphQL 2025-10 | All operations          |
+| Tenant isolation        | shop_id in all queries  |
+| Direct-to-storage       | Signed URLs             |
+| Step-locked UX          | 4-step flow             |
 
 ---
 
@@ -229,21 +246,22 @@ LOCATION → UPLOAD → POSITION → CONFIRM
 
 ### KORUMA ALTINDA - ASLA SİLİNMEYECEK KLASÖRLER
 
-| Klasör | Neden | İçerik |
-|--------|-------|--------|
+| Klasör                                | Neden             | İçerik                               |
+| ------------------------------------- | ----------------- | ------------------------------------ |
 | `/var/www/fast-dtf-transfer/uploads/` | ❌ **ASLA SİLME** | Eski local uploads, fallback storage |
-| `Bunny CDN` | ❌ **ASLA SİLME** | Müşteri dosyaları |
+| `Bunny CDN`                           | ❌ **ASLA SİLME** | Müşteri dosyaları                    |
 
 ### SİLİNEBİLİR - Temp Dosyalar
 
-| Klasör | Silinebilir | Koşul |
-|--------|-------------|-------|
-| `/tmp/preflight-*` | ✅ Evet | Job tamamlandıktan sonra |
-| `/tmp/magick-*` | ✅ Evet | ImageMagick temp files |
+| Klasör             | Silinebilir | Koşul                    |
+| ------------------ | ----------- | ------------------------ |
+| `/tmp/preflight-*` | ✅ Evet     | Job tamamlandıktan sonra |
+| `/tmp/magick-*`    | ✅ Evet     | ImageMagick temp files   |
 
 ### Thumbnail Stratejisi
 
 Thumbnail'lar **Bunny CDN'de** saklanmalı (temp'de değil):
+
 ```
 Bunny CDN/
 ├── uploads/           # Orijinal dosyalar
@@ -253,6 +271,7 @@ Bunny CDN/
 ```
 
 **Neden Bunny'de?**
+
 - Merchant panel'de gösterilecek
 - Sipariş detaylarında görünecek
 - Temp silince kaybolmasın
@@ -261,8 +280,8 @@ Bunny CDN/
 
 ## � Visitor Identification Project - Safe Implementation Rules
 
-> **Version:** 1.0.0  
-> **Status:** Active Development  
+> **Version:** 1.0.0
+> **Status:** Active Development
 > **Principle:** ADDITIVE ONLY - Mevcut sisteme ekleme, değişiklik değil
 
 ### 🎯 Project Scope
@@ -273,25 +292,25 @@ Visitor fingerprinting, attribution tracking ve analytics sistemi eklenmesi. **M
 
 Bu dosyalarda **HİÇBİR DEĞİŞİKLİK YAPILAMAZ** (import ekleme dahil):
 
-| Dosya | Neden |
-|-------|-------|
-| `app/routes/api.upload.intent.tsx` | ❌ Upload flow kritik - DOKUNMA |
-| `app/routes/api.upload.complete.tsx` | ❌ Upload completion kritik - DOKUNMA |
-| `app/routes/webhooks.*.tsx` | ❌ Webhook handlers kritik - DOKUNMA |
-| `extensions/theme-extension/assets/ul-cart.js` | ❌ Cart flow kritik - DOKUNMA |
-| `extensions/theme-extension/assets/ul-upload.js` | ❌ Upload flow kritik - DOKUNMA |
-| `app/lib/shopify.server.ts` | ❌ Auth flow kritik - DOKUNMA |
-| `app/shopify.server.ts` | ❌ Shopify config kritik - DOKUNMA |
+| Dosya                                            | Neden                                 |
+| ------------------------------------------------ | ------------------------------------- |
+| `app/routes/api.upload.intent.tsx`               | ❌ Upload flow kritik - DOKUNMA       |
+| `app/routes/api.upload.complete.tsx`             | ❌ Upload completion kritik - DOKUNMA |
+| `app/routes/webhooks.*.tsx`                      | ❌ Webhook handlers kritik - DOKUNMA  |
+| `extensions/theme-extension/assets/ul-cart.js`   | ❌ Cart flow kritik - DOKUNMA         |
+| `extensions/theme-extension/assets/ul-upload.js` | ❌ Upload flow kritik - DOKUNMA       |
+| `app/lib/shopify.server.ts`                      | ❌ Auth flow kritik - DOKUNMA         |
+| `app/shopify.server.ts`                          | ❌ Shopify config kritik - DOKUNMA    |
 
 ### ⚠️ DİKKATLİ DÜZENLEME - Sadece NULLABLE Alan Ekleme
 
 Bu dosyalarda **SADECE nullable FK alanları** eklenebilir:
 
-| Dosya | İzin Verilen |
-|-------|-------------|
+| Dosya                                   | İzin Verilen                              |
+| --------------------------------------- | ----------------------------------------- |
 | `prisma/schema.prisma` → `Upload` model | `visitorId String? @map("visitor_id")` ✅ |
 | `prisma/schema.prisma` → `Upload` model | `sessionId String? @map("session_id")` ✅ |
-| `prisma/schema.prisma` → Yeni modeller | `Visitor`, `VisitorSession` tabloları ✅ |
+| `prisma/schema.prisma` → Yeni modeller  | `Visitor`, `VisitorSession` tabloları ✅  |
 
 ### ✅ SERBEST ALAN - Yeni Dosyalar
 
@@ -300,7 +319,7 @@ Bu dosyalar **serbestçe oluşturulabilir**:
 ```
 # Theme Extension - YENİ JS dosyaları
 extensions/theme-extension/assets/ul-fingerprint.js    ✅ YENİ
-extensions/theme-extension/assets/ul-attribution.js   ✅ YENİ  
+extensions/theme-extension/assets/ul-attribution.js   ✅ YENİ
 extensions/theme-extension/assets/ul-consent.js       ✅ YENİ
 extensions/theme-extension/assets/ul-visitor.js       ✅ YENİ
 
@@ -323,26 +342,27 @@ app/routes/app.analytics.attribution.tsx              ✅ YENİ
 
 ### 🔴 MUTLAK YASAKLAR
 
-| Yasak | Neden |
-|-------|-------|
-| ❌ Upload intent/complete logic değiştirme | Mevcut flow bozulur |
-| ❌ Webhook handler logic değiştirme | Sipariş akışı bozulur |
-| ❌ Cart JS logic değiştirme | Add to cart bozulur |
-| ❌ NOT NULL constraint ekleme | Mevcut veriler bozulur |
-| ❌ Mevcut tablo kolonlarını silme | Veri kaybı |
-| ❌ Mevcut API response formatını değiştirme | Client uyumsuzluk |
-| ❌ ul-analytics.js'in mevcut track fonksiyonunu değiştirme | Analytics bozulur |
+| Yasak                                                      | Neden                  |
+| ---------------------------------------------------------- | ---------------------- |
+| ❌ Upload intent/complete logic değiştirme                 | Mevcut flow bozulur    |
+| ❌ Webhook handler logic değiştirme                        | Sipariş akışı bozulur  |
+| ❌ Cart JS logic değiştirme                                | Add to cart bozulur    |
+| ❌ NOT NULL constraint ekleme                              | Mevcut veriler bozulur |
+| ❌ Mevcut tablo kolonlarını silme                          | Veri kaybı             |
+| ❌ Mevcut API response formatını değiştirme                | Client uyumsuzluk      |
+| ❌ ul-analytics.js'in mevcut track fonksiyonunu değiştirme | Analytics bozulur      |
 
 ### ✅ GÜVENLİ EKLEME KURALLARI
 
 1. **Prisma Migration:**
+
    ```prisma
    // ✅ DOĞRU - Nullable FK
    model Upload {
      visitorId String? @map("visitor_id")
      visitor   Visitor? @relation(fields: [visitorId], references: [id])
    }
-   
+
    // ❌ YANLIŞ - NOT NULL
    model Upload {
      visitorId String @map("visitor_id")  // YASAK!
@@ -350,21 +370,23 @@ app/routes/app.analytics.attribution.tsx              ✅ YENİ
    ```
 
 2. **JS Entegrasyonu:**
+
    ```javascript
    // ✅ DOĞRU - Yeni dosyada, window objesine ekleme
    // ul-visitor.js (YENİ DOSYA)
    window.ULVisitor = { ... };
-   
+
    // ❌ YANLIŞ - Mevcut dosyayı değiştirme
    // ul-analytics.js içinde değişiklik YASAK
    ```
 
 3. **API Entegrasyonu:**
+
    ```typescript
    // ✅ DOĞRU - Yeni endpoint
    // api.v1.visitors.tsx (YENİ DOSYA)
    export async function action({ request }) { ... }
-   
+
    // ❌ YANLIŞ - Mevcut endpoint'e ekleme
    // api.upload.intent.tsx'e kod ekleme YASAK
    ```
@@ -373,13 +395,13 @@ app/routes/app.analytics.attribution.tsx              ✅ YENİ
 
 Her değişiklik sonrası bu testler PASS olmalı:
 
-| Test | Komut | Beklenen |
-|------|-------|----------|
-| Upload intent | `curl POST /api/upload/intent` | 200 + uploadId |
-| Upload complete | `curl POST /api/upload/complete` | 200 + success |
-| Cart add | Storefront'ta sepete ekle | Başarılı |
-| Webhook receive | Shopify'dan test webhook | 200 |
-| Mevcut upload'lar | DB'de eski upload'lar | visitorId=null, çalışıyor |
+| Test              | Komut                            | Beklenen                  |
+| ----------------- | -------------------------------- | ------------------------- |
+| Upload intent     | `curl POST /api/upload/intent`   | 200 + uploadId            |
+| Upload complete   | `curl POST /api/upload/complete` | 200 + success             |
+| Cart add          | Storefront'ta sepete ekle        | Başarılı                  |
+| Webhook receive   | Shopify'dan test webhook         | 200                       |
+| Mevcut upload'lar | DB'de eski upload'lar            | visitorId=null, çalışıyor |
 
 ### 🔄 Entegrasyon Stratejisi
 
@@ -406,6 +428,7 @@ FAZ 4: Dashboard (mevcut dashboard'a YENİ route'lar)
 ### ⚡ Rollback Planı
 
 Sorun çıkarsa:
+
 1. Yeni JS dosyalarını theme'den kaldır
 2. Yeni API route'ları sil
 3. Migration rollback (sadece yeni tablolar silinir)
@@ -415,13 +438,14 @@ Sorun çıkarsa:
 
 ## �️ Multi-Storage Implementasyonu - BEYİN CERRAHİSİ KURALLARI
 
-> **Version:** 1.0.0  
-> **Status:** ACTIVE SURGERY  
+> **Version:** 1.0.0
+> **Status:** ACTIVE SURGERY
 > **Principle:** MARKDOWN DOKÜMANA %100 SADIK KAL - ASLA SAPMA YOK
 
 ### 🎯 Operasyon Kapsamı
 
 3 farklı storage provider desteği eklenmesi:
+
 - **Bunny.net** (PRIMARY) - CDN tabanlı, hızlı, ucuz
 - **Local** (FALLBACK) - Sunucu filesystem
 - **R2** (OPTIONAL) - Cloudflare S3-uyumlu
@@ -430,18 +454,19 @@ Sorun çıkarsa:
 
 Bu kurallar **BEYİN CERRAHİSİ** hassasiyetinde uygulanacaktır:
 
-| Kural | Açıklama | Ceza |
-|-------|----------|------|
-| **ASLA KISALTMA** | Kod bloklarını `...` ile kısaltma | ❌ OPERASYON İPTAL |
-| **ASLA ATLAMA** | Hiçbir dosya/satır atlanamaz | ❌ OPERASYON İPTAL |
-| **ASLA EKSİLTME** | Dokümandaki her satır uygulanmalı | ❌ OPERASYON İPTAL |
-| **ASLA DURAKSAMA** | Yarıda bırakma yok | ❌ OPERASYON İPTAL |
-| **ASLA STATİK KOD** | Hardcoded değer yasak | ❌ OPERASYON İPTAL |
+| Kural                    | Açıklama                                 | Ceza               |
+| ------------------------ | ---------------------------------------- | ------------------ |
+| **ASLA KISALTMA**        | Kod bloklarını `...` ile kısaltma        | ❌ OPERASYON İPTAL |
+| **ASLA ATLAMA**          | Hiçbir dosya/satır atlanamaz             | ❌ OPERASYON İPTAL |
+| **ASLA EKSİLTME**        | Dokümandaki her satır uygulanmalı        | ❌ OPERASYON İPTAL |
+| **ASLA DURAKSAMA**       | Yarıda bırakma yok                       | ❌ OPERASYON İPTAL |
+| **ASLA STATİK KOD**      | Hardcoded değer yasak                    | ❌ OPERASYON İPTAL |
 | **MARKDOWN'A SADIK KAL** | MULTI_STORAGE_IMPLEMENTATION.md referans | ❌ OPERASYON İPTAL |
 
 ### 📋 REFERANS DOKÜMAN
 
 **MULTI_STORAGE_IMPLEMENTATION.md** dosyası tek kaynak (single source of truth):
+
 - FAZ 1-8 tüm değişiklikleri içerir
 - Her kod bloğu TAMAMEN kopyalanmalı
 - Satır numaraları ve dosya yolları kesin
@@ -450,7 +475,7 @@ Bu kurallar **BEYİN CERRAHİSİ** hassasiyetinde uygulanacaktır:
 
 ```
 ❌ // ... existing code ...     → YASAK! Tam kod yazılacak
-❌ // ... rest of file ...      → YASAK! Tam kod yazılacak  
+❌ // ... rest of file ...      → YASAK! Tam kod yazılacak
 ❌ // implementation here       → YASAK! Tam implementasyon
 ❌ /* omitted for brevity */    → YASAK! Hiçbir şey atlanmaz
 ❌ // TODO: implement           → YASAK! Şimdi implement et
@@ -538,20 +563,20 @@ BUNNY_STORAGE_URL=https://storage.bunnycdn.com
 
 ```typescript
 // Database'den okunacak - HARDCODE YASAK
-const provider = shop.storageProvider; // 'bunny' | 'local' | 'r2'
+const provider = shop.storageProvider // 'bunny' | 'local' | 'r2'
 ```
 
 ### 🧪 Test Kriterleri
 
 Her FAZ sonrası bu testler PASS olmalı:
 
-| Test | Komut | Beklenen |
-|------|-------|----------|
-| Bunny Upload | `curl PUT bunny-url` | 201 |
-| Bunny Download | `curl GET cdn-url` | 200 + file |
-| Local Fallback | Bunny down iken | Local'a yaz |
-| 5GB Upload | Büyük dosya | Timeout yok |
-| Thumbnail | Bunny Optimizer | WebP dönsün |
+| Test           | Komut                | Beklenen    |
+| -------------- | -------------------- | ----------- |
+| Bunny Upload   | `curl PUT bunny-url` | 201         |
+| Bunny Download | `curl GET cdn-url`   | 200 + file  |
+| Local Fallback | Bunny down iken      | Local'a yaz |
+| 5GB Upload     | Büyük dosya          | Timeout yok |
+| Thumbnail      | Bunny Optimizer      | WebP dönsün |
 
 ### 🔄 Operasyon Sırası
 
@@ -571,6 +596,7 @@ Her FAZ sonrası bu testler PASS olmalı:
 ### ⚡ Hata Durumunda
 
 Herhangi bir hata olursa:
+
 1. **DURMA** - Devam et, hatayı logla
 2. **ROLLBACK YOK** - İleri git
 3. **MARKDOWN'A DÖN** - Referansa bak
@@ -585,26 +611,26 @@ export async function uploadToBunny(
   key: string,
   contentType: string
 ): Promise<BunnyUploadResult> {
-  const url = `${BUNNY_STORAGE_URL}/${BUNNY_STORAGE_ZONE}/${key}`;
-  
+  const url = `${BUNNY_STORAGE_URL}/${BUNNY_STORAGE_ZONE}/${key}`
+
   const response = await fetch(url, {
     method: 'PUT',
     headers: {
-      'AccessKey': BUNNY_API_KEY,
+      AccessKey: BUNNY_API_KEY,
       'Content-Type': contentType,
     },
     body: buffer,
-  });
-  
+  })
+
   if (!response.ok) {
-    throw new Error(`Bunny upload failed: ${response.status}`);
+    throw new Error(`Bunny upload failed: ${response.status}`)
   }
-  
+
   return {
     success: true,
     cdnUrl: `${BUNNY_CDN_URL}/${key}`,
     storageUrl: url,
-  };
+  }
 }
 
 // ❌ YANLIŞ - Kısaltılmış
@@ -616,6 +642,7 @@ export async function uploadToBunny(buffer, key, contentType) {
 ### 🎯 Başarı Kriteri
 
 Operasyon BAŞARILI sayılır eğer:
+
 1. ✅ Tüm 24 dosya güncellenmiş
 2. ✅ ~1110 satır kod yazılmış
 3. ✅ Hiçbir kısaltma/atlama yok
@@ -633,15 +660,14 @@ Any implementation violating these rules must be **rejected immediately**.
 
 ---
 
-*Version: 3.3.0 | Domain: customizerapp.dev | App: 3D Customizer*
-*Visitor Identification Rules: v1.0.0 | Status: Active*
-*Multi-Storage Implementation: v1.0.0 | Status: ACTIVE SURGERY*
-
+_Version: 3.3.0 | Domain: customizerapp.dev | App: 3D Customizer_
+_Visitor Identification Rules: v1.0.0 | Status: Active_
+_Multi-Storage Implementation: v1.0.0 | Status: ACTIVE SURGERY_
 
 # 📚 FuncLib v4 - Kullanım Kılavuzu
 
 > **Tree-sitter tabanlı evrensel kod analiz aracı**
-> 
+>
 > Güncellenme: Ocak 2026
 
 ---
@@ -693,15 +719,15 @@ funclib refs useEditorStore
 
 ### Temel Komutlar
 
-| Komut | Açıklama | Örnek |
-|-------|----------|-------|
-| `index` | Projeyi indeksle | `funclib index` |
-| `search <query>` | Sembol ara | `funclib search handleClick` |
-| `refs <name>` | Referansları bul | `funclib refs fetchData` |
-| `symbol <name>` | Sembol detayı | `funclib symbol UserService` |
-| `file <path>` | Dosyadaki sembolleri listele | `funclib file src/utils.ts` |
-| `stats` | İndeks istatistikleri | `funclib stats` |
-| `serve` | REST API başlat | `funclib serve` |
+| Komut            | Açıklama                     | Örnek                        |
+| ---------------- | ---------------------------- | ---------------------------- |
+| `index`          | Projeyi indeksle             | `funclib index`              |
+| `search <query>` | Sembol ara                   | `funclib search handleClick` |
+| `refs <name>`    | Referansları bul             | `funclib refs fetchData`     |
+| `symbol <name>`  | Sembol detayı                | `funclib symbol UserService` |
+| `file <path>`    | Dosyadaki sembolleri listele | `funclib file src/utils.ts`  |
+| `stats`          | İndeks istatistikleri        | `funclib stats`              |
+| `serve`          | REST API başlat              | `funclib serve`              |
 
 ### Opsiyonlar
 
@@ -765,18 +791,18 @@ FUNCLIB_PROJECT=/path/to/project PORT=3456 npm run serve
 
 ### Endpoint'ler
 
-| Method | Endpoint | Açıklama |
-|--------|----------|----------|
-| `GET` | `/` | API bilgisi |
-| `GET` | `/health` | Sağlık kontrolü |
-| `POST` | `/index` | Projeyi indeksle |
-| `POST` | `/index/file` | Tek dosya indeksle |
-| `GET` | `/search?q=...` | Sembol ara |
-| `GET` | `/refs/:name` | Referansları bul |
-| `GET` | `/symbol/:name` | Sembol detayı |
-| `GET` | `/file/:path` | Dosyadaki semboller |
-| `GET` | `/stats` | İstatistikler |
-| `GET` | `/graph` | Call graph |
+| Method | Endpoint        | Açıklama            |
+| ------ | --------------- | ------------------- |
+| `GET`  | `/`             | API bilgisi         |
+| `GET`  | `/health`       | Sağlık kontrolü     |
+| `POST` | `/index`        | Projeyi indeksle    |
+| `POST` | `/index/file`   | Tek dosya indeksle  |
+| `GET`  | `/search?q=...` | Sembol ara          |
+| `GET`  | `/refs/:name`   | Referansları bul    |
+| `GET`  | `/symbol/:name` | Sembol detayı       |
+| `GET`  | `/file/:path`   | Dosyadaki semboller |
+| `GET`  | `/stats`        | İstatistikler       |
+| `GET`  | `/graph`        | Call graph          |
 
 ### Örnek İstekler
 
@@ -855,14 +881,14 @@ MCP_PORT=3457 FUNCLIB_PROJECT=/path/to/project node dist/mcp.js
 
 ### Mevcut Tool'lar
 
-| Tool | Açıklama |
-|------|----------|
-| `search_symbols` | Sembol ara |
-| `find_references` | Referansları bul (⚠️ KRİTİK) |
-| `get_symbol` | Sembol detayı |
-| `list_symbols_in_file` | Dosyadaki semboller |
-| `index_project` | Projeyi indeksle |
-| `get_stats` | İstatistikler |
+| Tool                   | Açıklama                     |
+| ---------------------- | ---------------------------- |
+| `search_symbols`       | Sembol ara                   |
+| `find_references`      | Referansları bul (⚠️ KRİTİK) |
+| `get_symbol`           | Sembol detayı                |
+| `list_symbols_in_file` | Dosyadaki semboller          |
+| `index_project`        | Projeyi indeksle             |
+| `get_stats`            | İstatistikler                |
 
 ### Claude Desktop / VS Code Konfigürasyonu
 
@@ -939,23 +965,29 @@ Projenize `.github/copilot-instructions.md` ekleyin:
 ## MCP Tool Kullanımı
 
 ### 1. search_symbols
+
 Sembolleri ara (fonksiyon, class, method, vb.)
 
 ### 2. find_references ⚠️ EN ÖNEMLİ
+
 Bir sembolün TÜM kullanım yerlerini bul
 
 ### 3. get_symbol
+
 Sembol detaylarını getir
 
 ### 4. list_symbols_in_file
+
 Dosyadaki tüm sembolleri listele
 
 ### 5. index_project
+
 Projeyi yeniden indeksle
 
 ## Düzeltme Workflow'u
 
 ### DOĞRU ✅
+
 1. `find_references` ile tüm kullanımları bul
 2. Kaç yerde kullanıldığını not et
 3. Fonksiyon tanımını değiştir
@@ -963,6 +995,7 @@ Projeyi yeniden indeksle
 5. Tekrar `find_references` ile kontrol et
 
 ### YANLIŞ ❌
+
 1. Sadece fonksiyon tanımını değiştir
 2. Çağrı yerlerini unutmak
 3. Build hatası!
@@ -972,22 +1005,22 @@ Projeyi yeniden indeksle
 
 ## 🌍 Desteklenen Diller
 
-| Dil | Uzantılar | Symbol Türleri |
-|-----|-----------|----------------|
-| **JavaScript** | `.js`, `.mjs`, `.cjs` | function, class, variable, const |
-| **TypeScript** | `.ts`, `.tsx` | function, class, interface, type, enum |
-| **Python** | `.py` | function, class, method, variable |
-| **Vue** | `.vue` | component, composable, emit |
-| **Go** | `.go` | func, struct, interface |
-| **Rust** | `.rs` | fn, struct, impl, trait |
-| **Java** | `.java` | class, interface, method |
-| **Kotlin** | `.kt` | class, fun, object |
-| **C#** | `.cs` | class, interface, method |
-| **C/C++** | `.c`, `.cpp`, `.h` | function, struct, class |
-| **PHP** | `.php` | function, class, method |
-| **Ruby** | `.rb` | def, class, module |
-| **Swift** | `.swift` | func, class, struct |
-| **Dart** | `.dart` | class, function, mixin |
+| Dil            | Uzantılar             | Symbol Türleri                         |
+| -------------- | --------------------- | -------------------------------------- |
+| **JavaScript** | `.js`, `.mjs`, `.cjs` | function, class, variable, const       |
+| **TypeScript** | `.ts`, `.tsx`         | function, class, interface, type, enum |
+| **Python**     | `.py`                 | function, class, method, variable      |
+| **Vue**        | `.vue`                | component, composable, emit            |
+| **Go**         | `.go`                 | func, struct, interface                |
+| **Rust**       | `.rs`                 | fn, struct, impl, trait                |
+| **Java**       | `.java`               | class, interface, method               |
+| **Kotlin**     | `.kt`                 | class, fun, object                     |
+| **C#**         | `.cs`                 | class, interface, method               |
+| **C/C++**      | `.c`, `.cpp`, `.h`    | function, struct, class                |
+| **PHP**        | `.php`                | function, class, method                |
+| **Ruby**       | `.rb`                 | def, class, module                     |
+| **Swift**      | `.swift`              | func, class, struct                    |
+| **Dart**       | `.dart`               | class, function, mixin                 |
 
 ---
 
@@ -1006,6 +1039,7 @@ your-project/
 ### Exclude Patterns
 
 Varsayılan olarak şunlar hariç tutulur:
+
 - `node_modules`
 - `dist`, `build`, `out`
 - `.git`
@@ -1016,11 +1050,11 @@ Varsayılan olarak şunlar hariç tutulur:
 
 ### Environment Variables
 
-| Variable | Default | Açıklama |
-|----------|---------|----------|
-| `FUNCLIB_PROJECT` | `cwd` | Proje yolu |
-| `PORT` | `3456` | REST API portu |
-| `MCP_PORT` | `3457` | MCP Server portu |
+| Variable          | Default | Açıklama         |
+| ----------------- | ------- | ---------------- |
+| `FUNCLIB_PROJECT` | `cwd`   | Proje yolu       |
+| `PORT`            | `3456`  | REST API portu   |
+| `MCP_PORT`        | `3457`  | MCP Server portu |
 
 ---
 
@@ -1056,11 +1090,11 @@ MCP_PORT=3461 npm run mcp
 
 ## 📊 Performans
 
-| Metrik | Değer |
-|--------|-------|
-| İndeksleme Hızı | ~1000 dosya/saniye |
-| Arama Hızı | < 10ms |
-| Referans Bulma | < 50ms |
+| Metrik           | Değer               |
+| ---------------- | ------------------- |
+| İndeksleme Hızı  | ~1000 dosya/saniye  |
+| Arama Hızı       | < 10ms              |
+| Referans Bulma   | < 50ms              |
 | Bellek Kullanımı | ~100MB / 10K sembol |
 
 ---
@@ -1076,6 +1110,7 @@ MCP_PORT=3461 npm run mcp
 ## 📜 Changelog
 
 ### v4.0.0
+
 - Tree-sitter tabanlı yeni parser
 - MCP Server desteği
 - Call graph analizi

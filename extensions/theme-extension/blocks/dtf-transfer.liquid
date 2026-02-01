@@ -3,16 +3,16 @@
   =====================================
   Mode: dtf_transfer (Mod-1)
   Location: Product page
-  
+
   This block renders the DTF uploader widget with:
   - File upload (drag & drop)
   - Extra questions from merchant config
   - Size & quantity selection
   - T-Shirt addon modal (if enabled)
   - Confirmation screen after cart add
-  
+
   USAGE: Add this block to your product page in Theme Editor
-  
+
   Version: 4.1.0 (FAZ 6 - Mobile Experience)
 {% endcomment %}
 
@@ -28,11 +28,11 @@
 {% endcomment %}
 <style>
   @media (max-width: 749px) {
-    /* 
+    /*
       Strategy: Make product page a flex column and reorder sections
       App blocks should come immediately after main product section
     */
-    
+
     /* Target main product page wrapper - common Shopify theme patterns */
     #MainContent,
     main,
@@ -45,7 +45,7 @@
       display: flex !important;
       flex-direction: column !important;
     }
-    
+
     /* Main product section stays at top */
     .shopify-section--main-product,
     .shopify-section[id*="product"],
@@ -55,7 +55,7 @@
     section.product {
       order: 1 !important;
     }
-    
+
     /* ALL app blocks come right after main product (order: 2) */
     .shopify-section[id*="apps"],
     [class*="shopify-app-block"],
@@ -64,12 +64,12 @@
     div[id^="shopify-block-"] {
       order: 2 !important;
     }
-    
+
     /* Other sections come after app blocks (order: 10+) */
     .shopify-section:not(.shopify-section--main-product):not([id*="product"]):not([id*="apps"]) {
       order: 10 !important;
     }
-    
+
     /* Specifically push related products, recommendations, reviews to bottom */
     .shopify-section[id*="related"],
     .shopify-section[id*="recommend"],
@@ -80,7 +80,7 @@
     [class*="product-recommendations"] {
       order: 20 !important;
     }
-    
+
     /* Within product info area - ensure app blocks inside are also prioritized */
     .product__info-container,
     .product-info,
@@ -90,7 +90,7 @@
       display: flex !important;
       flex-direction: column !important;
     }
-    
+
     /* DTF block specifically gets highest priority within app blocks */
     .ul-dtf-main,
     [data-shopify-editor-block]:has(.ul-dtf-main) {
@@ -121,8 +121,8 @@
   Ensures ULVisitor is available even if visitor-tracking block is not added
   Script is smart enough to prevent double initialization
 {% endcomment %}
-<script 
-  src="{{ 'ul-visitor.js' | asset_url }}" 
+<script
+  src="{{ 'ul-visitor.js' | asset_url }}"
   defer
   data-shop-domain="{{ shop.permanent_domain }}"
 ></script>

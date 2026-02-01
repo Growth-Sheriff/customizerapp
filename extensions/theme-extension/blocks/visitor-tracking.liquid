@@ -2,12 +2,12 @@
   Upload Lift - Visitor Tracking Block
   =====================================
   Purpose: Load visitor tracking script for attribution & analytics
-  
-  This block should be added to theme.liquid or any page where 
+
+  This block should be added to theme.liquid or any page where
   visitor tracking is needed.
-  
+
   SAFE: This is a NEW file - does not modify any existing flows
-  
+
   Version: 1.0.0
 {% endcomment %}
 
@@ -20,16 +20,16 @@
     1. ul-visitor.js - Visitor identification & attribution
     2. ul-consent.js - GDPR/CCPA consent banner (loads after visitor)
   {% endcomment %}
-  <script 
-    src="{{ 'ul-visitor.js' | asset_url }}" 
+  <script
+    src="{{ 'ul-visitor.js' | asset_url }}"
     defer
     data-shop-domain="{{ shop.permanent_domain }}"
     {% if block.settings.debug_mode %}data-debug="true"{% endif %}
   ></script>
-  
+
   {% if block.settings.show_consent_banner %}
-  <script 
-    src="{{ 'ul-consent.js' | asset_url }}" 
+  <script
+    src="{{ 'ul-consent.js' | asset_url }}"
     defer
   ></script>
   {% endif %}

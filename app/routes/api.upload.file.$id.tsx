@@ -1,14 +1,14 @@
-import type { LoaderFunctionArgs } from "@remix-run/node";
-import prisma from "~/lib/prisma.server";
-import { readLocalFile, isBunnyUrl } from "~/lib/storage.server";
-import mime from "mime-types";
+import type { LoaderFunctionArgs } from '@remix-run/node'
+import mime from 'mime-types'
+import prisma from '~/lib/prisma.server'
+import { isBunnyUrl, readLocalFile } from '~/lib/storage.server'
 
 /**
  * GET /api/upload/file/:id
- * 
+ *
  * Public endpoint to serve uploaded files by upload ID
  * Used by storefront checkout to display uploaded file links
- * 
+ *
  * This endpoint:
  * 1. Looks up the upload by ID
  * 2. Gets the first upload item's storage key
@@ -17,24 +17,24 @@ import mime from "mime-types";
  */
 export async function loader({ params, request }: LoaderFunctionArgs) {
   // Handle CORS preflight
-  if (request.method === "OPTIONS") {
+  if (request.method === 'OPTIONS') {
     return new Response(null, {
       status: 204,
       headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Range",
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Range',
       },
-    });
+    })
   }
 
-  const uploadId = params.id;
-  
+  const uploadId = params.id
+
   if (!uploadId) {
-    return new Response("Upload ID required", { 
+    return new Response('Upload ID required', {
       status: 400,
-      headers: { "Access-Control-Allow-Origin": "*" },
-    });
+      headers: { 'Access-Control-Allow-Origin': '*' },
+    })
   }
 
   try {
@@ -44,67 +44,67 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
       include: {
         items: {
           take: 1,
-          orderBy: { createdAt: "asc" },
+          orderBy: { createdAt: 'asc' },
         },
       },
-    });
+    })
 
     if (!upload || upload.items.length === 0) {
-      return new Response("Upload not found", { 
+      return new Response('Upload not found', {
         status: 404,
-        headers: { "Access-Control-Allow-Origin": "*" },
-      });
+        headers: { 'Access-Control-Allow-Origin': '*' },
+      })
     }
 
-    const item = upload.items[0];
-    const storageKey = item.storageKey;
+    const item = upload.items[0]
+    const storageKey = item.storageKey
 
     if (!storageKey) {
-      return new Response("File not found", { 
+      return new Response('File not found', {
         status: 404,
-        headers: { "Access-Control-Allow-Origin": "*" },
-      });
+        headers: { 'Access-Control-Allow-Origin': '*' },
+      })
     }
 
     // If storageKey is a Bunny URL or bunny: prefixed, redirect to CDN
     if (isBunnyUrl(storageKey) || storageKey.startsWith('bunny:')) {
-      const cdnUrl = process.env.BUNNY_CDN_URL || 'https://customizerappdev.b-cdn.net';
-      let redirectUrl: string;
-      
+      const cdnUrl = process.env.BUNNY_CDN_URL || 'https://customizerappdev.b-cdn.net'
+      let redirectUrl: string
+
       if (storageKey.startsWith('http')) {
-        redirectUrl = storageKey;
+        redirectUrl = storageKey
       } else {
-        const cleanKey = storageKey.replace('bunny:', '');
-        redirectUrl = `${cdnUrl}/${cleanKey}`;
+        const cleanKey = storageKey.replace('bunny:', '')
+        redirectUrl = `${cdnUrl}/${cleanKey}`
       }
-      
-      return Response.redirect(redirectUrl, 302);
+
+      return Response.redirect(redirectUrl, 302)
     }
 
     // Read file from local storage
-    const buffer = await readLocalFile(storageKey);
+    const buffer = await readLocalFile(storageKey)
 
     // Determine content type from file extension or original name
-    const ext = (item.originalName || storageKey).split(".").pop() || "";
-    const contentType = item.mimeType || mime.lookup(ext) || "application/octet-stream";
+    const ext = (item.originalName || storageKey).split('.').pop() || ''
+    const contentType = item.mimeType || mime.lookup(ext) || 'application/octet-stream'
 
     return new Response(buffer, {
       status: 200,
       headers: {
-        "Content-Type": contentType,
-        "Content-Length": String(buffer.length),
-        "Content-Disposition": item.originalName 
-          ? `inline; filename="${encodeURIComponent(item.originalName)}"` 
-          : "inline",
-        "Cache-Control": "public, max-age=31536000", // 1 year cache
-        "Access-Control-Allow-Origin": "*",
+        'Content-Type': contentType,
+        'Content-Length': String(buffer.length),
+        'Content-Disposition': item.originalName
+          ? `inline; filename="${encodeURIComponent(item.originalName)}"`
+          : 'inline',
+        'Cache-Control': 'public, max-age=31536000', // 1 year cache
+        'Access-Control-Allow-Origin': '*',
       },
-    });
+    })
   } catch (error) {
-    console.error("[API Upload File] Error serving file:", error);
-    return new Response("File not found", { 
+    console.error('[API Upload File] Error serving file:', error)
+    return new Response('File not found', {
       status: 404,
-      headers: { "Access-Control-Allow-Origin": "*" },
-    });
+      headers: { 'Access-Control-Allow-Origin': '*' },
+    })
   }
 }

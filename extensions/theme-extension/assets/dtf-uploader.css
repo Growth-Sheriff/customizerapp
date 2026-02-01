@@ -3,14 +3,14 @@
  * ====================
  * FAZ 1: Core DTF Upload Widget
  * FAZ 6: Mobile Experience Optimizations
- * 
+ *
  * Features:
  * - FAZ 2: T-Shirt Modal integration
  * - FAZ 3: Confirmation Screen
  * - Mobile responsive (touch-optimized)
  * - Safe area support (notch devices)
  * - Reduced motion support
- * 
+ *
  * Version: 4.1.0
  */
 
@@ -76,7 +76,9 @@
 }
 
 @keyframes ul-spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* ===== SECTION ===== */
@@ -151,7 +153,8 @@
 }
 
 @keyframes ul-glow-badge {
-  0%, 100% {
+  0%,
+  100% {
     box-shadow: 0 0 20px rgba(99, 102, 241, 0.4);
   }
   50% {
@@ -191,7 +194,8 @@
 }
 
 @keyframes ul-bounce-icon {
-  0%, 100% {
+  0%,
+  100% {
     transform: translateY(0);
   }
   50% {
@@ -208,7 +212,8 @@
 }
 
 @keyframes ul-pulse-text {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 1;
     transform: scale(1);
   }
@@ -223,7 +228,7 @@
   color: var(--ul-text-muted);
 }
 
-.ul-dropzone input[type="file"] {
+.ul-dropzone input[type='file'] {
   display: none;
 }
 
@@ -782,8 +787,8 @@
   color: var(--ul-error);
 }
 
-.ul-field input[type="text"],
-.ul-field input[type="number"],
+.ul-field input[type='text'],
+.ul-field input[type='number'],
 .ul-field textarea,
 .ul-field select {
   width: 100%;
@@ -809,7 +814,7 @@
   resize: vertical;
 }
 
-.ul-field input[type="checkbox"] {
+.ul-field input[type='checkbox'] {
   width: 18px;
   height: 18px;
   accent-color: var(--ul-primary);
@@ -1248,7 +1253,9 @@
   padding: 16px;
   background: var(--ul-bg);
   border-radius: var(--ul-radius);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.15),
+    0 0 0 1px rgba(0, 0, 0, 0.05);
   z-index: 99999;
   display: flex;
   align-items: flex-start;
@@ -1436,9 +1443,23 @@
 
 /* Error Shake Animation */
 @keyframes ul-shake {
-  0%, 100% { transform: translateX(0); }
-  10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
-  20%, 40%, 60%, 80% { transform: translateX(4px); }
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  10%,
+  30%,
+  50%,
+  70%,
+  90% {
+    transform: translateX(-4px);
+  }
+  20%,
+  40%,
+  60%,
+  80% {
+    transform: translateX(4px);
+  }
 }
 
 .ul-error-shake {
@@ -1447,8 +1468,13 @@
 
 /* Error Pulse Animation */
 @keyframes ul-pulse-error {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.4); }
-  50% { box-shadow: 0 0 0 8px rgba(231, 76, 60, 0); }
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(231, 76, 60, 0);
+  }
 }
 
 .ul-error-pulse {
@@ -1548,7 +1574,7 @@
     max-width: none;
     min-width: auto;
   }
-  
+
   .ul-error-toast .ul-toast-action {
     width: 100%;
     text-align: center;

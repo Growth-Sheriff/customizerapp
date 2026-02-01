@@ -1,7 +1,7 @@
 /**
  * Delivery Badge UI Component
  * Version: 2.0.0 - Fixed GeoIP Fallback & localStorage Safety
- * 
+ *
  * Bu dosya teslimat tarihini gösteren badge UI'ını yönetir.
  * DÜZELTMELER:
  * - Province fallback düzeltildi (customerLocation null durumu)
@@ -10,8 +10,8 @@
  * - Country formatı standardize edildi
  */
 
-(function() {
-  'use strict';
+;(function () {
+  'use strict'
 
   // ============================================
   // CONFIGURATION
@@ -21,23 +21,23 @@
     timezone: 'America/New_York',
     warehouseState: 'NJ',
     geoIPCacheDuration: 30 * 60 * 1000, // 30 dakika
-    debug: false
-  };
+    debug: false,
+  }
 
   // ============================================
   // SAFE LOCALSTORAGE
   // ============================================
   function safeGetItem(key) {
     try {
-      return localStorage.getItem(key);
+      return localStorage.getItem(key)
     } catch (e) {
-      return null;
+      return null
     }
   }
 
   function safeSetItem(key, value) {
     try {
-      localStorage.setItem(key, value);
+      localStorage.setItem(key, value)
     } catch (e) {
       // Sandbox/iframe hatası - sessizce geç
     }
@@ -45,7 +45,7 @@
 
   function safeRemoveItem(key) {
     try {
-      localStorage.removeItem(key);
+      localStorage.removeItem(key)
     } catch (e) {
       // Sessizce geç
     }
@@ -54,28 +54,31 @@
   // ============================================
   // GEOIP CACHE
   // ============================================
-  const GEOIP_CACHE_KEY = 'deliveryGeoIP';
-  
+  const GEOIP_CACHE_KEY = 'deliveryGeoIP'
+
   function getCachedGeoIP() {
-    const cached = safeGetItem(GEOIP_CACHE_KEY);
-    if (!cached) return null;
-    
+    const cached = safeGetItem(GEOIP_CACHE_KEY)
+    if (!cached) return null
+
     try {
-      const data = JSON.parse(cached);
+      const data = JSON.parse(cached)
       if (Date.now() - data.timestamp < CONFIG.geoIPCacheDuration) {
-        return data.location;
+        return data.location
       }
     } catch (e) {
       // Invalid cache
     }
-    return null;
+    return null
   }
 
   function setCachedGeoIP(location) {
-    safeSetItem(GEOIP_CACHE_KEY, JSON.stringify({
-      location,
-      timestamp: Date.now()
-    }));
+    safeSetItem(
+      GEOIP_CACHE_KEY,
+      JSON.stringify({
+        location,
+        timestamp: Date.now(),
+      })
+    )
   }
 
   // ============================================
@@ -84,48 +87,128 @@
   function getStateFromZip(zip) {
     // Use window function if available (from shopify-live-shipping.js)
     if (window.getStateFromZip) {
-      return window.getStateFromZip(zip);
+      return window.getStateFromZip(zip)
     }
-    
+
     // Fallback: Basic ZIP prefix to state
-    const prefix = String(zip || '').substring(0, 3);
-    
+    const prefix = String(zip || '').substring(0, 3)
+
     // Common prefixes
     const COMMON_PREFIXES = {
       // New Jersey
-      '070': 'NJ', '071': 'NJ', '072': 'NJ', '073': 'NJ', '074': 'NJ',
-      '075': 'NJ', '076': 'NJ', '077': 'NJ', '078': 'NJ', '079': 'NJ',
-      '080': 'NJ', '081': 'NJ', '082': 'NJ', '083': 'NJ', '084': 'NJ',
-      '085': 'NJ', '086': 'NJ', '087': 'NJ', '088': 'NJ', '089': 'NJ',
-      
+      '070': 'NJ',
+      '071': 'NJ',
+      '072': 'NJ',
+      '073': 'NJ',
+      '074': 'NJ',
+      '075': 'NJ',
+      '076': 'NJ',
+      '077': 'NJ',
+      '078': 'NJ',
+      '079': 'NJ',
+      '080': 'NJ',
+      '081': 'NJ',
+      '082': 'NJ',
+      '083': 'NJ',
+      '084': 'NJ',
+      '085': 'NJ',
+      '086': 'NJ',
+      '087': 'NJ',
+      '088': 'NJ',
+      '089': 'NJ',
+
       // New York
-      '100': 'NY', '101': 'NY', '102': 'NY', '103': 'NY', '104': 'NY',
-      '110': 'NY', '111': 'NY', '112': 'NY', '113': 'NY', '114': 'NY',
-      '115': 'NY', '116': 'NY', '117': 'NY', '118': 'NY', '119': 'NY',
-      
+      100: 'NY',
+      101: 'NY',
+      102: 'NY',
+      103: 'NY',
+      104: 'NY',
+      110: 'NY',
+      111: 'NY',
+      112: 'NY',
+      113: 'NY',
+      114: 'NY',
+      115: 'NY',
+      116: 'NY',
+      117: 'NY',
+      118: 'NY',
+      119: 'NY',
+
       // Pennsylvania
-      '150': 'PA', '151': 'PA', '152': 'PA', '153': 'PA', '154': 'PA',
-      '190': 'PA', '191': 'PA', '192': 'PA', '193': 'PA', '194': 'PA',
-      
+      150: 'PA',
+      151: 'PA',
+      152: 'PA',
+      153: 'PA',
+      154: 'PA',
+      190: 'PA',
+      191: 'PA',
+      192: 'PA',
+      193: 'PA',
+      194: 'PA',
+
       // California
-      '900': 'CA', '901': 'CA', '902': 'CA', '903': 'CA', '904': 'CA',
-      '905': 'CA', '906': 'CA', '907': 'CA', '908': 'CA', '910': 'CA',
-      '920': 'CA', '921': 'CA', '922': 'CA', '923': 'CA', '924': 'CA',
-      '950': 'CA', '951': 'CA', '952': 'CA', '953': 'CA', '954': 'CA',
-      
+      900: 'CA',
+      901: 'CA',
+      902: 'CA',
+      903: 'CA',
+      904: 'CA',
+      905: 'CA',
+      906: 'CA',
+      907: 'CA',
+      908: 'CA',
+      910: 'CA',
+      920: 'CA',
+      921: 'CA',
+      922: 'CA',
+      923: 'CA',
+      924: 'CA',
+      950: 'CA',
+      951: 'CA',
+      952: 'CA',
+      953: 'CA',
+      954: 'CA',
+
       // Texas
-      '750': 'TX', '751': 'TX', '752': 'TX', '753': 'TX', '754': 'TX',
-      '760': 'TX', '761': 'TX', '762': 'TX', '763': 'TX', '764': 'TX',
-      '770': 'TX', '772': 'TX', '773': 'TX', '774': 'TX', '775': 'TX',
-      '780': 'TX', '781': 'TX', '782': 'TX', '783': 'TX', '784': 'TX',
-      
+      750: 'TX',
+      751: 'TX',
+      752: 'TX',
+      753: 'TX',
+      754: 'TX',
+      760: 'TX',
+      761: 'TX',
+      762: 'TX',
+      763: 'TX',
+      764: 'TX',
+      770: 'TX',
+      772: 'TX',
+      773: 'TX',
+      774: 'TX',
+      775: 'TX',
+      780: 'TX',
+      781: 'TX',
+      782: 'TX',
+      783: 'TX',
+      784: 'TX',
+
       // Florida
-      '320': 'FL', '321': 'FL', '322': 'FL', '323': 'FL', '324': 'FL',
-      '325': 'FL', '326': 'FL', '327': 'FL', '328': 'FL', '329': 'FL',
-      '330': 'FL', '331': 'FL', '332': 'FL', '333': 'FL', '334': 'FL'
-    };
-    
-    return COMMON_PREFIXES[prefix] || CONFIG.warehouseState;
+      320: 'FL',
+      321: 'FL',
+      322: 'FL',
+      323: 'FL',
+      324: 'FL',
+      325: 'FL',
+      326: 'FL',
+      327: 'FL',
+      328: 'FL',
+      329: 'FL',
+      330: 'FL',
+      331: 'FL',
+      332: 'FL',
+      333: 'FL',
+      334: 'FL',
+    }
+
+    return COMMON_PREFIXES[prefix] || CONFIG.warehouseState
   }
 
   // ============================================
@@ -134,26 +217,47 @@
   const ZONE_CONFIG = {
     // Warehouse: New Jersey
     zone1: ['NJ', 'NY', 'PA', 'CT', 'MA', 'RI', 'NH', 'VT', 'ME', 'DE', 'MD', 'DC'], // 2-3 days
-    zone2: ['VA', 'WV', 'NC', 'SC', 'GA', 'FL', 'OH', 'IN', 'MI', 'IL', 'WI', 'KY', 'TN', 'AL', 'MS'], // 3-4 days
+    zone2: [
+      'VA',
+      'WV',
+      'NC',
+      'SC',
+      'GA',
+      'FL',
+      'OH',
+      'IN',
+      'MI',
+      'IL',
+      'WI',
+      'KY',
+      'TN',
+      'AL',
+      'MS',
+    ], // 3-4 days
     zone3: ['MN', 'IA', 'MO', 'AR', 'LA', 'ND', 'SD', 'NE', 'KS', 'OK', 'TX'], // 4-5 days
-    zone4: ['MT', 'WY', 'CO', 'NM', 'ID', 'UT', 'AZ', 'NV', 'WA', 'OR', 'CA', 'AK', 'HI'] // 5-7 days
-  };
+    zone4: ['MT', 'WY', 'CO', 'NM', 'ID', 'UT', 'AZ', 'NV', 'WA', 'OR', 'CA', 'AK', 'HI'], // 5-7 days
+  }
 
   function getZone(state) {
-    if (ZONE_CONFIG.zone1.includes(state)) return 1;
-    if (ZONE_CONFIG.zone2.includes(state)) return 2;
-    if (ZONE_CONFIG.zone3.includes(state)) return 3;
-    if (ZONE_CONFIG.zone4.includes(state)) return 4;
-    return 3; // Default to middle zone
+    if (ZONE_CONFIG.zone1.includes(state)) return 1
+    if (ZONE_CONFIG.zone2.includes(state)) return 2
+    if (ZONE_CONFIG.zone3.includes(state)) return 3
+    if (ZONE_CONFIG.zone4.includes(state)) return 4
+    return 3 // Default to middle zone
   }
 
   function getBaseDaysForZone(zone) {
     switch (zone) {
-      case 1: return 2;
-      case 2: return 3;
-      case 3: return 4;
-      case 4: return 5;
-      default: return 4;
+      case 1:
+        return 2
+      case 2:
+        return 3
+      case 3:
+        return 4
+      case 4:
+        return 5
+      default:
+        return 4
     }
   }
 
@@ -162,113 +266,113 @@
   // ============================================
   function getETHour() {
     try {
-      const options = { timeZone: CONFIG.timezone, hour: 'numeric', hour12: false };
-      return parseInt(new Date().toLocaleString('en-US', options));
+      const options = { timeZone: CONFIG.timezone, hour: 'numeric', hour12: false }
+      return parseInt(new Date().toLocaleString('en-US', options))
     } catch (e) {
-      return new Date().getHours();
+      return new Date().getHours()
     }
   }
 
   function isPastCutoff() {
-    return getETHour() >= CONFIG.cutoffHour;
+    return getETHour() >= CONFIG.cutoffHour
   }
 
   function isWeekend(date) {
-    const day = date.getDay();
-    return day === 0 || day === 6;
+    const day = date.getDay()
+    return day === 0 || day === 6
   }
 
   function addBusinessDays(startDate, days) {
-    const result = new Date(startDate);
-    let added = 0;
-    
+    const result = new Date(startDate)
+    let added = 0
+
     // If past cutoff, start from tomorrow
     if (isPastCutoff()) {
-      result.setDate(result.getDate() + 1);
+      result.setDate(result.getDate() + 1)
     }
-    
+
     while (added < days) {
-      result.setDate(result.getDate() + 1);
+      result.setDate(result.getDate() + 1)
       if (!isWeekend(result)) {
-        added++;
+        added++
       }
     }
-    
-    return result;
+
+    return result
   }
 
   function formatDate(date) {
-    const options = { weekday: 'short', month: 'short', day: 'numeric' };
-    return date.toLocaleDateString('en-US', options);
+    const options = { weekday: 'short', month: 'short', day: 'numeric' }
+    return date.toLocaleDateString('en-US', options)
   }
 
   function formatFullDate(date) {
-    const options = { weekday: 'long', month: 'long', day: 'numeric' };
-    return date.toLocaleDateString('en-US', options);
+    const options = { weekday: 'long', month: 'long', day: 'numeric' }
+    return date.toLocaleDateString('en-US', options)
   }
 
   // ============================================
   // CUSTOMER LOCATION
   // ============================================
-  let customerLocation = null;
+  let customerLocation = null
 
   async function detectLocation() {
     // 1. Check cache first
-    const cached = getCachedGeoIP();
+    const cached = getCachedGeoIP()
     if (cached) {
-      customerLocation = cached;
-      return cached;
+      customerLocation = cached
+      return cached
     }
 
     // 2. Try Shopify customer data
     if (window.Shopify && window.Shopify.customer) {
-      const customer = window.Shopify.customer;
+      const customer = window.Shopify.customer
       if (customer.default_address) {
-        const addr = customer.default_address;
+        const addr = customer.default_address
         if (addr.zip) {
           const location = {
             zip: addr.zip,
             state: addr.province_code || getStateFromZip(addr.zip),
             country: 'US',
-            source: 'shopify_customer'
-          };
-          customerLocation = location;
-          setCachedGeoIP(location);
-          return location;
+            source: 'shopify_customer',
+          }
+          customerLocation = location
+          setCachedGeoIP(location)
+          return location
         }
       }
     }
 
     // 3. Check stored ZIP
-    const storedZip = safeGetItem('customerZip');
+    const storedZip = safeGetItem('customerZip')
     if (storedZip) {
       const location = {
         zip: storedZip,
         state: getStateFromZip(storedZip),
         country: 'US',
-        source: 'stored'
-      };
-      customerLocation = location;
-      setCachedGeoIP(location);
-      return location;
+        source: 'stored',
+      }
+      customerLocation = location
+      setCachedGeoIP(location)
+      return location
     }
 
     // 4. GeoIP fallback (with caching to prevent multiple calls)
     try {
-      const response = await fetch('https://ipapi.co/json/', { timeout: 3000 });
+      const response = await fetch('https://ipapi.co/json/', { timeout: 3000 })
       if (response.ok) {
-        const data = await response.json();
+        const data = await response.json()
         if (data.country_code === 'US' && data.postal) {
           const location = {
             zip: data.postal,
             state: data.region_code || getStateFromZip(data.postal),
             city: data.city,
             country: 'US',
-            source: 'geoip'
-          };
-          customerLocation = location;
-          setCachedGeoIP(location);
-          return location;
+            source: 'geoip',
+          }
+          customerLocation = location
+          setCachedGeoIP(location)
+          return location
         }
       }
     } catch (e) {
@@ -280,28 +384,28 @@
       zip: null,
       state: CONFIG.warehouseState,
       country: 'US',
-      source: 'default'
-    };
-    customerLocation = defaultLocation;
-    return defaultLocation;
+      source: 'default',
+    }
+    customerLocation = defaultLocation
+    return defaultLocation
   }
 
   function setCustomerZip(zip) {
-    if (!zip) return;
-    
+    if (!zip) return
+
     const location = {
       zip: zip,
       state: getStateFromZip(zip),
       country: 'US',
-      source: 'user_input'
-    };
-    
-    customerLocation = location;
-    safeSetItem('customerZip', zip);
-    setCachedGeoIP(location);
-    
+      source: 'user_input',
+    }
+
+    customerLocation = location
+    safeSetItem('customerZip', zip)
+    setCachedGeoIP(location)
+
     // Trigger re-render
-    document.dispatchEvent(new CustomEvent('deliveryLocationChanged', { detail: location }));
+    document.dispatchEvent(new CustomEvent('deliveryLocationChanged', { detail: location }))
   }
 
   // ============================================
@@ -309,16 +413,17 @@
   // ============================================
   function calculateDeliveryEstimate(options = {}) {
     // KRITIK FIX: customerLocation null ise default state kullan
-    const state = options.state || (customerLocation ? customerLocation.state : null) || CONFIG.warehouseState;
-    const zone = getZone(state);
-    const baseDays = getBaseDaysForZone(zone);
-    
+    const state =
+      options.state || (customerLocation ? customerLocation.state : null) || CONFIG.warehouseState
+    const zone = getZone(state)
+    const baseDays = getBaseDaysForZone(zone)
+
     // Add processing time (1 day)
-    const totalDays = baseDays + 1;
-    
-    const minDate = addBusinessDays(new Date(), totalDays);
-    const maxDate = addBusinessDays(new Date(), totalDays + 1);
-    
+    const totalDays = baseDays + 1
+
+    const minDate = addBusinessDays(new Date(), totalDays)
+    const maxDate = addBusinessDays(new Date(), totalDays + 1)
+
     return {
       zone,
       baseDays,
@@ -333,18 +438,18 @@
       cutoffHour: CONFIG.cutoffHour,
       state,
       // KRITIK FIX: customerLocation null kontrolü
-      source: customerLocation ? customerLocation.source : 'default'
-    };
+      source: customerLocation ? customerLocation.source : 'default',
+    }
   }
 
   // ============================================
   // BADGE RENDERING
   // ============================================
   function renderDeliveryBadge(container, options = {}) {
-    if (!container) return;
-    
-    const estimate = calculateDeliveryEstimate(options);
-    
+    if (!container) return
+
+    const estimate = calculateDeliveryEstimate(options)
+
     const html = `
       <div class="delivery-badge" data-zone="${estimate.zone}">
         <div class="delivery-badge__icon">
@@ -358,63 +463,66 @@
         <div class="delivery-badge__content">
           <div class="delivery-badge__label">Estimated Delivery</div>
           <div class="delivery-badge__date">${estimate.rangeText}</div>
-          ${estimate.isPastCutoff ? 
-            '<div class="delivery-badge__note">Order by 2 PM ET for faster delivery</div>' : 
-            '<div class="delivery-badge__note">Order now to get it by ' + estimate.minDateFormatted + '</div>'
+          ${
+            estimate.isPastCutoff
+              ? '<div class="delivery-badge__note">Order by 2 PM ET for faster delivery</div>'
+              : '<div class="delivery-badge__note">Order now to get it by ' +
+                estimate.minDateFormatted +
+                '</div>'
           }
         </div>
       </div>
-    `;
-    
-    container.innerHTML = html;
-    return estimate;
+    `
+
+    container.innerHTML = html
+    return estimate
   }
 
   function renderCompactBadge(container, options = {}) {
-    if (!container) return;
-    
-    const estimate = calculateDeliveryEstimate(options);
-    
+    if (!container) return
+
+    const estimate = calculateDeliveryEstimate(options)
+
     container.innerHTML = `
       <span class="delivery-compact">
         📦 Get it by <strong>${estimate.minDateFormatted}</strong>
       </span>
-    `;
-    
-    return estimate;
+    `
+
+    return estimate
   }
 
   function renderInlineBadge(container, options = {}) {
-    if (!container) return;
-    
-    const estimate = calculateDeliveryEstimate(options);
-    
+    if (!container) return
+
+    const estimate = calculateDeliveryEstimate(options)
+
     container.innerHTML = `
       <span class="delivery-inline">
         Arrives ${estimate.rangeText}
       </span>
-    `;
-    
-    return estimate;
+    `
+
+    return estimate
   }
 
   // ============================================
   // ZIP INPUT COMPONENT
   // ============================================
   function renderZipInput(container, options = {}) {
-    if (!container) return;
-    
+    if (!container) return
+
     // KRITIK FIX: customerLocation null kontrolü
-    const currentZip = (customerLocation ? customerLocation.zip : null) || '';
-    
+    const currentZip = (customerLocation ? customerLocation.zip : null) || ''
+
     const html = `
       <div class="delivery-zip-input">
         <label for="delivery-zip">Enter ZIP for delivery estimate:</label>
         <div class="delivery-zip-input__row">
-          <input type="text" 
-                 id="delivery-zip" 
+          <input type="text"
+                 id="delivery-zip"
                  name="delivery-zip"
-                 placeholder="Enter ZIP code" 
+                 placeholder="Enter ZIP code"
                  value="${currentZip}"
                  maxlength="5"
                  pattern="[0-9]*"
@@ -424,42 +532,43 @@
         </div>
         <div class="delivery-zip-input__result"></div>
       </div>
-    `;
-    
-    container.innerHTML = html;
-    
+    `
+
+    container.innerHTML = html
+
     // Event handlers
-    const input = container.querySelector('#delivery-zip');
-    const btn = container.querySelector('.delivery-zip-input__btn');
-    const result = container.querySelector('.delivery-zip-input__result');
-    
+    const input = container.querySelector('#delivery-zip')
+    const btn = container.querySelector('.delivery-zip-input__btn')
+    const result = container.querySelector('.delivery-zip-input__result')
+
     function updateResult() {
-      const zip = input.value.trim();
+      const zip = input.value.trim()
       if (zip.length === 5 && /^\d+$/.test(zip)) {
-        setCustomerZip(zip);
-        const estimate = calculateDeliveryEstimate();
+        setCustomerZip(zip)
+        const estimate = calculateDeliveryEstimate()
         result.innerHTML = `
           <div class="delivery-zip-result">
             📦 Delivers to <strong>${estimate.state}</strong>: ${estimate.rangeText}
           </div>
-        `;
+        `
       } else if (zip.length > 0) {
-        result.innerHTML = '<div class="delivery-zip-error">Please enter a valid 5-digit ZIP code</div>';
+        result.innerHTML =
+          '<div class="delivery-zip-error">Please enter a valid 5-digit ZIP code</div>'
       } else {
-        result.innerHTML = '';
+        result.innerHTML = ''
       }
     }
-    
-    btn.addEventListener('click', updateResult);
+
+    btn.addEventListener('click', updateResult)
     input.addEventListener('keyup', (e) => {
-      if (e.key === 'Enter') updateResult();
-    });
+      if (e.key === 'Enter') updateResult()
+    })
     input.addEventListener('input', () => {
       // Auto-check when 5 digits entered
       if (input.value.length === 5) {
-        updateResult();
+        updateResult()
       }
-    });
+    })
   }
 
   // ============================================
@@ -467,44 +576,44 @@
   // ============================================
   async function initDeliveryBadges() {
     // Detect location
-    await detectLocation();
-    
+    await detectLocation()
+
     // Find and render badges
-    document.querySelectorAll('[data-delivery-badge]').forEach(el => {
-      const type = el.dataset.deliveryBadge || 'full';
+    document.querySelectorAll('[data-delivery-badge]').forEach((el) => {
+      const type = el.dataset.deliveryBadge || 'full'
       switch (type) {
         case 'compact':
-          renderCompactBadge(el);
-          break;
+          renderCompactBadge(el)
+          break
         case 'inline':
-          renderInlineBadge(el);
-          break;
+          renderInlineBadge(el)
+          break
         case 'zip-input':
-          renderZipInput(el);
-          break;
+          renderZipInput(el)
+          break
         default:
-          renderDeliveryBadge(el);
+          renderDeliveryBadge(el)
       }
-    });
-    
+    })
+
     // Listen for location changes
     document.addEventListener('deliveryLocationChanged', () => {
-      document.querySelectorAll('[data-delivery-badge]').forEach(el => {
-        const type = el.dataset.deliveryBadge || 'full';
+      document.querySelectorAll('[data-delivery-badge]').forEach((el) => {
+        const type = el.dataset.deliveryBadge || 'full'
         if (type !== 'zip-input') {
           switch (type) {
             case 'compact':
-              renderCompactBadge(el);
-              break;
+              renderCompactBadge(el)
+              break
             case 'inline':
-              renderInlineBadge(el);
-              break;
+              renderInlineBadge(el)
+              break
             default:
-              renderDeliveryBadge(el);
+              renderDeliveryBadge(el)
           }
         }
-      });
-    });
+      })
+    })
   }
 
   // ============================================
@@ -522,16 +631,16 @@
     getLocation: () => customerLocation,
     getStateFromZip,
     getZone,
-    config: CONFIG
-  };
+    config: CONFIG,
+  }
 
   // Auto-init on DOMContentLoaded
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initDeliveryBadges);
+    document.addEventListener('DOMContentLoaded', initDeliveryBadges)
   } else {
     // DOM already loaded
-    setTimeout(initDeliveryBadges, 0);
+    setTimeout(initDeliveryBadges, 0)
   }
 
-  console.log('[DeliveryBadge] v2.0.0 loaded - GeoIP caching & province fallback fixed');
-})();
+  console.log('[DeliveryBadge] v2.0.0 loaded - GeoIP caching & province fallback fixed')
+})()

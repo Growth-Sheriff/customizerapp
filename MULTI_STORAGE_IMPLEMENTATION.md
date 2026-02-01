@@ -1,7 +1,7 @@
 # 🚀 Multi-Storage Sistemi Implementasyon Dökümanı
 
-> **Versiyon:** 1.0.0  
-> **Tarih:** 19 Ocak 2026  
+> **Versiyon:** 1.0.0
+> **Tarih:** 19 Ocak 2026
 > **Durum:** Hazır - Onay Bekliyor
 
 ---
@@ -9,11 +9,13 @@
 ## 📋 Özet
 
 3 storage provider destekli upload sistemi:
+
 - **Bunny.net** (Birincil - CDN + Optimizer)
 - **Local Server** (Yedek - Failover)
 - **R2** (Opsiyonel - Gelecek)
 
 ### Bunny.net Bilgileri
+
 ```
 Storage Zone: customizerappdev
 Hostname: storage.bunnycdn.com
@@ -22,6 +24,7 @@ CDN URL: https://customizerappdev.b-cdn.net
 ```
 
 ### Karar Noktaları
+
 - ✅ Vary Cache ve WebP aktif (Bunny panelden)
 - ✅ Storage provider veritabanından değiştirilecek (Shop tablosu)
 - ✅ Mevcut dosyalar Bunny'ye migrate edilecek
@@ -36,23 +39,23 @@ CDN URL: https://customizerappdev.b-cdn.net
 
 ```typescript
 // ESKİ - SILINECEK (tamamı)
-import { writeFile, mkdir, readFile, unlink } from "fs/promises";
+import { writeFile, mkdir, readFile, unlink } from 'fs/promises'
 // ... tüm dosya
 ```
 
 **Yeni Kod:**
 
 ```typescript
-import { writeFile, mkdir, readFile, unlink } from "fs/promises";
-import { join, dirname } from "path";
-import { existsSync } from "fs";
-import crypto from "crypto";
+import { writeFile, mkdir, readFile, unlink } from 'fs/promises'
+import { join, dirname } from 'path'
+import { existsSync } from 'fs'
+import crypto from 'crypto'
 
 /**
  * MULTI-STORAGE SYSTEM v2.0
  * =========================
  * Supports: Bunny.net (primary), Local (fallback), R2 (optional)
- * 
+ *
  * Environment Variables:
  * - DEFAULT_STORAGE_PROVIDER: bunny | local | r2
  * - BUNNY_STORAGE_ZONE: Storage zone name
@@ -66,51 +69,51 @@ import crypto from "crypto";
 // CONFIGURATION
 // ============================================================
 
-const LOCAL_STORAGE_BASE = process.env.LOCAL_STORAGE_PATH || "./uploads";
-const LOCAL_FILE_SECRET = process.env.SECRET_KEY || "fallback-secret-key";
+const LOCAL_STORAGE_BASE = process.env.LOCAL_STORAGE_PATH || './uploads'
+const LOCAL_FILE_SECRET = process.env.SECRET_KEY || 'fallback-secret-key'
 
 // Bunny.net Configuration
-const BUNNY_STORAGE_ZONE = process.env.BUNNY_STORAGE_ZONE || "customizerappdev";
-const BUNNY_API_KEY = process.env.BUNNY_API_KEY || "";
-const BUNNY_CDN_URL = process.env.BUNNY_CDN_URL || "https://customizerappdev.b-cdn.net";
-const BUNNY_STORAGE_HOST = "storage.bunnycdn.com";
+const BUNNY_STORAGE_ZONE = process.env.BUNNY_STORAGE_ZONE || 'customizerappdev'
+const BUNNY_API_KEY = process.env.BUNNY_API_KEY || ''
+const BUNNY_CDN_URL = process.env.BUNNY_CDN_URL || 'https://customizerappdev.b-cdn.net'
+const BUNNY_STORAGE_HOST = 'storage.bunnycdn.com'
 
 // R2 Configuration (for future use)
-const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID || "";
-const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID || "";
-const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY || "";
-const R2_BUCKET_NAME = process.env.R2_BUCKET_NAME || "";
-const R2_PUBLIC_URL = process.env.R2_PUBLIC_URL || "";
+const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID || ''
+const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID || ''
+const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY || ''
+const R2_BUCKET_NAME = process.env.R2_BUCKET_NAME || ''
+const R2_PUBLIC_URL = process.env.R2_PUBLIC_URL || ''
 
 // ============================================================
 // TYPES
 // ============================================================
 
-export type StorageProvider = "local" | "bunny" | "r2";
+export type StorageProvider = 'local' | 'bunny' | 'r2'
 
 export interface StorageConfig {
-  provider: StorageProvider;
+  provider: StorageProvider
   // Local
-  localPath?: string;
+  localPath?: string
   // Bunny
-  bunnyZone?: string;
-  bunnyApiKey?: string;
-  bunnyCdnUrl?: string;
+  bunnyZone?: string
+  bunnyApiKey?: string
+  bunnyCdnUrl?: string
   // R2
-  r2AccountId?: string;
-  r2AccessKeyId?: string;
-  r2SecretAccessKey?: string;
-  r2BucketName?: string;
-  r2PublicUrl?: string;
+  r2AccountId?: string
+  r2AccessKeyId?: string
+  r2SecretAccessKey?: string
+  r2BucketName?: string
+  r2PublicUrl?: string
 }
 
 export interface UploadUrlResult {
-  url: string;
-  key: string;
-  provider: StorageProvider;
-  publicUrl: string;
-  method: "PUT" | "POST";
-  headers?: Record<string, string>;
+  url: string
+  key: string
+  provider: StorageProvider
+  publicUrl: string
+  method: 'PUT' | 'POST'
+  headers?: Record<string, string>
 }
 
 // ============================================================
@@ -120,17 +123,18 @@ export interface UploadUrlResult {
 /**
  * Get storage config from shop settings or environment
  */
-export function getStorageConfig(shopConfig?: { 
-  storageProvider?: string; 
-  storageConfig?: Record<string, string> | null;
+export function getStorageConfig(shopConfig?: {
+  storageProvider?: string
+  storageConfig?: Record<string, string> | null
 }): StorageConfig {
   // Shop-level override
-  const provider = (shopConfig?.storageProvider as StorageProvider) || 
-                   (process.env.DEFAULT_STORAGE_PROVIDER as StorageProvider) || 
-                   "local";
-  
-  const shopStorageConfig = shopConfig?.storageConfig || {};
-  
+  const provider =
+    (shopConfig?.storageProvider as StorageProvider) ||
+    (process.env.DEFAULT_STORAGE_PROVIDER as StorageProvider) ||
+    'local'
+
+  const shopStorageConfig = shopConfig?.storageConfig || {}
+
   return {
     provider,
     // Local
@@ -145,7 +149,7 @@ export function getStorageConfig(shopConfig?: {
     r2SecretAccessKey: shopStorageConfig.r2SecretAccessKey || R2_SECRET_ACCESS_KEY,
     r2BucketName: shopStorageConfig.r2BucketName || R2_BUCKET_NAME,
     r2PublicUrl: shopStorageConfig.r2PublicUrl || R2_PUBLIC_URL,
-  };
+  }
 }
 
 /**
@@ -153,13 +157,18 @@ export function getStorageConfig(shopConfig?: {
  */
 export function isStorageConfigured(config: StorageConfig): boolean {
   switch (config.provider) {
-    case "bunny":
-      return !!(config.bunnyZone && config.bunnyApiKey);
-    case "r2":
-      return !!(config.r2AccountId && config.r2AccessKeyId && config.r2SecretAccessKey && config.r2BucketName);
-    case "local":
+    case 'bunny':
+      return !!(config.bunnyZone && config.bunnyApiKey)
+    case 'r2':
+      return !!(
+        config.r2AccountId &&
+        config.r2AccessKeyId &&
+        config.r2SecretAccessKey &&
+        config.r2BucketName
+      )
+    case 'local':
     default:
-      return true;
+      return true
   }
 }
 
@@ -168,11 +177,11 @@ export function isStorageConfigured(config: StorageConfig): boolean {
  */
 export function getEffectiveStorageProvider(config: StorageConfig): StorageProvider {
   if (isStorageConfigured(config)) {
-    return config.provider;
+    return config.provider
   }
   // Fallback to local if primary not configured
-  console.warn(`[Storage] ${config.provider} not configured, falling back to local`);
-  return "local";
+  console.warn(`[Storage] ${config.provider} not configured, falling back to local`)
+  return 'local'
 }
 
 // ============================================================
@@ -180,35 +189,32 @@ export function getEffectiveStorageProvider(config: StorageConfig): StorageProvi
 // ============================================================
 
 export function generateLocalFileToken(key: string, expiresAt: number): string {
-  const payload = `${key}:${expiresAt}`;
-  const signature = crypto
-    .createHmac("sha256", LOCAL_FILE_SECRET)
-    .update(payload)
-    .digest("hex");
-  return `${expiresAt}.${signature}`;
+  const payload = `${key}:${expiresAt}`
+  const signature = crypto.createHmac('sha256', LOCAL_FILE_SECRET).update(payload).digest('hex')
+  return `${expiresAt}.${signature}`
 }
 
 export function validateLocalFileToken(key: string, token: string): boolean {
-  if (!token) return false;
-  
-  const [expiresAtStr, signature] = token.split(".");
-  if (!expiresAtStr || !signature) return false;
-  
-  const expiresAt = parseInt(expiresAtStr, 10);
-  if (isNaN(expiresAt)) return false;
-  
-  if (Date.now() > expiresAt) return false;
-  
-  const expectedPayload = `${key}:${expiresAt}`;
+  if (!token) return false
+
+  const [expiresAtStr, signature] = token.split('.')
+  if (!expiresAtStr || !signature) return false
+
+  const expiresAt = parseInt(expiresAtStr, 10)
+  if (isNaN(expiresAt)) return false
+
+  if (Date.now() > expiresAt) return false
+
+  const expectedPayload = `${key}:${expiresAt}`
   const expectedSignature = crypto
-    .createHmac("sha256", LOCAL_FILE_SECRET)
+    .createHmac('sha256', LOCAL_FILE_SECRET)
     .update(expectedPayload)
-    .digest("hex");
-  
+    .digest('hex')
+
   return crypto.timingSafeEqual(
-    Buffer.from(signature, "hex"),
-    Buffer.from(expectedSignature, "hex")
-  );
+    Buffer.from(signature, 'hex'),
+    Buffer.from(expectedSignature, 'hex')
+  )
 }
 
 // ============================================================
@@ -224,16 +230,16 @@ export async function getUploadSignedUrl(
   contentType: string,
   _expiresIn: number = 3600
 ): Promise<UploadUrlResult> {
-  const effectiveProvider = getEffectiveStorageProvider(config);
-  
+  const effectiveProvider = getEffectiveStorageProvider(config)
+
   switch (effectiveProvider) {
-    case "bunny":
-      return getBunnyUploadUrl(config, key, contentType);
-    case "r2":
-      return getR2UploadUrl(config, key, contentType);
-    case "local":
+    case 'bunny':
+      return getBunnyUploadUrl(config, key, contentType)
+    case 'r2':
+      return getR2UploadUrl(config, key, contentType)
+    case 'local':
     default:
-      return getLocalUploadUrl(config, key);
+      return getLocalUploadUrl(config, key)
   }
 }
 
@@ -246,55 +252,48 @@ function getBunnyUploadUrl(
   key: string,
   _contentType: string
 ): UploadUrlResult {
-  const uploadUrl = `https://${BUNNY_STORAGE_HOST}/${config.bunnyZone}/${key}`;
-  const publicUrl = `${config.bunnyCdnUrl}/${key}`;
-  
+  const uploadUrl = `https://${BUNNY_STORAGE_HOST}/${config.bunnyZone}/${key}`
+  const publicUrl = `${config.bunnyCdnUrl}/${key}`
+
   return {
     url: uploadUrl,
     key,
-    provider: "bunny",
+    provider: 'bunny',
     publicUrl,
-    method: "PUT",
+    method: 'PUT',
     headers: {
-      "AccessKey": config.bunnyApiKey || "",
+      AccessKey: config.bunnyApiKey || '',
     },
-  };
+  }
 }
 
 /**
  * R2 Presigned Upload URL (placeholder - needs AWS SDK)
  */
-function getR2UploadUrl(
-  config: StorageConfig,
-  key: string,
-  _contentType: string
-): UploadUrlResult {
+function getR2UploadUrl(config: StorageConfig, key: string, _contentType: string): UploadUrlResult {
   // TODO: Implement R2 presigned URL with AWS SDK v3
   // For now, fallback to local
-  console.warn("[Storage] R2 presigned URL not implemented, using local");
-  return getLocalUploadUrl(config, key);
+  console.warn('[Storage] R2 presigned URL not implemented, using local')
+  return getLocalUploadUrl(config, key)
 }
 
 /**
  * Local Storage Upload URL
  * Client uploads via POST to our endpoint
  */
-function getLocalUploadUrl(
-  _config: StorageConfig,
-  key: string
-): UploadUrlResult {
-  let host = process.env.SHOPIFY_APP_URL || process.env.HOST || "https://customizerapp.dev";
-  if (!host.startsWith("http://") && !host.startsWith("https://")) {
-    host = `https://${host}`;
+function getLocalUploadUrl(_config: StorageConfig, key: string): UploadUrlResult {
+  let host = process.env.SHOPIFY_APP_URL || process.env.HOST || 'https://customizerapp.dev'
+  if (!host.startsWith('http://') && !host.startsWith('https://')) {
+    host = `https://${host}`
   }
-  
+
   return {
     url: `${host}/api/upload/local`,
     key,
-    provider: "local",
+    provider: 'local',
     publicUrl: `${host}/api/files/${encodeURIComponent(key)}`,
-    method: "POST",
-  };
+    method: 'POST',
+  }
 }
 
 // ============================================================
@@ -310,35 +309,35 @@ export async function getDownloadSignedUrl(
   expiresIn: number = 30 * 24 * 3600
 ): Promise<string> {
   // Check if key is already a full URL (external storage)
-  if (key.startsWith("http://") || key.startsWith("https://")) {
-    return key;
+  if (key.startsWith('http://') || key.startsWith('https://')) {
+    return key
   }
-  
+
   // Check if key indicates Bunny storage
-  if (key.startsWith("bunny:")) {
-    const bunnyKey = key.replace("bunny:", "");
-    return `${config.bunnyCdnUrl || BUNNY_CDN_URL}/${bunnyKey}`;
+  if (key.startsWith('bunny:')) {
+    const bunnyKey = key.replace('bunny:', '')
+    return `${config.bunnyCdnUrl || BUNNY_CDN_URL}/${bunnyKey}`
   }
-  
-  const effectiveProvider = getEffectiveStorageProvider(config);
-  
+
+  const effectiveProvider = getEffectiveStorageProvider(config)
+
   switch (effectiveProvider) {
-    case "bunny":
+    case 'bunny':
       // Bunny CDN URL (public)
-      return `${config.bunnyCdnUrl}/${key}`;
-    case "r2":
+      return `${config.bunnyCdnUrl}/${key}`
+    case 'r2':
       // R2 public URL
-      return `${config.r2PublicUrl}/${key}`;
-    case "local":
+      return `${config.r2PublicUrl}/${key}`
+    case 'local':
     default:
       // Local signed URL
-      let host = process.env.SHOPIFY_APP_URL || process.env.HOST || "https://customizerapp.dev";
-      if (!host.startsWith("http://") && !host.startsWith("https://")) {
-        host = `https://${host}`;
+      let host = process.env.SHOPIFY_APP_URL || process.env.HOST || 'https://customizerapp.dev'
+      if (!host.startsWith('http://') && !host.startsWith('https://')) {
+        host = `https://${host}`
       }
-      const expiresAt = Date.now() + expiresIn * 1000;
-      const token = generateLocalFileToken(key, expiresAt);
-      return `${host}/api/files/${encodeURIComponent(key)}?token=${token}`;
+      const expiresAt = Date.now() + expiresIn * 1000
+      const token = generateLocalFileToken(key, expiresAt)
+      return `${host}/api/files/${encodeURIComponent(key)}?token=${token}`
   }
 }
 
@@ -352,23 +351,23 @@ export function getThumbnailUrl(
   height?: number
 ): string {
   // If already a URL, add optimizer params if Bunny
-  if (key.startsWith("https://") && key.includes(".b-cdn.net")) {
-    const url = new URL(key);
-    url.searchParams.set("width", width.toString());
-    if (height) url.searchParams.set("height", height.toString());
-    url.searchParams.set("format", "webp");
-    url.searchParams.set("quality", "85");
-    return url.toString();
+  if (key.startsWith('https://') && key.includes('.b-cdn.net')) {
+    const url = new URL(key)
+    url.searchParams.set('width', width.toString())
+    if (height) url.searchParams.set('height', height.toString())
+    url.searchParams.set('format', 'webp')
+    url.searchParams.set('quality', '85')
+    return url.toString()
   }
-  
+
   // Bunny key
-  if (config.provider === "bunny" || key.startsWith("bunny:")) {
-    const bunnyKey = key.replace("bunny:", "");
-    return `${config.bunnyCdnUrl || BUNNY_CDN_URL}/${bunnyKey}?width=${width}${height ? `&height=${height}` : ""}&format=webp&quality=85`;
+  if (config.provider === 'bunny' || key.startsWith('bunny:')) {
+    const bunnyKey = key.replace('bunny:', '')
+    return `${config.bunnyCdnUrl || BUNNY_CDN_URL}/${bunnyKey}?width=${width}${height ? `&height=${height}` : ''}&format=webp&quality=85`
   }
-  
+
   // Local - no optimizer, return as-is
-  return key;
+  return key
 }
 
 // ============================================================
@@ -376,61 +375,58 @@ export function getThumbnailUrl(
 // ============================================================
 
 export async function saveLocalFile(key: string, data: Buffer): Promise<string> {
-  const filePath = join(LOCAL_STORAGE_BASE, key);
-  const dir = dirname(filePath);
-  
+  const filePath = join(LOCAL_STORAGE_BASE, key)
+  const dir = dirname(filePath)
+
   if (!existsSync(dir)) {
-    await mkdir(dir, { recursive: true });
+    await mkdir(dir, { recursive: true })
   }
-  
-  await writeFile(filePath, data);
-  return filePath;
+
+  await writeFile(filePath, data)
+  return filePath
 }
 
 export async function readLocalFile(key: string): Promise<Buffer> {
-  const filePath = join(LOCAL_STORAGE_BASE, key);
-  return readFile(filePath);
+  const filePath = join(LOCAL_STORAGE_BASE, key)
+  return readFile(filePath)
 }
 
 export async function deleteLocalFile(key: string): Promise<void> {
-  const filePath = join(LOCAL_STORAGE_BASE, key);
+  const filePath = join(LOCAL_STORAGE_BASE, key)
   try {
-    await unlink(filePath);
+    await unlink(filePath)
   } catch (e) {
     // File may not exist, ignore
   }
 }
 
 export async function deleteFile(config: StorageConfig, key: string): Promise<void> {
-  const effectiveProvider = getEffectiveStorageProvider(config);
-  
+  const effectiveProvider = getEffectiveStorageProvider(config)
+
   switch (effectiveProvider) {
-    case "bunny":
-      await deleteBunnyFile(config, key);
-      break;
-    case "local":
+    case 'bunny':
+      await deleteBunnyFile(config, key)
+      break
+    case 'local':
     default:
-      await deleteLocalFile(key);
+      await deleteLocalFile(key)
   }
 }
 
 async function deleteBunnyFile(config: StorageConfig, key: string): Promise<void> {
   try {
-    const bunnyKey = key.replace("bunny:", "");
-    const response = await fetch(
-      `https://${BUNNY_STORAGE_HOST}/${config.bunnyZone}/${bunnyKey}`,
-      {
-        method: "DELETE",
-        headers: {
-          "AccessKey": config.bunnyApiKey || "",
-        },
-      }
-    );
+    const bunnyKey = key.replace('bunny:', '')
+    const response = await fetch(`https://${BUNNY_STORAGE_HOST}/${config.bunnyZone}/${bunnyKey}`, {
+      method: 'DELETE',
+      headers: {
+        AccessKey: config.bunnyApiKey || '',
+      },
+    })
     if (!response.ok) {
-      console.warn(`[Bunny] Failed to delete file: ${key}`);
+      console.warn(`[Bunny] Failed to delete file: ${key}`)
     }
   } catch (e) {
-    console.error("[Bunny] Delete error:", e);
+    console.error('[Bunny] Delete error:', e)
   }
 }
 
@@ -444,37 +440,37 @@ export function buildStorageKey(
   itemId: string,
   filename: string
 ): string {
-  const env = process.env.NODE_ENV === "production" ? "prod" : "dev";
-  const safeShop = shopDomain.replace(/[^a-zA-Z0-9-]/g, "_");
-  return `${safeShop}/${env}/${uploadId}/${itemId}/${filename}`;
+  const env = process.env.NODE_ENV === 'production' ? 'prod' : 'dev'
+  const safeShop = shopDomain.replace(/[^a-zA-Z0-9-]/g, '_')
+  return `${safeShop}/${env}/${uploadId}/${itemId}/${filename}`
 }
 
 export function getLocalFilePath(key: string): string {
-  return join(LOCAL_STORAGE_BASE, key);
+  return join(LOCAL_STORAGE_BASE, key)
 }
 
 /**
  * Check if a storage key is from Bunny CDN
  */
 export function isBunnyUrl(key: string | null | undefined): boolean {
-  if (!key) return false;
-  return key.includes(".b-cdn.net") || key.includes("bunnycdn.com") || key.startsWith("bunny:");
+  if (!key) return false
+  return key.includes('.b-cdn.net') || key.includes('bunnycdn.com') || key.startsWith('bunny:')
 }
 
 /**
  * Check if a storage key is from R2
  */
 export function isR2Url(key: string | null | undefined): boolean {
-  if (!key) return false;
-  return key.includes(".r2.dev") || key.includes("r2.cloudflarestorage.com");
+  if (!key) return false
+  return key.includes('.r2.dev') || key.includes('r2.cloudflarestorage.com')
 }
 
 /**
  * Check if a storage key is an external URL
  */
 export function isExternalUrl(key: string | null | undefined): boolean {
-  if (!key) return false;
-  return key.startsWith("http://") || key.startsWith("https://");
+  if (!key) return false
+  return key.startsWith('http://') || key.startsWith('https://')
 }
 ```
 
@@ -488,74 +484,86 @@ export function isExternalUrl(key: string | null | undefined): boolean {
 
 ```typescript
 // ESKİ
-import { getStorageConfig, getUploadSignedUrl, buildStorageKey } from "~/lib/storage.server";
+import { getStorageConfig, getUploadSignedUrl, buildStorageKey } from '~/lib/storage.server'
 
 // YENİ
-import { getStorageConfig, getUploadSignedUrl, buildStorageKey, type UploadUrlResult } from "~/lib/storage.server";
+import {
+  getStorageConfig,
+  getUploadSignedUrl,
+  buildStorageKey,
+  type UploadUrlResult,
+} from '~/lib/storage.server'
 ```
 
 **Değişiklik 2: Storage config alma (Satır 200-210)**
 
 ```typescript
 // ESKİ (Satır 200-206)
-  // LOCAL-ONLY STORAGE - No provider selection needed
-  const storageConfig = getStorageConfig();
-  
-  console.log(`[Upload Intent] Shop: ${shopDomain}, Storage: local`);
+// LOCAL-ONLY STORAGE - No provider selection needed
+const storageConfig = getStorageConfig()
+
+console.log(`[Upload Intent] Shop: ${shopDomain}, Storage: local`)
 
 // YENİ
-  // MULTI-STORAGE: Get config from shop settings
-  const storageConfig = getStorageConfig({
-    storageProvider: shop.storageProvider,
-    storageConfig: shop.storageConfig as Record<string, string> | null,
-  });
-  
-  console.log(`[Upload Intent] Shop: ${shopDomain}, Storage: ${storageConfig.provider}`);
+// MULTI-STORAGE: Get config from shop settings
+const storageConfig = getStorageConfig({
+  storageProvider: shop.storageProvider,
+  storageConfig: shop.storageConfig as Record<string, string> | null,
+})
+
+console.log(`[Upload Intent] Shop: ${shopDomain}, Storage: ${storageConfig.provider}`)
 ```
 
 **Değişiklik 3: Signed URL response (Satır 235-256)**
 
 ```typescript
 // ESKİ (Satır 235-255)
-    // Generate signed upload URL (always local)
-    const { url: uploadUrl, isLocal } = await getUploadSignedUrl(storageConfig, key, contentType);
+// Generate signed upload URL (always local)
+const { url: uploadUrl, isLocal } = await getUploadSignedUrl(storageConfig, key, contentType)
 
-    return corsJson({
-      uploadId,
-      itemId,
-      uploadUrl,
-      key,
-      fileName,
-      fileSize,
-      mimeType: contentType,
-      expiresIn: 900, // 15 minutes
-      isLocal: true,
-      storageProvider: "local",
-    }, request);
+return corsJson(
+  {
+    uploadId,
+    itemId,
+    uploadUrl,
+    key,
+    fileName,
+    fileSize,
+    mimeType: contentType,
+    expiresIn: 900, // 15 minutes
+    isLocal: true,
+    storageProvider: 'local',
+  },
+  request
+)
 
 // YENİ
-    // Generate signed upload URL (provider-aware)
-    const uploadResult: UploadUrlResult = await getUploadSignedUrl(storageConfig, key, contentType);
+// Generate signed upload URL (provider-aware)
+const uploadResult: UploadUrlResult = await getUploadSignedUrl(storageConfig, key, contentType)
 
-    return corsJson({
-      uploadId,
-      itemId,
-      uploadUrl: uploadResult.url,
-      key: uploadResult.key,
-      publicUrl: uploadResult.publicUrl,
-      fileName,
-      fileSize,
-      mimeType: contentType,
-      expiresIn: 3600, // 1 hour for large files
-      storageProvider: uploadResult.provider,
-      uploadMethod: uploadResult.method,
-      uploadHeaders: uploadResult.headers || {},
-    }, request, {
-      headers: {
-        // 5GB upload support
-        "Content-Length": "5368709120",
-      },
-    });
+return corsJson(
+  {
+    uploadId,
+    itemId,
+    uploadUrl: uploadResult.url,
+    key: uploadResult.key,
+    publicUrl: uploadResult.publicUrl,
+    fileName,
+    fileSize,
+    mimeType: contentType,
+    expiresIn: 3600, // 1 hour for large files
+    storageProvider: uploadResult.provider,
+    uploadMethod: uploadResult.method,
+    uploadHeaders: uploadResult.headers || {},
+  },
+  request,
+  {
+    headers: {
+      // 5GB upload support
+      'Content-Length': '5368709120',
+    },
+  }
+)
 ```
 
 ---
@@ -568,132 +576,139 @@ import { getStorageConfig, getUploadSignedUrl, buildStorageKey, type UploadUrlRe
 
 ```typescript
 // ESKİ
-import { generateLocalFileToken } from "~/lib/storage.server";
+import { generateLocalFileToken } from '~/lib/storage.server'
 
 // YENİ
-import { generateLocalFileToken, getStorageConfig, isBunnyUrl, isR2Url, getThumbnailUrl } from "~/lib/storage.server";
+import {
+  generateLocalFileToken,
+  getStorageConfig,
+  isBunnyUrl,
+  isR2Url,
+  getThumbnailUrl,
+} from '~/lib/storage.server'
 ```
 
 **Değişiklik 2: URL resolution güncelleme (Satır 130-190)**
 
 ```typescript
 // ESKİ (Satır 130-145)
-  // Check if storageKey is an external URL (Shopify, R2, S3)
-  const isExternalUrl = (key: string | null | undefined): boolean => {
-    if (!key) return false;
-    return key.startsWith('http://') || key.startsWith('https://');
-  };
+// Check if storageKey is an external URL (Shopify, R2, S3)
+const isExternalUrl = (key: string | null | undefined): boolean => {
+  if (!key) return false
+  return key.startsWith('http://') || key.startsWith('https://')
+}
 
 // YENİ
-  // Get storage config for this shop
-  const storageConfig = getStorageConfig({
-    storageProvider: shop.storageProvider,
-    storageConfig: shop.storageConfig as Record<string, string> | null,
-  });
+// Get storage config for this shop
+const storageConfig = getStorageConfig({
+  storageProvider: shop.storageProvider,
+  storageConfig: shop.storageConfig as Record<string, string> | null,
+})
 
-  // Check if storageKey is an external URL
-  const isExternalUrl = (key: string | null | undefined): boolean => {
-    if (!key) return false;
-    return key.startsWith('http://') || key.startsWith('https://');
-  };
-  
-  // Check if storageKey is a Bunny key (bunny:path/to/file)
-  const isBunnyKey = (key: string | null | undefined): boolean => {
-    if (!key) return false;
-    return key.startsWith('bunny:') || isBunnyUrl(key);
-  };
+// Check if storageKey is an external URL
+const isExternalUrl = (key: string | null | undefined): boolean => {
+  if (!key) return false
+  return key.startsWith('http://') || key.startsWith('https://')
+}
+
+// Check if storageKey is a Bunny key (bunny:path/to/file)
+const isBunnyKey = (key: string | null | undefined): boolean => {
+  if (!key) return false
+  return key.startsWith('bunny:') || isBunnyUrl(key)
+}
 ```
 
 **Değişiklik 3: Download URL logic (Satır 160-190)**
 
 ```typescript
 // ESKİ (Satır 160-180)
-  if (firstItem?.storageKey) {
-    if (isExternalUrl(firstItem.storageKey)) {
-      // Shopify or external storage - use URL directly
-      downloadUrl = firstItem.storageKey;
-    } else if (isShopifyFileId(firstItem.storageKey)) {
-      // ... Shopify resolution code ...
-    } else {
-      // Local storage - generate signed URL
-      const token = generateLocalFileToken(firstItem.storageKey, expiresAt);
-      downloadUrl = `${host}/api/files/${encodeURIComponent(firstItem.storageKey)}?token=${encodeURIComponent(token)}`;
-    }
+if (firstItem?.storageKey) {
+  if (isExternalUrl(firstItem.storageKey)) {
+    // Shopify or external storage - use URL directly
+    downloadUrl = firstItem.storageKey
+  } else if (isShopifyFileId(firstItem.storageKey)) {
+    // ... Shopify resolution code ...
+  } else {
+    // Local storage - generate signed URL
+    const token = generateLocalFileToken(firstItem.storageKey, expiresAt)
+    downloadUrl = `${host}/api/files/${encodeURIComponent(firstItem.storageKey)}?token=${encodeURIComponent(token)}`
   }
+}
 
 // YENİ
-  if (firstItem?.storageKey) {
-    if (isExternalUrl(firstItem.storageKey)) {
-      // Already a full URL - use directly
-      downloadUrl = firstItem.storageKey;
-    } else if (isBunnyKey(firstItem.storageKey)) {
-      // Bunny storage - build CDN URL
-      const bunnyKey = firstItem.storageKey.replace('bunny:', '');
-      const cdnUrl = storageConfig.bunnyCdnUrl || process.env.BUNNY_CDN_URL || 'https://customizerappdev.b-cdn.net';
-      downloadUrl = `${cdnUrl}/${bunnyKey}`;
-    } else if (isShopifyFileId(firstItem.storageKey)) {
-      // Shopify fileId - resolve via API
-      const fileId = firstItem.storageKey.replace('shopify:', '');
-      const resolvedUrl = await resolveShopifyFileUrl(fileId, shop.shopDomain, shop.accessToken);
-      if (resolvedUrl) {
-        downloadUrl = resolvedUrl;
-        await prisma.uploadItem.update({
-          where: { id: firstItem.id },
-          data: { storageKey: resolvedUrl },
-        });
-      }
-    } else {
-      // Local storage - generate signed URL
-      const token = generateLocalFileToken(firstItem.storageKey, expiresAt);
-      downloadUrl = `${host}/api/files/${encodeURIComponent(firstItem.storageKey)}?token=${encodeURIComponent(token)}`;
+if (firstItem?.storageKey) {
+  if (isExternalUrl(firstItem.storageKey)) {
+    // Already a full URL - use directly
+    downloadUrl = firstItem.storageKey
+  } else if (isBunnyKey(firstItem.storageKey)) {
+    // Bunny storage - build CDN URL
+    const bunnyKey = firstItem.storageKey.replace('bunny:', '')
+    const cdnUrl =
+      storageConfig.bunnyCdnUrl || process.env.BUNNY_CDN_URL || 'https://customizerappdev.b-cdn.net'
+    downloadUrl = `${cdnUrl}/${bunnyKey}`
+  } else if (isShopifyFileId(firstItem.storageKey)) {
+    // Shopify fileId - resolve via API
+    const fileId = firstItem.storageKey.replace('shopify:', '')
+    const resolvedUrl = await resolveShopifyFileUrl(fileId, shop.shopDomain, shop.accessToken)
+    if (resolvedUrl) {
+      downloadUrl = resolvedUrl
+      await prisma.uploadItem.update({
+        where: { id: firstItem.id },
+        data: { storageKey: resolvedUrl },
+      })
     }
+  } else {
+    // Local storage - generate signed URL
+    const token = generateLocalFileToken(firstItem.storageKey, expiresAt)
+    downloadUrl = `${host}/api/files/${encodeURIComponent(firstItem.storageKey)}?token=${encodeURIComponent(token)}`
   }
+}
 ```
 
 **Değişiklik 4: Thumbnail URL logic (Satır 190-210)**
 
 ```typescript
 // ESKİ (Satır 190-205)
-  // Thumbnail URL logic
-  if (firstItem?.thumbnailKey) {
-    if (isExternalUrl(firstItem.thumbnailKey)) {
-      thumbnailUrl = firstItem.thumbnailKey;
-    } else if (isShopifyFileId(firstItem.thumbnailKey)) {
-      const fileId = firstItem.thumbnailKey.replace('shopify:', '');
-      thumbnailUrl = await resolveShopifyFileUrl(fileId, shop.shopDomain, shop.accessToken);
-    } else {
-      const token = generateLocalFileToken(firstItem.thumbnailKey, expiresAt);
-      thumbnailUrl = `${host}/api/files/${encodeURIComponent(firstItem.thumbnailKey)}?token=${encodeURIComponent(token)}`;
-    }
+// Thumbnail URL logic
+if (firstItem?.thumbnailKey) {
+  if (isExternalUrl(firstItem.thumbnailKey)) {
+    thumbnailUrl = firstItem.thumbnailKey
+  } else if (isShopifyFileId(firstItem.thumbnailKey)) {
+    const fileId = firstItem.thumbnailKey.replace('shopify:', '')
+    thumbnailUrl = await resolveShopifyFileUrl(fileId, shop.shopDomain, shop.accessToken)
+  } else {
+    const token = generateLocalFileToken(firstItem.thumbnailKey, expiresAt)
+    thumbnailUrl = `${host}/api/files/${encodeURIComponent(firstItem.thumbnailKey)}?token=${encodeURIComponent(token)}`
   }
+}
 
 // YENİ
-  // Thumbnail URL logic - use Bunny Optimizer for CDN files
-  if (firstItem?.thumbnailKey) {
-    if (isExternalUrl(firstItem.thumbnailKey)) {
-      // If Bunny URL, add optimizer params
-      if (isBunnyUrl(firstItem.thumbnailKey)) {
-        thumbnailUrl = getThumbnailUrl(storageConfig, firstItem.thumbnailKey, 200);
-      } else {
-        thumbnailUrl = firstItem.thumbnailKey;
-      }
-    } else if (isBunnyKey(firstItem.thumbnailKey)) {
-      // Bunny key - use optimizer
-      thumbnailUrl = getThumbnailUrl(storageConfig, firstItem.thumbnailKey, 200);
-    } else if (isShopifyFileId(firstItem.thumbnailKey)) {
-      const fileId = firstItem.thumbnailKey.replace('shopify:', '');
-      thumbnailUrl = await resolveShopifyFileUrl(fileId, shop.shopDomain, shop.accessToken);
+// Thumbnail URL logic - use Bunny Optimizer for CDN files
+if (firstItem?.thumbnailKey) {
+  if (isExternalUrl(firstItem.thumbnailKey)) {
+    // If Bunny URL, add optimizer params
+    if (isBunnyUrl(firstItem.thumbnailKey)) {
+      thumbnailUrl = getThumbnailUrl(storageConfig, firstItem.thumbnailKey, 200)
     } else {
-      // Local storage
-      const token = generateLocalFileToken(firstItem.thumbnailKey, expiresAt);
-      thumbnailUrl = `${host}/api/files/${encodeURIComponent(firstItem.thumbnailKey)}?token=${encodeURIComponent(token)}`;
+      thumbnailUrl = firstItem.thumbnailKey
     }
-  } else if (downloadUrl && isBunnyUrl(downloadUrl)) {
-    // No thumbnail but download is Bunny - use optimizer
-    thumbnailUrl = getThumbnailUrl(storageConfig, downloadUrl, 200);
-  } else if (downloadUrl) {
-    thumbnailUrl = downloadUrl;
+  } else if (isBunnyKey(firstItem.thumbnailKey)) {
+    // Bunny key - use optimizer
+    thumbnailUrl = getThumbnailUrl(storageConfig, firstItem.thumbnailKey, 200)
+  } else if (isShopifyFileId(firstItem.thumbnailKey)) {
+    const fileId = firstItem.thumbnailKey.replace('shopify:', '')
+    thumbnailUrl = await resolveShopifyFileUrl(fileId, shop.shopDomain, shop.accessToken)
+  } else {
+    // Local storage
+    const token = generateLocalFileToken(firstItem.thumbnailKey, expiresAt)
+    thumbnailUrl = `${host}/api/files/${encodeURIComponent(firstItem.thumbnailKey)}?token=${encodeURIComponent(token)}`
   }
+} else if (downloadUrl && isBunnyUrl(downloadUrl)) {
+  // No thumbnail but download is Bunny - use optimizer
+  thumbnailUrl = getThumbnailUrl(storageConfig, downloadUrl, 200)
+} else if (downloadUrl) {
+  thumbnailUrl = downloadUrl
+}
 ```
 
 ---
@@ -731,7 +746,7 @@ import { generateLocalFileToken, getStorageConfig, isBunnyUrl, isR2Url, getThumb
     async uploadToStorage(productId, file, intentData) {
       const instance = this.instances[productId];
       const { elements } = instance;
-      
+
       const provider = intentData.storageProvider || 'local';
       console.log('[UL] uploadToStorage - provider:', provider);
 
@@ -774,7 +789,7 @@ import { generateLocalFileToken, getStorageConfig, isBunnyUrl, isR2Url, getThumb
         xhr.addEventListener('abort', () => reject(new Error('Bunny upload cancelled')));
 
         xhr.open('PUT', intentData.uploadUrl);
-        
+
         // Set Bunny headers
         if (intentData.uploadHeaders) {
           Object.entries(intentData.uploadHeaders).forEach(([key, value]) => {
@@ -782,7 +797,7 @@ import { generateLocalFileToken, getStorageConfig, isBunnyUrl, isR2Url, getThumb
           });
         }
         xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
-        
+
         xhr.send(file);
       });
     },
@@ -861,29 +876,33 @@ import { generateLocalFileToken, getStorageConfig, isBunnyUrl, isR2Url, getThumb
 
 ```javascript
 // ESKİ (Satır 700-708)
-          body: JSON.stringify({
-            shopDomain: shopDomain,
-            uploadId: intentData.uploadId,
-            items: [{
-              itemId: intentData.itemId,
-              location: 'front',
-              fileUrl: uploadResult?.fileUrl || null,
-              fileId: uploadResult?.fileId || null,
-              storageProvider: intentData.storageProvider || 'shopify'
-            }]
-          })
+body: JSON.stringify({
+  shopDomain: shopDomain,
+  uploadId: intentData.uploadId,
+  items: [
+    {
+      itemId: intentData.itemId,
+      location: 'front',
+      fileUrl: uploadResult?.fileUrl || null,
+      fileId: uploadResult?.fileId || null,
+      storageProvider: intentData.storageProvider || 'shopify',
+    },
+  ],
+})
 
 // YENİ
-          body: JSON.stringify({
-            shopDomain: shopDomain,
-            uploadId: intentData.uploadId,
-            items: [{
-              itemId: intentData.itemId,
-              location: 'front',
-              fileUrl: uploadResult?.fileUrl || intentData.publicUrl || null,
-              storageProvider: intentData.storageProvider || 'local'
-            }]
-          })
+body: JSON.stringify({
+  shopDomain: shopDomain,
+  uploadId: intentData.uploadId,
+  items: [
+    {
+      itemId: intentData.itemId,
+      location: 'front',
+      fileUrl: uploadResult?.fileUrl || intentData.publicUrl || null,
+      storageProvider: intentData.storageProvider || 'local',
+    },
+  ],
+})
 ```
 
 ---
@@ -894,89 +913,94 @@ import { generateLocalFileToken, getStorageConfig, isBunnyUrl, isR2Url, getThumb
 
 ```javascript
 // ESKİ (Satır 1078-1095)
-      const intentData = await intentRes.json();
-      const { uploadId, itemId, uploadUrl } = intentData;
-      
-      console.log('[ULTShirtModal] Intent response:', { uploadId, itemId });
-      
-      // Step 2: Upload file directly to storage
-      const uploadRes = await fetch(uploadUrl, {
-        method: 'PUT',
-        headers: { 'Content-Type': file.type || 'application/octet-stream' },
-        body: file
-      });
-      
-      if (!uploadRes.ok) throw new Error('Upload failed');
+const intentData = await intentRes.json()
+const { uploadId, itemId, uploadUrl } = intentData
+
+console.log('[ULTShirtModal] Intent response:', { uploadId, itemId })
+
+// Step 2: Upload file directly to storage
+const uploadRes = await fetch(uploadUrl, {
+  method: 'PUT',
+  headers: { 'Content-Type': file.type || 'application/octet-stream' },
+  body: file,
+})
+
+if (!uploadRes.ok) throw new Error('Upload failed')
 
 // YENİ
-      const intentData = await intentRes.json();
-      const { uploadId, itemId, uploadUrl, storageProvider, uploadMethod, uploadHeaders, publicUrl } = intentData;
-      
-      console.log('[ULTShirtModal] Intent response:', { uploadId, itemId, storageProvider });
-      
-      // Step 2: Upload file directly to storage (provider-aware)
-      let uploadRes;
-      if (storageProvider === 'bunny' || storageProvider === 'r2') {
-        // Direct PUT to CDN
-        const headers = { 
-          'Content-Type': file.type || 'application/octet-stream',
-          ...(uploadHeaders || {})
-        };
-        uploadRes = await fetch(uploadUrl, {
-          method: 'PUT',
-          headers,
-          body: file
-        });
-      } else {
-        // Local: POST with FormData
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('key', intentData.key);
-        formData.append('uploadId', uploadId);
-        formData.append('itemId', itemId);
-        uploadRes = await fetch(uploadUrl, {
-          method: 'POST',
-          body: formData
-        });
-      }
-      
-      if (!uploadRes.ok) throw new Error('Upload failed');
+const intentData = await intentRes.json()
+const { uploadId, itemId, uploadUrl, storageProvider, uploadMethod, uploadHeaders, publicUrl } =
+  intentData
+
+console.log('[ULTShirtModal] Intent response:', { uploadId, itemId, storageProvider })
+
+// Step 2: Upload file directly to storage (provider-aware)
+let uploadRes
+if (storageProvider === 'bunny' || storageProvider === 'r2') {
+  // Direct PUT to CDN
+  const headers = {
+    'Content-Type': file.type || 'application/octet-stream',
+    ...(uploadHeaders || {}),
+  }
+  uploadRes = await fetch(uploadUrl, {
+    method: 'PUT',
+    headers,
+    body: file,
+  })
+} else {
+  // Local: POST with FormData
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('key', intentData.key)
+  formData.append('uploadId', uploadId)
+  formData.append('itemId', itemId)
+  uploadRes = await fetch(uploadUrl, {
+    method: 'POST',
+    body: formData,
+  })
+}
+
+if (!uploadRes.ok) throw new Error('Upload failed')
 ```
 
 **Değişiklik: Complete request (Satır 1095-1110)**
 
 ```javascript
 // ESKİ (Satır 1095-1108)
-      // Step 3: Mark complete (matching dtf-uploader format)
-      const completeRes = await fetch(`${apiBase}/api/upload/complete`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          shopDomain,
-          uploadId,
-          items: [{
-            itemId,
-            location: 'front'
-          }]
-        })
-      });
+// Step 3: Mark complete (matching dtf-uploader format)
+const completeRes = await fetch(`${apiBase}/api/upload/complete`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    shopDomain,
+    uploadId,
+    items: [
+      {
+        itemId,
+        location: 'front',
+      },
+    ],
+  }),
+})
 
 // YENİ
-      // Step 3: Mark complete with provider info
-      const completeRes = await fetch(`${apiBase}/api/upload/complete`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          shopDomain,
-          uploadId,
-          items: [{
-            itemId,
-            location: 'front',
-            fileUrl: publicUrl || null,
-            storageProvider: storageProvider || 'local'
-          }]
-        })
-      });
+// Step 3: Mark complete with provider info
+const completeRes = await fetch(`${apiBase}/api/upload/complete`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    shopDomain,
+    uploadId,
+    items: [
+      {
+        itemId,
+        location: 'front',
+        fileUrl: publicUrl || null,
+        storageProvider: storageProvider || 'local',
+      },
+    ],
+  }),
+})
 ```
 
 ---
@@ -987,142 +1011,144 @@ import { generateLocalFileToken, getStorageConfig, isBunnyUrl, isR2Url, getThumb
 
 ```javascript
 // ESKİ (Satır 632-680)
-  async function uploadFile(file) {
-    const section = document.querySelector('.ul-product-bar');
-    const apiBase = section?.dataset.apiBase || CONFIG.apiBase;
+async function uploadFile(file) {
+  const section = document.querySelector('.ul-product-bar')
+  const apiBase = section?.dataset.apiBase || CONFIG.apiBase
 
-    // 1. Create upload intent
-    const intentResponse = await fetch(`${apiBase}/api/upload/intent`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        filename: file.name,
-        contentType: file.type,
-        size: file.size,
-        shop: window.Shopify?.shop || getShopFromUrl()
-      })
-    });
+  // 1. Create upload intent
+  const intentResponse = await fetch(`${apiBase}/api/upload/intent`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      filename: file.name,
+      contentType: file.type,
+      size: file.size,
+      shop: window.Shopify?.shop || getShopFromUrl(),
+    }),
+  })
 
-    if (!intentResponse.ok) {
-      throw new Error('Failed to create upload intent');
-    }
-
-    const { uploadId, signedUrl } = await intentResponse.json();
-
-    // 2. Upload to signed URL
-    const uploadResponse = await fetch(signedUrl, {
-      method: 'PUT',
-      headers: { 'Content-Type': file.type },
-      body: file
-    });
-
-    if (!uploadResponse.ok) {
-      throw new Error('Failed to upload file');
-    }
-
-    // 3. Complete upload
-    const completeResponse = await fetch(`${apiBase}/api/upload/complete`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ uploadId })
-    });
-
-    if (!completeResponse.ok) {
-      throw new Error('Failed to complete upload');
-    }
-
-    // Build full public URL with https://
-    const fullUrl = `${window.location.origin}${apiBase}/api/upload/file/${uploadId}`;
-
-    return {
-      id: uploadId,
-      url: fullUrl
-    };
+  if (!intentResponse.ok) {
+    throw new Error('Failed to create upload intent')
   }
 
+  const { uploadId, signedUrl } = await intentResponse.json()
+
+  // 2. Upload to signed URL
+  const uploadResponse = await fetch(signedUrl, {
+    method: 'PUT',
+    headers: { 'Content-Type': file.type },
+    body: file,
+  })
+
+  if (!uploadResponse.ok) {
+    throw new Error('Failed to upload file')
+  }
+
+  // 3. Complete upload
+  const completeResponse = await fetch(`${apiBase}/api/upload/complete`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ uploadId }),
+  })
+
+  if (!completeResponse.ok) {
+    throw new Error('Failed to complete upload')
+  }
+
+  // Build full public URL with https://
+  const fullUrl = `${window.location.origin}${apiBase}/api/upload/file/${uploadId}`
+
+  return {
+    id: uploadId,
+    url: fullUrl,
+  }
+}
+
 // YENİ
-  async function uploadFile(file) {
-    const section = document.querySelector('.ul-product-bar');
-    const apiBase = section?.dataset.apiBase || CONFIG.apiBase;
-    const shopDomain = window.Shopify?.shop || getShopFromUrl();
+async function uploadFile(file) {
+  const section = document.querySelector('.ul-product-bar')
+  const apiBase = section?.dataset.apiBase || CONFIG.apiBase
+  const shopDomain = window.Shopify?.shop || getShopFromUrl()
 
-    // 1. Create upload intent
-    const intentResponse = await fetch(`${apiBase}/api/upload/intent`, {
+  // 1. Create upload intent
+  const intentResponse = await fetch(`${apiBase}/api/upload/intent`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      shopDomain,
+      fileName: file.name,
+      contentType: file.type,
+      fileSize: file.size,
+      mode: 'quick',
+    }),
+  })
+
+  if (!intentResponse.ok) {
+    throw new Error('Failed to create upload intent')
+  }
+
+  const intentData = await intentResponse.json()
+  const { uploadId, itemId, uploadUrl, storageProvider, uploadHeaders, publicUrl } = intentData
+
+  // 2. Upload to storage (provider-aware)
+  let uploadResponse
+  if (storageProvider === 'bunny' || storageProvider === 'r2') {
+    // Direct PUT to CDN
+    uploadResponse = await fetch(uploadUrl, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': file.type,
+        ...(uploadHeaders || {}),
+      },
+      body: file,
+    })
+  } else {
+    // Local: POST with FormData
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('key', intentData.key)
+    formData.append('uploadId', uploadId)
+    formData.append('itemId', itemId)
+    uploadResponse = await fetch(uploadUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        shopDomain,
-        fileName: file.name,
-        contentType: file.type,
-        fileSize: file.size,
-        mode: 'quick'
-      })
-    });
+      body: formData,
+    })
+  }
 
-    if (!intentResponse.ok) {
-      throw new Error('Failed to create upload intent');
-    }
+  if (!uploadResponse.ok) {
+    throw new Error('Failed to upload file')
+  }
 
-    const intentData = await intentResponse.json();
-    const { uploadId, itemId, uploadUrl, storageProvider, uploadHeaders, publicUrl } = intentData;
-
-    // 2. Upload to storage (provider-aware)
-    let uploadResponse;
-    if (storageProvider === 'bunny' || storageProvider === 'r2') {
-      // Direct PUT to CDN
-      uploadResponse = await fetch(uploadUrl, {
-        method: 'PUT',
-        headers: { 
-          'Content-Type': file.type,
-          ...(uploadHeaders || {})
-        },
-        body: file
-      });
-    } else {
-      // Local: POST with FormData
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('key', intentData.key);
-      formData.append('uploadId', uploadId);
-      formData.append('itemId', itemId);
-      uploadResponse = await fetch(uploadUrl, {
-        method: 'POST',
-        body: formData
-      });
-    }
-
-    if (!uploadResponse.ok) {
-      throw new Error('Failed to upload file');
-    }
-
-    // 3. Complete upload
-    const completeResponse = await fetch(`${apiBase}/api/upload/complete`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        shopDomain,
-        uploadId,
-        items: [{
+  // 3. Complete upload
+  const completeResponse = await fetch(`${apiBase}/api/upload/complete`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      shopDomain,
+      uploadId,
+      items: [
+        {
           itemId,
           location: 'front',
           fileUrl: publicUrl,
-          storageProvider
-        }]
-      })
-    });
+          storageProvider,
+        },
+      ],
+    }),
+  })
 
-    if (!completeResponse.ok) {
-      throw new Error('Failed to complete upload');
-    }
-
-    // Return public URL from intent (CDN URL for Bunny)
-    const fullUrl = publicUrl || `${window.location.origin}${apiBase}/api/upload/file/${uploadId}`;
-
-    return {
-      id: uploadId,
-      url: fullUrl
-    };
+  if (!completeResponse.ok) {
+    throw new Error('Failed to complete upload')
   }
+
+  // Return public URL from intent (CDN URL for Bunny)
+  const fullUrl = publicUrl || `${window.location.origin}${apiBase}/api/upload/file/${uploadId}`
+
+  return {
+    id: uploadId,
+    url: fullUrl,
+  }
+}
 ```
 
 ---
@@ -1141,94 +1167,101 @@ import { generateLocalFileToken, getStorageConfig, isBunnyUrl, isR2Url, getThumb
 
 ```javascript
 // ESKİ (Satır 840-860)
-      // Step 2: Upload file - always local storage (POST with FormData)
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('key', intentData.key);
-      formData.append('uploadId', intentData.uploadId);
-      formData.append('itemId', intentData.itemId);
-      const uploadResponse = await fetch(intentData.uploadUrl, {
-        method: 'POST',
-        body: formData
-      });
+// Step 2: Upload file - always local storage (POST with FormData)
+const formData = new FormData()
+formData.append('file', file)
+formData.append('key', intentData.key)
+formData.append('uploadId', intentData.uploadId)
+formData.append('itemId', intentData.itemId)
+const uploadResponse = await fetch(intentData.uploadUrl, {
+  method: 'POST',
+  body: formData,
+})
 
 // YENİ
-      // Step 2: Upload file (provider-aware)
-      const storageProvider = intentData.storageProvider || 'local';
-      let uploadResponse;
-      
-      if (storageProvider === 'bunny' || storageProvider === 'r2') {
-        // Direct PUT to CDN
-        const headers = { 
-          'Content-Type': file.type || 'application/octet-stream',
-          ...(intentData.uploadHeaders || {})
-        };
-        uploadResponse = await fetch(intentData.uploadUrl, {
-          method: 'PUT',
-          headers,
-          body: file
-        });
-      } else {
-        // Local: POST with FormData
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('key', intentData.key);
-        formData.append('uploadId', intentData.uploadId);
-        formData.append('itemId', intentData.itemId);
-        uploadResponse = await fetch(intentData.uploadUrl, {
-          method: 'POST',
-          body: formData
-        });
-      }
+// Step 2: Upload file (provider-aware)
+const storageProvider = intentData.storageProvider || 'local'
+let uploadResponse
+
+if (storageProvider === 'bunny' || storageProvider === 'r2') {
+  // Direct PUT to CDN
+  const headers = {
+    'Content-Type': file.type || 'application/octet-stream',
+    ...(intentData.uploadHeaders || {}),
+  }
+  uploadResponse = await fetch(intentData.uploadUrl, {
+    method: 'PUT',
+    headers,
+    body: file,
+  })
+} else {
+  // Local: POST with FormData
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('key', intentData.key)
+  formData.append('uploadId', intentData.uploadId)
+  formData.append('itemId', intentData.itemId)
+  uploadResponse = await fetch(intentData.uploadUrl, {
+    method: 'POST',
+    body: formData,
+  })
+}
 ```
 
 **Değişiklik: Complete request (Satır 870-885)**
 
 ```javascript
 // ESKİ (Satır 870-882)
-      // Step 3: Complete upload - always local storage
-      const completeResponse = await fetch(`${apiBase}/api/upload/complete`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          uploadId: intentData.uploadId,
-          shopDomain: shopDomain,
-          items: [{
-            itemId: intentData.itemId,
-            location: 'front',
-            storageProvider: 'local'
-          }]
-        })
-      });
+// Step 3: Complete upload - always local storage
+const completeResponse = await fetch(`${apiBase}/api/upload/complete`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    uploadId: intentData.uploadId,
+    shopDomain: shopDomain,
+    items: [
+      {
+        itemId: intentData.itemId,
+        location: 'front',
+        storageProvider: 'local',
+      },
+    ],
+  }),
+})
 
 // YENİ
-      // Step 3: Complete upload (provider-aware)
-      const completeResponse = await fetch(`${apiBase}/api/upload/complete`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          uploadId: intentData.uploadId,
-          shopDomain: shopDomain,
-          items: [{
-            itemId: intentData.itemId,
-            location: 'front',
-            fileUrl: intentData.publicUrl || null,
-            storageProvider: storageProvider
-          }]
-        })
-      });
+// Step 3: Complete upload (provider-aware)
+const completeResponse = await fetch(`${apiBase}/api/upload/complete`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    uploadId: intentData.uploadId,
+    shopDomain: shopDomain,
+    items: [
+      {
+        itemId: intentData.itemId,
+        location: 'front',
+        fileUrl: intentData.publicUrl || null,
+        storageProvider: storageProvider,
+      },
+    ],
+  }),
+})
 ```
 
 **Değişiklik: Public URL kullanımı (Satır 920-925)**
 
 ```javascript
 // ESKİ (Satır 920-922)
-      // Use the signed URL from API, fallback to constructed URL if not available
-      const publicUrl = finalDownloadUrl || `https://customizerapp.dev/api/upload/file/${uploadId}`;
+// Use the signed URL from API, fallback to constructed URL if not available
+const publicUrl = finalDownloadUrl || `https://customizerapp.dev/api/upload/file/${uploadId}`
 
 // YENİ
-      // Use CDN URL from intent for Bunny, or signed URL from status API
-      const publicUrl = intentData.publicUrl || finalDownloadUrl || `https://customizerapp.dev/api/upload/file/${uploadId}`;
+// Use CDN URL from intent for Bunny, or signed URL from status API
+const publicUrl =
+  intentData.publicUrl ||
+  finalDownloadUrl ||
+  `https://customizerapp.dev/api/upload/file/${uploadId}`
 ```
 
 ---
@@ -1273,33 +1306,35 @@ LOCAL_STORAGE_PATH=./uploads
 
 ```typescript
 // ESKİ (Satır 120-135)
-        // For Shopify uploads: prefer fileUrl, fallback to fileId for later resolution
-        if (item.fileUrl) {
-          updateData.storageKey = item.fileUrl;
-          console.log(`[Upload Complete] Updated storageKey with Shopify URL: ${item.fileUrl}`);
-        } else if (item.fileId && item.storageProvider === 'shopify') {
-          // Store fileId as storageKey with shopify: prefix for later resolution
-          updateData.storageKey = `shopify:${item.fileId}`;
-          console.log(`[Upload Complete] Stored Shopify fileId for later resolution: ${item.fileId}`);
-        }
+// For Shopify uploads: prefer fileUrl, fallback to fileId for later resolution
+if (item.fileUrl) {
+  updateData.storageKey = item.fileUrl
+  console.log(`[Upload Complete] Updated storageKey with Shopify URL: ${item.fileUrl}`)
+} else if (item.fileId && item.storageProvider === 'shopify') {
+  // Store fileId as storageKey with shopify: prefix for later resolution
+  updateData.storageKey = `shopify:${item.fileId}`
+  console.log(`[Upload Complete] Stored Shopify fileId for later resolution: ${item.fileId}`)
+}
 
 // YENİ
-        // Update storageKey based on provider
-        if (item.fileUrl) {
-          // For Bunny/R2: Store CDN URL directly
-          // For Shopify: Store Shopify URL
-          updateData.storageKey = item.fileUrl;
-          console.log(`[Upload Complete] Updated storageKey: ${item.fileUrl} (provider: ${item.storageProvider})`);
-        } else if (item.fileId && item.storageProvider === 'shopify') {
-          updateData.storageKey = `shopify:${item.fileId}`;
-          console.log(`[Upload Complete] Stored Shopify fileId: ${item.fileId}`);
-        } else if (item.storageProvider === 'bunny') {
-          // Bunny: construct CDN URL from key
-          const bunnyKey = intentData?.key || '';
-          const cdnUrl = process.env.BUNNY_CDN_URL || 'https://customizerappdev.b-cdn.net';
-          updateData.storageKey = `${cdnUrl}/${bunnyKey}`;
-          console.log(`[Upload Complete] Constructed Bunny URL: ${updateData.storageKey}`);
-        }
+// Update storageKey based on provider
+if (item.fileUrl) {
+  // For Bunny/R2: Store CDN URL directly
+  // For Shopify: Store Shopify URL
+  updateData.storageKey = item.fileUrl
+  console.log(
+    `[Upload Complete] Updated storageKey: ${item.fileUrl} (provider: ${item.storageProvider})`
+  )
+} else if (item.fileId && item.storageProvider === 'shopify') {
+  updateData.storageKey = `shopify:${item.fileId}`
+  console.log(`[Upload Complete] Stored Shopify fileId: ${item.fileId}`)
+} else if (item.storageProvider === 'bunny') {
+  // Bunny: construct CDN URL from key
+  const bunnyKey = intentData?.key || ''
+  const cdnUrl = process.env.BUNNY_CDN_URL || 'https://customizerappdev.b-cdn.net'
+  updateData.storageKey = `${cdnUrl}/${bunnyKey}`
+  console.log(`[Upload Complete] Constructed Bunny URL: ${updateData.storageKey}`)
+}
 ```
 
 ---
@@ -1311,96 +1346,99 @@ LOCAL_STORAGE_PATH=./uploads
 ```typescript
 /**
  * Migration Script: Local Storage → Bunny.net
- * 
+ *
  * Usage:
  *   npx ts-node scripts/migrate-to-bunny.ts
- * 
+ *
  * Options:
  *   --dry-run    : Only log what would be migrated
  *   --limit=100  : Migrate only first N files
  */
 
-import { PrismaClient } from '@prisma/client';
-import { readFile } from 'fs/promises';
-import { join } from 'path';
+import { PrismaClient } from '@prisma/client'
+import { readFile } from 'fs/promises'
+import { join } from 'path'
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient()
 
-const BUNNY_STORAGE_ZONE = process.env.BUNNY_STORAGE_ZONE || 'customizerappdev';
-const BUNNY_API_KEY = process.env.BUNNY_API_KEY || '';
-const BUNNY_CDN_URL = process.env.BUNNY_CDN_URL || 'https://customizerappdev.b-cdn.net';
-const LOCAL_STORAGE_PATH = process.env.LOCAL_STORAGE_PATH || './uploads';
+const BUNNY_STORAGE_ZONE = process.env.BUNNY_STORAGE_ZONE || 'customizerappdev'
+const BUNNY_API_KEY = process.env.BUNNY_API_KEY || ''
+const BUNNY_CDN_URL = process.env.BUNNY_CDN_URL || 'https://customizerappdev.b-cdn.net'
+const LOCAL_STORAGE_PATH = process.env.LOCAL_STORAGE_PATH || './uploads'
 
-const isDryRun = process.argv.includes('--dry-run');
-const limitArg = process.argv.find(a => a.startsWith('--limit='));
-const limit = limitArg ? parseInt(limitArg.split('=')[1]) : undefined;
+const isDryRun = process.argv.includes('--dry-run')
+const limitArg = process.argv.find((a) => a.startsWith('--limit='))
+const limit = limitArg ? parseInt(limitArg.split('=')[1]) : undefined
 
 async function uploadToBunny(key: string, data: Buffer, contentType: string): Promise<string> {
-  const url = `https://storage.bunnycdn.com/${BUNNY_STORAGE_ZONE}/${key}`;
-  
+  const url = `https://storage.bunnycdn.com/${BUNNY_STORAGE_ZONE}/${key}`
+
   const response = await fetch(url, {
     method: 'PUT',
     headers: {
-      'AccessKey': BUNNY_API_KEY,
+      AccessKey: BUNNY_API_KEY,
       'Content-Type': contentType,
     },
     body: data,
-  });
-  
+  })
+
   if (!response.ok) {
-    throw new Error(`Bunny upload failed: ${response.status} ${response.statusText}`);
+    throw new Error(`Bunny upload failed: ${response.status} ${response.statusText}`)
   }
-  
-  return `${BUNNY_CDN_URL}/${key}`;
+
+  return `${BUNNY_CDN_URL}/${key}`
 }
 
-async function migrateFile(item: { id: string; storageKey: string; mimeType: string | null }): Promise<boolean> {
+async function migrateFile(item: {
+  id: string
+  storageKey: string
+  mimeType: string | null
+}): Promise<boolean> {
   try {
     // Skip if already external URL
     if (item.storageKey.startsWith('http://') || item.storageKey.startsWith('https://')) {
-      console.log(`[SKIP] ${item.id} - Already external URL`);
-      return false;
+      console.log(`[SKIP] ${item.id} - Already external URL`)
+      return false
     }
-    
+
     // Read local file
-    const localPath = join(LOCAL_STORAGE_PATH, item.storageKey);
-    const fileData = await readFile(localPath);
-    
+    const localPath = join(LOCAL_STORAGE_PATH, item.storageKey)
+    const fileData = await readFile(localPath)
+
     if (isDryRun) {
-      console.log(`[DRY-RUN] Would migrate: ${item.storageKey} (${fileData.length} bytes)`);
-      return true;
+      console.log(`[DRY-RUN] Would migrate: ${item.storageKey} (${fileData.length} bytes)`)
+      return true
     }
-    
+
     // Upload to Bunny
     const bunnyUrl = await uploadToBunny(
       item.storageKey,
       fileData,
       item.mimeType || 'application/octet-stream'
-    );
-    
+    )
+
     // Update database
     await prisma.uploadItem.update({
       where: { id: item.id },
       data: { storageKey: bunnyUrl },
-    });
-    
-    console.log(`[OK] ${item.id}: ${item.storageKey} → ${bunnyUrl}`);
-    return true;
-    
+    })
+
+    console.log(`[OK] ${item.id}: ${item.storageKey} → ${bunnyUrl}`)
+    return true
   } catch (error) {
-    console.error(`[ERROR] ${item.id}: ${error}`);
-    return false;
+    console.error(`[ERROR] ${item.id}: ${error}`)
+    return false
   }
 }
 
 async function main() {
-  console.log('='.repeat(60));
-  console.log('LOCAL → BUNNY.NET MIGRATION');
-  console.log('='.repeat(60));
-  console.log(`Mode: ${isDryRun ? 'DRY RUN' : 'LIVE'}`);
-  console.log(`Limit: ${limit || 'ALL'}`);
-  console.log('');
-  
+  console.log('='.repeat(60))
+  console.log('LOCAL → BUNNY.NET MIGRATION')
+  console.log('='.repeat(60))
+  console.log(`Mode: ${isDryRun ? 'DRY RUN' : 'LIVE'}`)
+  console.log(`Limit: ${limit || 'ALL'}`)
+  console.log('')
+
   // Get all local storage items
   const items = await prisma.uploadItem.findMany({
     where: {
@@ -1414,60 +1452,60 @@ async function main() {
       mimeType: true,
     },
     take: limit,
-  });
-  
-  console.log(`Found ${items.length} items to migrate`);
-  console.log('');
-  
-  let success = 0;
-  let failed = 0;
-  let skipped = 0;
-  
+  })
+
+  console.log(`Found ${items.length} items to migrate`)
+  console.log('')
+
+  let success = 0
+  let failed = 0
+  let skipped = 0
+
   for (const item of items) {
-    const result = await migrateFile(item);
-    if (result) success++;
-    else skipped++;
+    const result = await migrateFile(item)
+    if (result) success++
+    else skipped++
   }
-  
-  console.log('');
-  console.log('='.repeat(60));
-  console.log('MIGRATION COMPLETE');
-  console.log('='.repeat(60));
-  console.log(`Success: ${success}`);
-  console.log(`Skipped: ${skipped}`);
-  console.log(`Failed: ${failed}`);
+
+  console.log('')
+  console.log('='.repeat(60))
+  console.log('MIGRATION COMPLETE')
+  console.log('='.repeat(60))
+  console.log(`Success: ${success}`)
+  console.log(`Skipped: ${skipped}`)
+  console.log(`Failed: ${failed}`)
 }
 
 main()
   .catch(console.error)
-  .finally(() => prisma.$disconnect());
+  .finally(() => prisma.$disconnect())
 ```
 
 ---
 
 ## 📊 Değişiklik Özeti
 
-| Dosya | Değişiklik Türü | Satır Sayısı |
-|-------|----------------|--------------|
-| `app/lib/storage.server.ts` | Tam yeniden yazım | ~350 |
-| `app/routes/api.upload.intent.tsx` | 3 blok değişiklik | ~40 |
-| `app/routes/api.upload.status.$id.tsx` | 4 blok değişiklik | ~60 |
-| `app/routes/api.upload.complete.tsx` | 1 blok değişiklik | ~20 |
-| `extensions/.../dtf-uploader.js` | 2 fonksiyon ekleme | ~100 |
-| `extensions/.../tshirt-modal.js` | 2 blok değişiklik | ~40 |
-| `extensions/.../product-bar-upload.js` | 1 fonksiyon yeniden yazım | ~60 |
-| `extensions/.../carousel-upload.js` | 1 fonksiyon yeniden yazım | ~60 |
-| `theme-snippets/.../dtf-quick-upload-btn.liquid` | 3 blok değişiklik | ~50 |
-| `.env.example` | Ekleme | ~15 |
-| `scripts/migrate-to-bunny.ts` | Yeni dosya | ~120 |
-| **TOPLAM** | | **~915 satır** |
+| Dosya                                            | Değişiklik Türü           | Satır Sayısı   |
+| ------------------------------------------------ | ------------------------- | -------------- |
+| `app/lib/storage.server.ts`                      | Tam yeniden yazım         | ~350           |
+| `app/routes/api.upload.intent.tsx`               | 3 blok değişiklik         | ~40            |
+| `app/routes/api.upload.status.$id.tsx`           | 4 blok değişiklik         | ~60            |
+| `app/routes/api.upload.complete.tsx`             | 1 blok değişiklik         | ~20            |
+| `extensions/.../dtf-uploader.js`                 | 2 fonksiyon ekleme        | ~100           |
+| `extensions/.../tshirt-modal.js`                 | 2 blok değişiklik         | ~40            |
+| `extensions/.../product-bar-upload.js`           | 1 fonksiyon yeniden yazım | ~60            |
+| `extensions/.../carousel-upload.js`              | 1 fonksiyon yeniden yazım | ~60            |
+| `theme-snippets/.../dtf-quick-upload-btn.liquid` | 3 blok değişiklik         | ~50            |
+| `.env.example`                                   | Ekleme                    | ~15            |
+| `scripts/migrate-to-bunny.ts`                    | Yeni dosya                | ~120           |
+| **TOPLAM**                                       |                           | **~915 satır** |
 
 ---
 
 ## 🚀 Uygulama Sırası
 
 1. **FAZ 1**: `storage.server.ts` - Core library
-2. **FAZ 5**: `.env` - Environment variables  
+2. **FAZ 5**: `.env` - Environment variables
 3. **FAZ 2**: `api.upload.intent.tsx` - Intent endpoint
 4. **FAZ 6**: `api.upload.complete.tsx` - Complete endpoint
 5. **FAZ 3**: `api.upload.status.$id.tsx` - Status endpoint
@@ -1479,6 +1517,7 @@ main()
 ## ✅ Test Senaryoları
 
 ### Test 1: Bunny Upload
+
 ```bash
 # 1. Shop'un storageProvider'ını 'bunny' yap
 # 2. Storefront'tan dosya yükle
@@ -1486,13 +1525,15 @@ main()
 ```
 
 ### Test 2: Local Fallback
+
 ```bash
 # 1. BUNNY_API_KEY'i yanlış yap
-# 2. Storefront'tan dosya yükle  
+# 2. Storefront'tan dosya yükle
 # 3. Local storage'a fallback ettiğini kontrol et
 ```
 
 ### Test 3: Mevcut Dosya Migration
+
 ```bash
 # 1. npx ts-node scripts/migrate-to-bunny.ts --dry-run
 # 2. Çıktıyı kontrol et
@@ -1519,134 +1560,146 @@ FuncLib analizi ile tespit edilen ek değişiklik noktaları:
 ### 8.1 Worker Dosyaları (KRİTİK!)
 
 #### `workers/preflight.worker.ts`
+
 **Satır 68-95:** `downloadLocalFile` ve `uploadLocalFile` fonksiyonları sadece local için.
 
 ```typescript
 // ESKİ (Satır 68-95)
 async function downloadLocalFile(storageKey: string, localPath: string): Promise<void> {
-  const uploadsDir = process.env.LOCAL_UPLOAD_DIR || path.join(process.cwd(), "uploads");
+  const uploadsDir = process.env.LOCAL_UPLOAD_DIR || path.join(process.cwd(), 'uploads')
   // ... local only code
 }
 
 async function uploadLocalFile(storageKey: string, localPath: string): Promise<void> {
-  const uploadsDir = process.env.LOCAL_UPLOAD_DIR || path.join(process.cwd(), "uploads");
+  const uploadsDir = process.env.LOCAL_UPLOAD_DIR || path.join(process.cwd(), 'uploads')
   // ... local only code
 }
 
 // YENİ - Bunny desteği eklenmeli
 async function downloadFromBunny(storageKey: string, localPath: string): Promise<void> {
-  const cdnUrl = process.env.BUNNY_CDN_URL || 'https://customizerappdev.b-cdn.net';
+  const cdnUrl = process.env.BUNNY_CDN_URL || 'https://customizerappdev.b-cdn.net'
   // Bunny key'den URL oluştur
-  const url = storageKey.startsWith('http') 
-    ? storageKey 
-    : `${cdnUrl}/${storageKey.replace('bunny:', '')}`;
-  
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`Failed to download from Bunny: ${response.status}`);
-  
-  const buffer = Buffer.from(await response.arrayBuffer());
-  await fs.writeFile(localPath, buffer);
+  const url = storageKey.startsWith('http')
+    ? storageKey
+    : `${cdnUrl}/${storageKey.replace('bunny:', '')}`
+
+  const response = await fetch(url)
+  if (!response.ok) throw new Error(`Failed to download from Bunny: ${response.status}`)
+
+  const buffer = Buffer.from(await response.arrayBuffer())
+  await fs.writeFile(localPath, buffer)
 }
 
-async function uploadToBunny(storageKey: string, localPath: string, contentType: string): Promise<void> {
-  const zone = process.env.BUNNY_STORAGE_ZONE || 'customizerappdev';
-  const apiKey = process.env.BUNNY_API_KEY || '';
-  
-  const content = await fs.readFile(localPath);
-  const url = `https://storage.bunnycdn.com/${zone}/${storageKey}`;
-  
+async function uploadToBunny(
+  storageKey: string,
+  localPath: string,
+  contentType: string
+): Promise<void> {
+  const zone = process.env.BUNNY_STORAGE_ZONE || 'customizerappdev'
+  const apiKey = process.env.BUNNY_API_KEY || ''
+
+  const content = await fs.readFile(localPath)
+  const url = `https://storage.bunnycdn.com/${zone}/${storageKey}`
+
   const response = await fetch(url, {
     method: 'PUT',
     headers: {
-      'AccessKey': apiKey,
+      AccessKey: apiKey,
       'Content-Type': contentType,
     },
     body: content,
-  });
-  
-  if (!response.ok) throw new Error(`Failed to upload to Bunny: ${response.status}`);
+  })
+
+  if (!response.ok) throw new Error(`Failed to upload to Bunny: ${response.status}`)
 }
 ```
 
 **Satır 170-185:** Download logic değişmeli:
+
 ```typescript
 // ESKİ
-if (storageProvider === "local") {
-  await downloadLocalFile(storageKey, originalPath);
+if (storageProvider === 'local') {
+  await downloadLocalFile(storageKey, originalPath)
 } else {
-  const client = getStorageClient(storageProvider);
-  await downloadFile(client, storageKey, originalPath);
+  const client = getStorageClient(storageProvider)
+  await downloadFile(client, storageKey, originalPath)
 }
 
 // YENİ
-if (storageProvider === "bunny" || isBunnyUrl(storageKey)) {
-  await downloadFromBunny(storageKey, originalPath);
-} else if (storageProvider === "local") {
-  await downloadLocalFile(storageKey, originalPath);
+if (storageProvider === 'bunny' || isBunnyUrl(storageKey)) {
+  await downloadFromBunny(storageKey, originalPath)
+} else if (storageProvider === 'local') {
+  await downloadLocalFile(storageKey, originalPath)
 } else {
-  const client = getStorageClient(storageProvider);
-  await downloadFile(client, storageKey, originalPath);
+  const client = getStorageClient(storageProvider)
+  await downloadFile(client, storageKey, originalPath)
 }
 ```
 
 **Satır 245-255:** Thumbnail upload logic:
+
 ```typescript
 // ESKİ
-if (storageProvider === "local") {
-  await uploadLocalFile(thumbnailKey, thumbnailPath);
+if (storageProvider === 'local') {
+  await uploadLocalFile(thumbnailKey, thumbnailPath)
 } else if (client) {
-  await uploadFile(client, thumbnailKey, thumbnailPath, "image/webp");
+  await uploadFile(client, thumbnailKey, thumbnailPath, 'image/webp')
 }
 
 // YENİ
-if (storageProvider === "bunny") {
-  await uploadToBunny(thumbnailKey, thumbnailPath, "image/webp");
-} else if (storageProvider === "local") {
-  await uploadLocalFile(thumbnailKey, thumbnailPath);
+if (storageProvider === 'bunny') {
+  await uploadToBunny(thumbnailKey, thumbnailPath, 'image/webp')
+} else if (storageProvider === 'local') {
+  await uploadLocalFile(thumbnailKey, thumbnailPath)
 } else if (client) {
-  await uploadFile(client, thumbnailKey, thumbnailPath, "image/webp");
+  await uploadFile(client, thumbnailKey, thumbnailPath, 'image/webp')
 }
 ```
 
 ---
 
 #### `workers/export.worker.ts`
+
 **Satır 59-77:** `downloadFileFromStorage` sadece S3/R2 için.
 
 ```typescript
 // ESKİ (Satır 59-77)
 async function downloadFileFromStorage(key: string, localPath: string): Promise<void> {
-  const client = getStorageClient();
-  const bucket = getBucketName();
+  const client = getStorageClient()
+  const bucket = getBucketName()
   // S3/R2 only
 }
 
 // YENİ - Bunny ve Local desteği eklenmeli
-async function downloadFileFromStorage(key: string, localPath: string, storageProvider?: string): Promise<void> {
+async function downloadFileFromStorage(
+  key: string,
+  localPath: string,
+  storageProvider?: string
+): Promise<void> {
   // Check if it's a Bunny URL
   if (key.includes('.b-cdn.net') || key.includes('bunnycdn.com') || key.startsWith('bunny:')) {
-    const cdnUrl = process.env.BUNNY_CDN_URL || 'https://customizerappdev.b-cdn.net';
-    const url = key.startsWith('http') ? key : `${cdnUrl}/${key.replace('bunny:', '')}`;
-    
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`Failed to download from Bunny: ${response.status}`);
-    
-    const buffer = Buffer.from(await response.arrayBuffer());
-    await fs.writeFile(localPath, buffer);
-    return;
+    const cdnUrl = process.env.BUNNY_CDN_URL || 'https://customizerappdev.b-cdn.net'
+    const url = key.startsWith('http') ? key : `${cdnUrl}/${key.replace('bunny:', '')}`
+
+    const response = await fetch(url)
+    if (!response.ok) throw new Error(`Failed to download from Bunny: ${response.status}`)
+
+    const buffer = Buffer.from(await response.arrayBuffer())
+    await fs.writeFile(localPath, buffer)
+    return
   }
-  
+
   // Check if local storage
   if (storageProvider === 'local' || (!key.startsWith('http') && !process.env.R2_BUCKET_NAME)) {
-    const uploadsDir = process.env.LOCAL_UPLOAD_DIR || path.join(process.cwd(), 'uploads');
-    const sourcePath = path.join(uploadsDir, key);
-    await fs.copyFile(sourcePath, localPath);
-    return;
+    const uploadsDir = process.env.LOCAL_UPLOAD_DIR || path.join(process.cwd(), 'uploads')
+    const sourcePath = path.join(uploadsDir, key)
+    await fs.copyFile(sourcePath, localPath)
+    return
   }
-  
+
   // S3/R2
-  const client = getStorageClient();
-  const bucket = getBucketName();
+  const client = getStorageClient()
+  const bucket = getBucketName()
   // ... existing S3/R2 code
 }
 ```
@@ -1656,63 +1709,68 @@ async function downloadFileFromStorage(key: string, localPath: string, storagePr
 ### 8.2 Admin Route Dosyaları
 
 #### `app/routes/app.uploads._index.tsx` (Satır 67-77)
+
 ```typescript
 // ESKİ
-const storageConfig = getStorageConfig(shop.storageConfig as any);
+const storageConfig = getStorageConfig(shop.storageConfig as any)
 
 // YENİ
 const storageConfig = getStorageConfig({
   storageProvider: shop.storageProvider,
   storageConfig: shop.storageConfig as Record<string, string> | null,
-});
+})
 ```
 
 #### `app/routes/app.uploads.$id.tsx` (Satır 49-67)
+
 ```typescript
 // ESKİ
-const storageConfig = getStorageConfig(shop.storageConfig as any);
+const storageConfig = getStorageConfig(shop.storageConfig as any)
 
 // YENİ
 const storageConfig = getStorageConfig({
   storageProvider: shop.storageProvider,
   storageConfig: shop.storageConfig as Record<string, string> | null,
-});
+})
 ```
 
 #### `app/routes/app.queue.tsx` (Satır 118-126)
+
 ```typescript
 // ESKİ
-const storageConfig = getStorageConfig(shop.storageConfig as any);
+const storageConfig = getStorageConfig(shop.storageConfig as any)
 
 // YENİ
 const storageConfig = getStorageConfig({
   storageProvider: shop.storageProvider,
   storageConfig: shop.storageConfig as Record<string, string> | null,
-});
+})
 ```
 
 #### `app/routes/app.asset-sets._index.tsx` (Satır 299-302)
+
 ```typescript
 // ESKİ
-const storageConfig = getStorageConfig(shop.storageConfig as any);
+const storageConfig = getStorageConfig(shop.storageConfig as any)
 
 // YENİ
 const storageConfig = getStorageConfig({
   storageProvider: shop.storageProvider,
   storageConfig: shop.storageConfig as Record<string, string> | null,
-});
+})
 ```
 
 #### `app/routes/app.asset-sets.$id.tsx` (Satır 51-52)
+
 ```typescript
 // ESKİ
-const storageConfig = getStorageConfig(shop.storageConfig as any);
+const storageConfig = getStorageConfig(shop.storageConfig as any)
 
 // YENİ
 const storageConfig = getStorageConfig({
   storageProvider: shop.storageProvider,
   storageConfig: shop.storageConfig as Record<string, string> | null,
-});
+})
 ```
 
 ---
@@ -1720,40 +1778,44 @@ const storageConfig = getStorageConfig({
 ### 8.3 API Route Dosyaları
 
 #### `app/routes/api.v1.exports.$id.tsx` (Satır 86-87)
+
 ```typescript
 // ESKİ
-const storageConfig = getStorageConfig(shop.storageConfig as any);
+const storageConfig = getStorageConfig(shop.storageConfig as any)
 
 // YENİ
 const storageConfig = getStorageConfig({
   storageProvider: shop.storageProvider,
   storageConfig: shop.storageConfig as Record<string, string> | null,
-});
+})
 ```
 
 #### `app/routes/api.asset-sets.$id.tsx` (Satır 48-49)
+
 ```typescript
 // ESKİ
-const storageConfig = getStorageConfig(assetSet.shop.storageConfig as any);
+const storageConfig = getStorageConfig(assetSet.shop.storageConfig as any)
 
 // YENİ
 const storageConfig = getStorageConfig({
   storageProvider: assetSet.shop.storageProvider || 'local',
   storageConfig: assetSet.shop.storageConfig as Record<string, string> | null,
-});
+})
 ```
-*Not: Bu dosyada shop.storageProvider alanı select'e eklenmeli!*
+
+_Not: Bu dosyada shop.storageProvider alanı select'e eklenmeli!_
 
 #### `app/routes/api.gdpr.shop.redact.tsx` (Satır 32)
+
 ```typescript
 // ESKİ
-const storageConfig = getStorageConfig(shopRecord.storageConfig as any);
+const storageConfig = getStorageConfig(shopRecord.storageConfig as any)
 
 // YENİ
 const storageConfig = getStorageConfig({
   storageProvider: shopRecord.storageProvider,
   storageConfig: shopRecord.storageConfig as Record<string, string> | null,
-});
+})
 ```
 
 ---
@@ -1761,71 +1823,80 @@ const storageConfig = getStorageConfig({
 ### 8.4 File Serving Route'ları (Bunny redirect desteği)
 
 #### `app/routes/api.files.$.tsx` (Satır 35-45)
+
 ```typescript
 // ESKİ - Sadece local dosya servisi
-const buffer = await readLocalFile(decodedKey);
+const buffer = await readLocalFile(decodedKey)
 
 // YENİ - Bunny URL'lerine redirect
 // If the key is a Bunny URL, redirect to it
-if (decodedKey.startsWith('http') && (decodedKey.includes('.b-cdn.net') || decodedKey.includes('bunnycdn.com'))) {
-  return Response.redirect(decodedKey, 302);
+if (
+  decodedKey.startsWith('http') &&
+  (decodedKey.includes('.b-cdn.net') || decodedKey.includes('bunnycdn.com'))
+) {
+  return Response.redirect(decodedKey, 302)
 }
 
 // Otherwise, serve from local storage
-const buffer = await readLocalFile(decodedKey);
+const buffer = await readLocalFile(decodedKey)
 ```
 
 #### `app/routes/api.upload.file.$id.tsx` (Satır 65-72)
+
 ```typescript
 // ESKİ - Sadece local
-const buffer = await readLocalFile(storageKey);
+const buffer = await readLocalFile(storageKey)
 
 // YENİ - Bunny redirect
 // If storageKey is a Bunny URL, redirect to CDN
-if (storageKey.startsWith('http') && (storageKey.includes('.b-cdn.net') || storageKey.includes('bunnycdn.com'))) {
-  return Response.redirect(storageKey, 302);
+if (
+  storageKey.startsWith('http') &&
+  (storageKey.includes('.b-cdn.net') || storageKey.includes('bunnycdn.com'))
+) {
+  return Response.redirect(storageKey, 302)
 }
 
 // Read file from local storage
-const buffer = await readLocalFile(storageKey);
+const buffer = await readLocalFile(storageKey)
 ```
 
 #### `app/routes/api.storage.preview.$.tsx` (Satır 35)
+
 ```typescript
 // ESKİ - Sadece local
-const data = await readLocalFile(key);
+const data = await readLocalFile(key)
 
 // YENİ - Bunny redirect
 // If key is a Bunny URL, redirect
 if (key.startsWith('http') && (key.includes('.b-cdn.net') || key.includes('bunnycdn.com'))) {
-  return Response.redirect(key, 302);
+  return Response.redirect(key, 302)
 }
 
 // Local storage
-const data = await readLocalFile(key);
+const data = await readLocalFile(key)
 ```
 
 ---
 
 ## 📊 GÜNCEL Değişiklik Özeti
 
-| Dosya | Değişiklik Türü | Satır |
-|-------|----------------|-------|
-| **FAZ 1-7** (önceki) | | ~915 |
-| `workers/preflight.worker.ts` | Bunny upload/download | ~80 |
-| `workers/export.worker.ts` | Bunny download | ~40 |
-| `app/routes/app.uploads._index.tsx` | Config güncelleme | ~5 |
-| `app/routes/app.uploads.$id.tsx` | Config güncelleme | ~5 |
-| `app/routes/app.queue.tsx` | Config güncelleme | ~5 |
-| `app/routes/app.asset-sets._index.tsx` | Config güncelleme | ~5 |
-| `app/routes/app.asset-sets.$id.tsx` | Config güncelleme | ~5 |
-| `app/routes/api.v1.exports.$id.tsx` | Config güncelleme | ~5 |
-| `app/routes/api.asset-sets.$id.tsx` | Config + select güncelleme | ~10 |
-| `app/routes/api.gdpr.shop.redact.tsx` | Config güncelleme | ~5 |
-| `app/routes/api.files.$.tsx` | Bunny redirect | ~10 |
-| `app/routes/api.upload.file.$id.tsx` | Bunny redirect | ~10 |
-| `app/routes/api.storage.preview.$.tsx` | Bunny redirect | ~10 |
-| **YENİ TOPLAM** | | **~1110 satır** |
+| Dosya                                  | Değişiklik Türü            | Satır           |
+| -------------------------------------- | -------------------------- | --------------- |
+| **FAZ 1-7** (önceki)                   |                            | ~915            |
+| `workers/preflight.worker.ts`          | Bunny upload/download      | ~80             |
+| `workers/export.worker.ts`             | Bunny download             | ~40             |
+| `app/routes/app.uploads._index.tsx`    | Config güncelleme          | ~5              |
+| `app/routes/app.uploads.$id.tsx`       | Config güncelleme          | ~5              |
+| `app/routes/app.queue.tsx`             | Config güncelleme          | ~5              |
+| `app/routes/app.asset-sets._index.tsx` | Config güncelleme          | ~5              |
+| `app/routes/app.asset-sets.$id.tsx`    | Config güncelleme          | ~5              |
+| `app/routes/api.v1.exports.$id.tsx`    | Config güncelleme          | ~5              |
+| `app/routes/api.asset-sets.$id.tsx`    | Config + select güncelleme | ~10             |
+| `app/routes/api.gdpr.shop.redact.tsx`  | Config güncelleme          | ~5              |
+| `app/routes/api.files.$.tsx`           | Bunny redirect             | ~10             |
+| `app/routes/api.upload.file.$id.tsx`   | Bunny redirect             | ~10             |
+| `app/routes/api.storage.preview.$.tsx` | Bunny redirect             | ~10             |
+| **YENİ TOPLAM**                        |                            | **~1110 satır** |
 
 ---
 

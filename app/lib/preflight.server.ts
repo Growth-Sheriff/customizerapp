@@ -1,35 +1,35 @@
 // Preflight check utilities
-import { exec } from "child_process";
-import { promisify } from "util";
-import fs from "fs/promises";
-import path from "path";
+import { exec } from 'child_process'
+import fs from 'fs/promises'
+import path from 'path'
+import { promisify } from 'util'
 
-const execAsync = promisify(exec);
+const execAsync = promisify(exec)
 
 // Preflight check result types
 export interface PreflightCheck {
-  name: string;
-  status: "ok" | "warning" | "error";
-  value?: string | number;
-  message?: string;
-  details?: Record<string, unknown>;
+  name: string
+  status: 'ok' | 'warning' | 'error'
+  value?: string | number
+  message?: string
+  details?: Record<string, unknown>
 }
 
 export interface PreflightResult {
-  overall: "ok" | "warning" | "error";
-  checks: PreflightCheck[];
-  thumbnailPath?: string;
-  convertedPath?: string;
+  overall: 'ok' | 'warning' | 'error'
+  checks: PreflightCheck[]
+  thumbnailPath?: string
+  convertedPath?: string
 }
 
 // Plan-based configuration
 export interface PreflightConfig {
-  maxFileSizeMB: number;
-  minDPI: number;
-  requiredDPI: number;
-  maxPages: number;
-  allowedFormats: string[];
-  requireTransparency: boolean;
+  maxFileSizeMB: number
+  minDPI: number
+  requiredDPI: number
+  maxPages: number
+  allowedFormats: string[]
+  requireTransparency: boolean
 }
 
 export const PLAN_CONFIGS: Record<string, PreflightConfig> = {
@@ -39,9 +39,15 @@ export const PLAN_CONFIGS: Record<string, PreflightConfig> = {
     requiredDPI: 300,
     maxPages: 1,
     allowedFormats: [
-      "image/png", "image/jpeg", "image/webp", "image/tiff",
-      "image/vnd.adobe.photoshop", "application/x-photoshop",
-      "application/pdf", "application/postscript", "image/svg+xml"
+      'image/png',
+      'image/jpeg',
+      'image/webp',
+      'image/tiff',
+      'image/vnd.adobe.photoshop',
+      'application/x-photoshop',
+      'application/pdf',
+      'application/postscript',
+      'image/svg+xml',
     ],
     requireTransparency: false,
   },
@@ -51,9 +57,15 @@ export const PLAN_CONFIGS: Record<string, PreflightConfig> = {
     requiredDPI: 300,
     maxPages: 1,
     allowedFormats: [
-      "image/png", "image/jpeg", "image/webp", "image/tiff",
-      "image/vnd.adobe.photoshop", "application/x-photoshop",
-      "application/pdf", "application/postscript", "image/svg+xml"
+      'image/png',
+      'image/jpeg',
+      'image/webp',
+      'image/tiff',
+      'image/vnd.adobe.photoshop',
+      'application/x-photoshop',
+      'application/pdf',
+      'application/postscript',
+      'image/svg+xml',
     ],
     requireTransparency: false,
   },
@@ -63,9 +75,15 @@ export const PLAN_CONFIGS: Record<string, PreflightConfig> = {
     requiredDPI: 300,
     maxPages: 5,
     allowedFormats: [
-      "image/png", "image/jpeg", "image/webp", "image/tiff",
-      "image/vnd.adobe.photoshop", "application/x-photoshop",
-      "application/pdf", "application/postscript", "image/svg+xml"
+      'image/png',
+      'image/jpeg',
+      'image/webp',
+      'image/tiff',
+      'image/vnd.adobe.photoshop',
+      'application/x-photoshop',
+      'application/pdf',
+      'application/postscript',
+      'image/svg+xml',
     ],
     requireTransparency: false,
   },
@@ -75,122 +93,133 @@ export const PLAN_CONFIGS: Record<string, PreflightConfig> = {
     requiredDPI: 300,
     maxPages: 10,
     allowedFormats: [
-      "image/png", "image/jpeg", "image/webp", "image/tiff",
-      "image/vnd.adobe.photoshop", "application/x-photoshop",
-      "application/pdf", "application/postscript", "image/svg+xml"
+      'image/png',
+      'image/jpeg',
+      'image/webp',
+      'image/tiff',
+      'image/vnd.adobe.photoshop',
+      'application/x-photoshop',
+      'application/pdf',
+      'application/postscript',
+      'image/svg+xml',
     ],
     requireTransparency: false,
   },
-};
+}
 
 // Magic bytes for file type detection
 const MAGIC_BYTES: Record<string, Buffer> = {
-  "image/png": Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-  "image/jpeg": Buffer.from([0xff, 0xd8, 0xff]),
-  "image/webp": Buffer.from([0x52, 0x49, 0x46, 0x46]), // RIFF header
-  "image/tiff": Buffer.from([0x49, 0x49, 0x2a, 0x00]), // Little-endian TIFF (II)
-  "image/tiff-be": Buffer.from([0x4d, 0x4d, 0x00, 0x2a]), // Big-endian TIFF (MM)
-  "application/pdf": Buffer.from([0x25, 0x50, 0x44, 0x46]), // %PDF
-  "image/svg+xml": Buffer.from([0x3c, 0x3f, 0x78, 0x6d, 0x6c]), // <?xml or <svg
-  "image/vnd.adobe.photoshop": Buffer.from([0x38, 0x42, 0x50, 0x53]), // 8BPS - PSD signature
-};
+  'image/png': Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+  'image/jpeg': Buffer.from([0xff, 0xd8, 0xff]),
+  'image/webp': Buffer.from([0x52, 0x49, 0x46, 0x46]), // RIFF header
+  'image/tiff': Buffer.from([0x49, 0x49, 0x2a, 0x00]), // Little-endian TIFF (II)
+  'image/tiff-be': Buffer.from([0x4d, 0x4d, 0x00, 0x2a]), // Big-endian TIFF (MM)
+  'application/pdf': Buffer.from([0x25, 0x50, 0x44, 0x46]), // %PDF
+  'image/svg+xml': Buffer.from([0x3c, 0x3f, 0x78, 0x6d, 0x6c]), // <?xml or <svg
+  'image/vnd.adobe.photoshop': Buffer.from([0x38, 0x42, 0x50, 0x53]), // 8BPS - PSD signature
+}
 
 // Detect file type from magic bytes
 export async function detectFileType(filePath: string): Promise<string | null> {
-  const buffer = Buffer.alloc(16);
-  const fd = await fs.open(filePath, "r");
-  await fd.read(buffer, 0, 16, 0);
-  await fd.close();
+  const buffer = Buffer.alloc(16)
+  const fd = await fs.open(filePath, 'r')
+  await fd.read(buffer, 0, 16, 0)
+  await fd.close()
 
   for (const [mimeType, magic] of Object.entries(MAGIC_BYTES)) {
     if (buffer.subarray(0, magic.length).equals(magic)) {
       // Normalize TIFF big-endian to standard TIFF MIME type
-      if (mimeType === "image/tiff-be") {
-        return "image/tiff";
+      if (mimeType === 'image/tiff-be') {
+        return 'image/tiff'
       }
-      return mimeType;
+      return mimeType
     }
   }
 
   // Check for SVG (might start with <svg instead of <?xml)
-  const start = buffer.toString("utf8", 0, 4);
-  if (start === "<svg" || start === "<?xm") {
-    return "image/svg+xml";
+  const start = buffer.toString('utf8', 0, 4)
+  if (start === '<svg' || start === '<?xm') {
+    return 'image/svg+xml'
   }
 
   // Check for AI/EPS (PostScript)
-  if (buffer.toString("utf8", 0, 2) === "%!") {
-    return "application/postscript";
+  if (buffer.toString('utf8', 0, 2) === '%!') {
+    return 'application/postscript'
   }
 
-  return null;
+  return null
 }
 
 // Get image info using ImageMagick identify
 export async function getImageInfo(filePath: string): Promise<{
-  width: number;
-  height: number;
-  dpi: number;
-  colorspace: string;
-  hasAlpha: boolean;
-  format: string;
+  width: number
+  height: number
+  dpi: number
+  colorspace: string
+  hasAlpha: boolean
+  format: string
 }> {
   try {
     const { stdout } = await execAsync(
       `identify -format "%w|%h|%x|%y|%[colorspace]|%[channels]|%m" "${filePath}[0]"`,
       { timeout: 30000 }
-    );
+    )
 
-    const parts = stdout.trim().split("|");
-    const width = parseInt(parts[0]) || 0;
-    const height = parseInt(parts[1]) || 0;
-    const xDpi = parseFloat(parts[2]) || 72;
-    const yDpi = parseFloat(parts[3]) || 72;
-    const colorspace = parts[4] || "unknown";
-    const channels = parts[5] || "";
-    const format = parts[6] || "unknown";
+    const parts = stdout.trim().split('|')
+    const width = parseInt(parts[0]) || 0
+    const height = parseInt(parts[1]) || 0
+    const xDpi = parseFloat(parts[2]) || 72
+    const yDpi = parseFloat(parts[3]) || 72
+    const colorspace = parts[4] || 'unknown'
+    const channels = parts[5] || ''
+    const format = parts[6] || 'unknown'
 
     // Average DPI
-    const dpi = Math.round((xDpi + yDpi) / 2);
+    const dpi = Math.round((xDpi + yDpi) / 2)
 
     // Check for alpha channel
-    const hasAlpha = channels.toLowerCase().includes("a") || channels.toLowerCase().includes("alpha");
+    const hasAlpha =
+      channels.toLowerCase().includes('a') || channels.toLowerCase().includes('alpha')
 
-    return { width, height, dpi, colorspace, hasAlpha, format };
+    return { width, height, dpi, colorspace, hasAlpha, format }
   } catch (error) {
-    console.error("[Preflight] ImageMagick identify failed:", error);
-    throw new Error("Failed to analyze image");
+    console.error('[Preflight] ImageMagick identify failed:', error)
+    throw new Error('Failed to analyze image')
   }
 }
 
 // Get PDF info using pdfinfo
 export async function getPdfInfo(filePath: string): Promise<{
-  pages: number;
-  width: number;
-  height: number;
+  pages: number
+  width: number
+  height: number
 }> {
   try {
-    const { stdout } = await execAsync(`pdfinfo "${filePath}"`, { timeout: 10000 });
+    const { stdout } = await execAsync(`pdfinfo "${filePath}"`, { timeout: 10000 })
 
-    const pagesMatch = stdout.match(/Pages:\s+(\d+)/);
-    const sizeMatch = stdout.match(/Page size:\s+([\d.]+)\s+x\s+([\d.]+)/);
+    const pagesMatch = stdout.match(/Pages:\s+(\d+)/)
+    const sizeMatch = stdout.match(/Page size:\s+([\d.]+)\s+x\s+([\d.]+)/)
 
-    const pages = pagesMatch ? parseInt(pagesMatch[1]) : 1;
+    const pages = pagesMatch ? parseInt(pagesMatch[1]) : 1
     // PDF points to pixels (72 dpi base)
-    const width = sizeMatch ? Math.round(parseFloat(sizeMatch[1]) * 300 / 72) : 0;
-    const height = sizeMatch ? Math.round(parseFloat(sizeMatch[2]) * 300 / 72) : 0;
+    const width = sizeMatch ? Math.round((parseFloat(sizeMatch[1]) * 300) / 72) : 0
+    const height = sizeMatch ? Math.round((parseFloat(sizeMatch[2]) * 300) / 72) : 0
 
-    return { pages, width, height };
+    return { pages, width, height }
   } catch (error) {
-    console.error("[Preflight] pdfinfo failed:", error);
-    return { pages: 1, width: 0, height: 0 };
+    console.error('[Preflight] pdfinfo failed:', error)
+    return { pages: 1, width: 0, height: 0 }
   }
 }
 
 // Convert PDF to PNG using Ghostscript
 // Security: -dSAFER prevents file system access, -dNOCACHE prevents disk caching
 // -dNOPLATFONTS disables platform font access, -dSANDBOX enables full sandbox mode
-export async function convertPdfToPng(inputPath: string, outputPath: string, dpi: number = 300): Promise<void> {
+export async function convertPdfToPng(
+  inputPath: string,
+  outputPath: string,
+  dpi: number = 300
+): Promise<void> {
   // Try multiple approaches for better PDF compatibility
   const commands = [
     // Standard high-quality conversion
@@ -198,53 +227,57 @@ export async function convertPdfToPng(inputPath: string, outputPath: string, dpi
     // Fallback: Lower DPI for problematic PDFs
     `gs -dSAFER -dBATCH -dNOPAUSE -sDEVICE=png16m -r150 -dFirstPage=1 -dLastPage=1 -sOutputFile="${outputPath}" "${inputPath}"`,
     // Last resort: Use ImageMagick with density
-    `convert -density 150 "${inputPath}[0]" -colorspace sRGB -flatten -quality 90 "${outputPath}"`
-  ];
+    `convert -density 150 "${inputPath}[0]" -colorspace sRGB -flatten -quality 90 "${outputPath}"`,
+  ]
 
-  let lastError: Error | null = null;
-  
+  let lastError: Error | null = null
+
   for (const cmd of commands) {
     try {
-      await execAsync(cmd, { timeout: 60000 });
+      await execAsync(cmd, { timeout: 60000 })
       // Verify the output file exists and is valid
-      const stats = await fs.stat(outputPath).catch(() => null);
+      const stats = await fs.stat(outputPath).catch(() => null)
       if (stats && stats.size > 100) {
-        console.log("[Preflight] PDF conversion successful with command:", cmd.substring(0, 50));
-        return;
+        console.log('[Preflight] PDF conversion successful with command:', cmd.substring(0, 50))
+        return
       }
     } catch (error) {
-      console.warn("[Preflight] PDF conversion attempt failed:", (error as Error).message);
-      lastError = error as Error;
+      console.warn('[Preflight] PDF conversion attempt failed:', (error as Error).message)
+      lastError = error as Error
     }
   }
-  
-  console.error("[Preflight] All PDF conversion methods failed");
-  throw lastError || new Error("PDF conversion failed");
+
+  console.error('[Preflight] All PDF conversion methods failed')
+  throw lastError || new Error('PDF conversion failed')
 }
 
 // Get PDF page count using Ghostscript
 export async function getPdfPageCount(inputPath: string): Promise<number> {
-  const cmd = `gs -q -dNODISPLAY -c "(${inputPath.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}) (r) file runpdfbegin pdfpagecount = quit"`;
+  const cmd = `gs -q -dNODISPLAY -c "(${inputPath.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}) (r) file runpdfbegin pdfpagecount = quit"`
 
   try {
-    const { stdout } = await execAsync(cmd, { timeout: 10000 });
-    const pageCount = parseInt(stdout.trim(), 10);
-    return isNaN(pageCount) ? 1 : pageCount;
+    const { stdout } = await execAsync(cmd, { timeout: 10000 })
+    const pageCount = parseInt(stdout.trim(), 10)
+    return isNaN(pageCount) ? 1 : pageCount
   } catch (error) {
     // Fallback: try with pdfinfo if available
     try {
-      const { stdout } = await execAsync(`pdfinfo "${inputPath}" | grep Pages`, { timeout: 5000 });
-      const match = stdout.match(/Pages:\s*(\d+)/);
-      return match ? parseInt(match[1], 10) : 1;
+      const { stdout } = await execAsync(`pdfinfo "${inputPath}" | grep Pages`, { timeout: 5000 })
+      const match = stdout.match(/Pages:\s*(\d+)/)
+      return match ? parseInt(match[1], 10) : 1
     } catch {
-      console.warn("[Preflight] Could not determine PDF page count, assuming 1");
-      return 1;
+      console.warn('[Preflight] Could not determine PDF page count, assuming 1')
+      return 1
     }
   }
 }
 
 // Convert AI/EPS to PNG using Ghostscript
-export async function convertEpsToPng(inputPath: string, outputPath: string, dpi: number = 300): Promise<void> {
+export async function convertEpsToPng(
+  inputPath: string,
+  outputPath: string,
+  dpi: number = 300
+): Promise<void> {
   // Try multiple approaches for better AI/EPS compatibility
   const commands = [
     // Standard EPS conversion with crop
@@ -252,41 +285,41 @@ export async function convertEpsToPng(inputPath: string, outputPath: string, dpi
     // Fallback: Without EPS crop (for AI files that are PDF-based)
     `gs -dSAFER -dBATCH -dNOPAUSE -sDEVICE=png16m -r150 -dFirstPage=1 -dLastPage=1 -sOutputFile="${outputPath}" "${inputPath}"`,
     // Last resort: ImageMagick (works for many AI files)
-    `convert -density 150 "${inputPath}[0]" -colorspace sRGB -flatten -quality 90 "${outputPath}"`
-  ];
+    `convert -density 150 "${inputPath}[0]" -colorspace sRGB -flatten -quality 90 "${outputPath}"`,
+  ]
 
-  let lastError: Error | null = null;
-  
+  let lastError: Error | null = null
+
   for (const cmd of commands) {
     try {
-      await execAsync(cmd, { timeout: 60000 });
+      await execAsync(cmd, { timeout: 60000 })
       // Verify the output file exists and is valid
-      const stats = await fs.stat(outputPath).catch(() => null);
+      const stats = await fs.stat(outputPath).catch(() => null)
       if (stats && stats.size > 100) {
-        console.log("[Preflight] AI/EPS conversion successful with command:", cmd.substring(0, 50));
-        return;
+        console.log('[Preflight] AI/EPS conversion successful with command:', cmd.substring(0, 50))
+        return
       }
     } catch (error) {
-      console.warn("[Preflight] AI/EPS conversion attempt failed:", (error as Error).message);
-      lastError = error as Error;
+      console.warn('[Preflight] AI/EPS conversion attempt failed:', (error as Error).message)
+      lastError = error as Error
     }
   }
-  
-  console.error("[Preflight] All AI/EPS conversion methods failed");
-  throw lastError || new Error("EPS/AI conversion failed");
+
+  console.error('[Preflight] All AI/EPS conversion methods failed')
+  throw lastError || new Error('EPS/AI conversion failed')
 }
 
 // Convert TIFF to PNG using ImageMagick
 // ImageMagick handles all TIFF variants (LZW, ZIP, uncompressed, CMYK, etc.)
 export async function convertTiffToPng(inputPath: string, outputPath: string): Promise<void> {
   // Use [0] to get first page/layer, -colorspace sRGB to convert CMYK if needed
-  const cmd = `convert "${inputPath}[0]" -colorspace sRGB -flatten -quality 100 "${outputPath}"`;
+  const cmd = `convert "${inputPath}[0]" -colorspace sRGB -flatten -quality 100 "${outputPath}"`
 
   try {
-    await execAsync(cmd, { timeout: 60000 }); // 60s timeout for large TIFF files
+    await execAsync(cmd, { timeout: 60000 }) // 60s timeout for large TIFF files
   } catch (error) {
-    console.error("[Preflight] TIFF conversion failed:", error);
-    throw new Error("TIFF conversion failed");
+    console.error('[Preflight] TIFF conversion failed:', error)
+    throw new Error('TIFF conversion failed')
   }
 }
 
@@ -295,44 +328,48 @@ export async function convertTiffToPng(inputPath: string, outputPath: string): P
 export async function convertPsdToPng(inputPath: string, outputPath: string): Promise<void> {
   // [0] gets the flattened composite, -flatten merges transparency
   // -colorspace sRGB handles CMYK to RGB conversion
-  const cmd = `convert "${inputPath}[0]" -colorspace sRGB -flatten -quality 100 "${outputPath}"`;
+  const cmd = `convert "${inputPath}[0]" -colorspace sRGB -flatten -quality 100 "${outputPath}"`
 
   try {
-    await execAsync(cmd, { timeout: 120000 }); // 120s timeout for large PSD files
+    await execAsync(cmd, { timeout: 120000 }) // 120s timeout for large PSD files
   } catch (error) {
-    console.error("[Preflight] PSD conversion failed:", error);
-    throw new Error("PSD conversion failed");
+    console.error('[Preflight] PSD conversion failed:', error)
+    throw new Error('PSD conversion failed')
   }
 }
 
 // Generate WebP thumbnail
-export async function generateThumbnail(inputPath: string, outputPath: string, maxSize: number = 400): Promise<void> {
-  const cmd = `convert "${inputPath}[0]" -thumbnail ${maxSize}x${maxSize}\\> -quality 85 "${outputPath}"`;
+export async function generateThumbnail(
+  inputPath: string,
+  outputPath: string,
+  maxSize: number = 400
+): Promise<void> {
+  const cmd = `convert "${inputPath}[0]" -thumbnail ${maxSize}x${maxSize}\\> -quality 85 "${outputPath}"`
 
   try {
-    await execAsync(cmd, { timeout: 30000 });
+    await execAsync(cmd, { timeout: 30000 })
     // Verify thumbnail was created and is valid
-    const stats = await fs.stat(outputPath).catch(() => null);
+    const stats = await fs.stat(outputPath).catch(() => null)
     if (!stats || stats.size < 100) {
-      throw new Error("Thumbnail file is empty or too small");
+      throw new Error('Thumbnail file is empty or too small')
     }
   } catch (error) {
-    console.error("[Preflight] Thumbnail generation failed:", error);
-    
+    console.error('[Preflight] Thumbnail generation failed:', error)
+
     // Create a fallback placeholder thumbnail
     try {
-      console.log("[Preflight] Creating fallback placeholder thumbnail");
+      console.log('[Preflight] Creating fallback placeholder thumbnail')
       // Create a simple gray placeholder with "PDF" or "AI" text
-      const ext = path.extname(inputPath).toLowerCase().replace('.', '').toUpperCase() || 'FILE';
-      const fallbackCmd = `convert -size ${maxSize}x${maxSize} xc:#f3f4f6 -gravity center -pointsize 48 -fill "#6b7280" -annotate 0 "${ext}" -quality 85 "${outputPath}"`;
-      await execAsync(fallbackCmd, { timeout: 10000 });
-      console.log("[Preflight] Fallback thumbnail created successfully");
-      return;
+      const ext = path.extname(inputPath).toLowerCase().replace('.', '').toUpperCase() || 'FILE'
+      const fallbackCmd = `convert -size ${maxSize}x${maxSize} xc:#f3f4f6 -gravity center -pointsize 48 -fill "#6b7280" -annotate 0 "${ext}" -quality 85 "${outputPath}"`
+      await execAsync(fallbackCmd, { timeout: 10000 })
+      console.log('[Preflight] Fallback thumbnail created successfully')
+      return
     } catch (fallbackError) {
-      console.error("[Preflight] Fallback thumbnail also failed:", fallbackError);
+      console.error('[Preflight] Fallback thumbnail also failed:', fallbackError)
     }
-    
-    throw new Error("Thumbnail generation failed");
+
+    throw new Error('Thumbnail generation failed')
   }
 }
 
@@ -343,161 +380,157 @@ export async function runPreflightChecks(
   fileSize: number,
   config: PreflightConfig
 ): Promise<PreflightResult> {
-  const checks: PreflightCheck[] = [];
-  let overall: "ok" | "warning" | "error" = "ok";
+  const checks: PreflightCheck[] = []
+  let overall: 'ok' | 'warning' | 'error' = 'ok'
 
   // 1. File size check
-  const sizeMB = fileSize / (1024 * 1024);
+  const sizeMB = fileSize / (1024 * 1024)
   if (sizeMB > config.maxFileSizeMB) {
     checks.push({
-      name: "fileSize",
-      status: "error",
+      name: 'fileSize',
+      status: 'error',
       value: sizeMB.toFixed(2),
       message: `File size (${sizeMB.toFixed(2)}MB) exceeds limit (${config.maxFileSizeMB}MB)`,
-    });
-    overall = "error";
+    })
+    overall = 'error'
   } else {
     checks.push({
-      name: "fileSize",
-      status: "ok",
+      name: 'fileSize',
+      status: 'ok',
       value: sizeMB.toFixed(2),
       message: `File size: ${sizeMB.toFixed(2)}MB`,
-    });
+    })
   }
 
   // 2. Format check (magic bytes)
-  const detectedType = await detectFileType(filePath);
-  
+  const detectedType = await detectFileType(filePath)
+
   // Check if detected type or its alternatives are allowed
   // PSD can have multiple MIME types, check all variants
-  const psdTypes = ["image/vnd.adobe.photoshop", "application/x-photoshop", "image/x-psd"];
-  const isPsd = psdTypes.includes(detectedType || "");
-  const isPsdAllowed = psdTypes.some(t => config.allowedFormats.includes(t));
-  
-  const isFormatAllowed = detectedType && (
-    config.allowedFormats.includes(detectedType) ||
-    (isPsd && isPsdAllowed)
-  );
-  
+  const psdTypes = ['image/vnd.adobe.photoshop', 'application/x-photoshop', 'image/x-psd']
+  const isPsd = psdTypes.includes(detectedType || '')
+  const isPsdAllowed = psdTypes.some((t) => config.allowedFormats.includes(t))
+
+  const isFormatAllowed =
+    detectedType && (config.allowedFormats.includes(detectedType) || (isPsd && isPsdAllowed))
+
   if (!detectedType || !isFormatAllowed) {
     checks.push({
-      name: "format",
-      status: "error",
-      value: detectedType || "unknown",
-      message: `Unsupported file format: ${detectedType || "unknown"}`,
-    });
-    overall = "error";
-    return { overall, checks };
+      name: 'format',
+      status: 'error',
+      value: detectedType || 'unknown',
+      message: `Unsupported file format: ${detectedType || 'unknown'}`,
+    })
+    overall = 'error'
+    return { overall, checks }
   }
   checks.push({
-    name: "format",
-    status: "ok",
+    name: 'format',
+    status: 'ok',
     value: detectedType,
     message: `Format: ${detectedType}`,
-  });
+  })
 
   // 3. PDF-specific checks
-  if (detectedType === "application/pdf") {
-    const pdfInfo = await getPdfInfo(filePath);
+  if (detectedType === 'application/pdf') {
+    const pdfInfo = await getPdfInfo(filePath)
 
     if (pdfInfo.pages > config.maxPages) {
       checks.push({
-        name: "pageCount",
-        status: "error",
+        name: 'pageCount',
+        status: 'error',
         value: pdfInfo.pages,
         message: `PDF has ${pdfInfo.pages} pages (max: ${config.maxPages})`,
-      });
-      overall = "error";
+      })
+      overall = 'error'
     } else if (pdfInfo.pages > 1) {
       checks.push({
-        name: "pageCount",
-        status: "warning",
+        name: 'pageCount',
+        status: 'warning',
         value: pdfInfo.pages,
         message: `PDF has ${pdfInfo.pages} pages. Only first page will be used.`,
-      });
-      if (overall === "ok") overall = "warning";
+      })
+      if (overall === 'ok') overall = 'warning'
     } else {
       checks.push({
-        name: "pageCount",
-        status: "ok",
+        name: 'pageCount',
+        status: 'ok',
         value: 1,
-        message: "Single page PDF",
-      });
+        message: 'Single page PDF',
+      })
     }
   }
 
   // 4. Image info checks (DPI, dimensions, transparency, color)
   try {
-    const imageInfo = await getImageInfo(filePath);
+    const imageInfo = await getImageInfo(filePath)
 
     // DPI check
     if (imageInfo.dpi < config.minDPI * 0.7) {
       checks.push({
-        name: "dpi",
-        status: "error",
+        name: 'dpi',
+        status: 'error',
         value: imageInfo.dpi,
         message: `DPI (${imageInfo.dpi}) is too low. Minimum: ${config.minDPI}`,
-      });
-      overall = "error";
+      })
+      overall = 'error'
     } else if (imageInfo.dpi < config.requiredDPI) {
       checks.push({
-        name: "dpi",
-        status: "warning",
+        name: 'dpi',
+        status: 'warning',
         value: imageInfo.dpi,
         message: `DPI (${imageInfo.dpi}) is below recommended (${config.requiredDPI})`,
-      });
-      if (overall === "ok") overall = "warning";
+      })
+      if (overall === 'ok') overall = 'warning'
     } else {
       checks.push({
-        name: "dpi",
-        status: "ok",
+        name: 'dpi',
+        status: 'ok',
         value: imageInfo.dpi,
         message: `DPI: ${imageInfo.dpi}`,
-      });
+      })
     }
 
     // Dimensions check
     checks.push({
-      name: "dimensions",
-      status: "ok",
+      name: 'dimensions',
+      status: 'ok',
       value: `${imageInfo.width}x${imageInfo.height}`,
       message: `Dimensions: ${imageInfo.width} x ${imageInfo.height} px`,
       details: { width: imageInfo.width, height: imageInfo.height },
-    });
+    })
 
     // Transparency check
     checks.push({
-      name: "transparency",
-      status: imageInfo.hasAlpha ? "ok" : "warning",
+      name: 'transparency',
+      status: imageInfo.hasAlpha ? 'ok' : 'warning',
       value: imageInfo.hasAlpha,
-      message: imageInfo.hasAlpha ? "Has transparency (alpha channel)" : "No transparency detected",
-    });
-    if (!imageInfo.hasAlpha && config.requireTransparency && overall === "ok") {
-      overall = "warning";
+      message: imageInfo.hasAlpha ? 'Has transparency (alpha channel)' : 'No transparency detected',
+    })
+    if (!imageInfo.hasAlpha && config.requireTransparency && overall === 'ok') {
+      overall = 'warning'
     }
 
     // Color profile check
-    const goodColorspaces = ["sRGB", "RGB", "CMYK"];
-    const colorOk = goodColorspaces.some(cs =>
+    const goodColorspaces = ['sRGB', 'RGB', 'CMYK']
+    const colorOk = goodColorspaces.some((cs) =>
       imageInfo.colorspace.toLowerCase().includes(cs.toLowerCase())
-    );
+    )
     checks.push({
-      name: "colorProfile",
-      status: colorOk ? "ok" : "warning",
+      name: 'colorProfile',
+      status: colorOk ? 'ok' : 'warning',
       value: imageInfo.colorspace,
       message: `Color profile: ${imageInfo.colorspace}`,
-    });
-    if (!colorOk && overall === "ok") overall = "warning";
-
+    })
+    if (!colorOk && overall === 'ok') overall = 'warning'
   } catch (error) {
     checks.push({
-      name: "imageAnalysis",
-      status: "error",
-      message: "Failed to analyze image properties",
-    });
-    overall = "error";
+      name: 'imageAnalysis',
+      status: 'error',
+      message: 'Failed to analyze image properties',
+    })
+    overall = 'error'
   }
 
-  return { overall, checks };
+  return { overall, checks }
 }
-

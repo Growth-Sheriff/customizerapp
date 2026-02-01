@@ -1,111 +1,109 @@
-import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
-import { json } from "@remix-run/node";
-import { triggerUploadReceived } from "~/lib/flow.server";
-import { handleCorsOptions, corsJson } from "~/lib/cors.server";
-import { rateLimitGuard, getIdentifier } from "~/lib/rateLimit.server";
-import prisma from "~/lib/prisma.server";
-import { Queue } from "bullmq";
-import Redis from "ioredis";
+import type { ActionFunctionArgs, LoaderFunctionArgs } from '@remix-run/node'
+import { Queue } from 'bullmq'
+import Redis from 'ioredis'
+import { corsJson, handleCorsOptions } from '~/lib/cors.server'
+import { triggerUploadReceived } from '~/lib/flow.server'
+import prisma from '~/lib/prisma.server'
+import { getIdentifier, rateLimitGuard } from '~/lib/rateLimit.server'
 
 // ============================================================================
 // FAZ 0 - API-001: Singleton Redis Connection
 // Prevents connection leak by reusing a single connection across all requests
 // ============================================================================
-let redisConnection: Redis | null = null;
+let redisConnection: Redis | null = null
 
 const getRedisConnection = (): Redis => {
   if (!redisConnection) {
-    redisConnection = new Redis(process.env.REDIS_URL || "redis://localhost:6379", {
+    redisConnection = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
       maxRetriesPerRequest: null,
       enableReadyCheck: true,
       retryStrategy: (times: number) => Math.min(times * 50, 2000),
       reconnectOnError: (err: Error) => {
-        const targetError = 'READONLY';
+        const targetError = 'READONLY'
         if (err.message.includes(targetError)) {
           // Only reconnect on READONLY errors (failover scenario)
-          return true;
+          return true
         }
-        return false;
+        return false
       },
-    });
+    })
 
     redisConnection.on('error', (err: Error) => {
-      console.error('[Redis] Connection error:', err.message);
-    });
+      console.error('[Redis] Connection error:', err.message)
+    })
 
     redisConnection.on('connect', () => {
-      console.log('[Redis] Connected successfully');
-    });
+      console.log('[Redis] Connected successfully')
+    })
 
     redisConnection.on('close', () => {
-      console.warn('[Redis] Connection closed');
-      redisConnection = null; // Allow reconnection on next request
-    });
+      console.warn('[Redis] Connection closed')
+      redisConnection = null // Allow reconnection on next request
+    })
   }
-  return redisConnection;
-};
+  return redisConnection
+}
 
 // POST /api/upload/complete
 // Request: { shopDomain, uploadId, items: [{ itemId, location, transform? }] }
 export async function action({ request }: ActionFunctionArgs) {
   // Handle CORS preflight
-  if (request.method === "OPTIONS") {
-    return handleCorsOptions(request);
+  if (request.method === 'OPTIONS') {
+    return handleCorsOptions(request)
   }
 
-  if (request.method !== "POST") {
-    return corsJson({ error: "Method not allowed" }, request, { status: 405 });
+  if (request.method !== 'POST') {
+    return corsJson({ error: 'Method not allowed' }, request, { status: 405 })
   }
 
   // Rate limiting
-  const identifier = getIdentifier(request, "customer");
-  const rateLimitResponse = await rateLimitGuard(identifier, "preflight");
-  if (rateLimitResponse) return rateLimitResponse;
+  const identifier = getIdentifier(request, 'customer')
+  const rateLimitResponse = await rateLimitGuard(identifier, 'preflight')
+  if (rateLimitResponse) return rateLimitResponse
 
-  let body: any;
+  let body: any
   try {
-    body = await request.json();
+    body = await request.json()
   } catch {
-    return corsJson({ error: "Invalid JSON body" }, request, { status: 400 });
+    return corsJson({ error: 'Invalid JSON body' }, request, { status: 400 })
   }
 
-  const { shopDomain, uploadId, items } = body;
+  const { shopDomain, uploadId, items } = body
 
   if (!shopDomain) {
-    return corsJson({ error: "Missing required field: shopDomain" }, request, { status: 400 });
+    return corsJson({ error: 'Missing required field: shopDomain' }, request, { status: 400 })
   }
 
   if (!uploadId) {
-    return corsJson({ error: "Missing required field: uploadId" }, request, { status: 400 });
+    return corsJson({ error: 'Missing required field: uploadId' }, request, { status: 400 })
   }
 
   // items is optional for quick mode - will use existing items from intent
 
   const shop = await prisma.shop.findUnique({
     where: { shopDomain },
-  });
+  })
 
   if (!shop) {
-    return corsJson({ error: "Shop not found" }, request, { status: 404 });
+    return corsJson({ error: 'Shop not found' }, request, { status: 404 })
   }
 
   // Get shop settings for auto-approve feature
-  const shopSettings = (shop.settings as Record<string, any>) || {};
-  const autoApprove = shopSettings.autoApprove !== false; // Default to true
-
+  const shopSettings = (shop.settings as Record<string, any>) || {}
+  const autoApprove = shopSettings.autoApprove !== false // Default to true
 
   // Verify upload belongs to shop
   const upload = await prisma.upload.findFirst({
     where: { id: uploadId, shopId: shop.id },
     include: { items: true },
-  });
+  })
 
   if (!upload) {
-    return corsJson({ error: "Upload not found" }, request, { status: 404 });
+    return corsJson({ error: 'Upload not found' }, request, { status: 404 })
   }
 
-  if (upload.status !== "draft") {
-    return corsJson({ error: "Upload already completed" }, request, { status: 400 });
+  if (upload.status !== 'draft') {
+    return corsJson({ error: 'Upload already completed' }, request, { status: 400 })
   }
 
   try {
@@ -113,69 +111,71 @@ export async function action({ request }: ActionFunctionArgs) {
     // autoApprove is read from shop.settings by the preflight worker
     await prisma.upload.update({
       where: { id: uploadId },
-      data: { 
-        status: "uploaded",
+      data: {
+        status: 'uploaded',
       },
-    });
+    })
 
     // Update items with location, transform, and fileUrl (for CDN uploads)
     // If items array is provided, use it; otherwise skip item updates (quick mode)
     if (items && Array.isArray(items) && items.length > 0) {
       for (const item of items) {
         const updateData: Record<string, unknown> = {
-          location: item.location || "front",
+          location: item.location || 'front',
           transform: item.transform || null,
-        };
-        
+        }
+
         // Upload duration in milliseconds (from client)
         if (item.uploadDurationMs && typeof item.uploadDurationMs === 'number') {
-          updateData.uploadDurationMs = Math.round(item.uploadDurationMs);
+          updateData.uploadDurationMs = Math.round(item.uploadDurationMs)
         }
-        
+
         // MULTI-STORAGE: Handle different storage providers
-        const provider = item.storageProvider || 'local';
-        
+        const provider = item.storageProvider || 'local'
+
         if (item.fileUrl) {
           // CDN uploads (Bunny/R2): Store the public URL directly
           if (provider === 'bunny') {
             // Store with bunny: prefix for provider identification
-            updateData.storageKey = `bunny:${item.fileUrl.replace(/^https?:\/\/[^/]+\//, '')}`;
-            console.log(`[Upload Complete] Stored Bunny CDN key: ${updateData.storageKey}`);
+            updateData.storageKey = `bunny:${item.fileUrl.replace(/^https?:\/\/[^/]+\//, '')}`
+            console.log(`[Upload Complete] Stored Bunny CDN key: ${updateData.storageKey}`)
           } else if (provider === 'r2') {
             // Store R2 URL directly
-            updateData.storageKey = item.fileUrl;
-            console.log(`[Upload Complete] Stored R2 URL: ${item.fileUrl}`);
+            updateData.storageKey = item.fileUrl
+            console.log(`[Upload Complete] Stored R2 URL: ${item.fileUrl}`)
           } else {
             // Local or other - store URL as-is
-            updateData.storageKey = item.fileUrl;
-            console.log(`[Upload Complete] Updated storageKey: ${item.fileUrl}`);
+            updateData.storageKey = item.fileUrl
+            console.log(`[Upload Complete] Updated storageKey: ${item.fileUrl}`)
           }
         } else if (item.fileId && provider === 'shopify') {
           // Legacy Shopify: Store fileId with prefix for later resolution
-          updateData.storageKey = `shopify:${item.fileId}`;
-          console.log(`[Upload Complete] Stored Shopify fileId for later resolution: ${item.fileId}`);
+          updateData.storageKey = `shopify:${item.fileId}`
+          console.log(
+            `[Upload Complete] Stored Shopify fileId for later resolution: ${item.fileId}`
+          )
         }
         // For local storage, storageKey was already set during intent - no update needed
-        
+
         await prisma.uploadItem.update({
           where: { id: item.itemId },
           data: updateData,
-        });
+        })
       }
     }
 
     // Enqueue preflight job for each item
     // FAZ 0 - API-001: Use singleton connection (don't create new connection per request)
-    const connection = getRedisConnection();
-    const preflightQueue = new Queue("preflight", { connection });
+    const connection = getRedisConnection()
+    const preflightQueue = new Queue('preflight', { connection })
 
     for (const uploadItem of upload.items) {
-      await preflightQueue.add("preflight", {
+      await preflightQueue.add('preflight', {
         uploadId,
         shopId: shop.id,
         itemId: uploadItem.id,
         storageKey: uploadItem.storageKey,
-      });
+      })
     }
 
     // FAZ 0 - API-001: DON'T close singleton connection - it's reused across requests
@@ -190,7 +190,7 @@ export async function action({ request }: ActionFunctionArgs) {
       customerId: upload.customerId,
       customerEmail: upload.customerEmail,
       items: upload.items.map((i: { location: string }) => ({ location: i.location })),
-    });
+    })
 
     // 📊 Update visitor and session metrics if linked
     if (upload.visitorId) {
@@ -202,8 +202,8 @@ export async function action({ request }: ActionFunctionArgs) {
             totalUploads: { increment: 1 },
             lastSeenAt: new Date(),
           },
-        });
-        
+        })
+
         // Increment session's uploads count if session exists
         if (upload.sessionId) {
           await prisma.visitorSession.update({
@@ -212,55 +212,57 @@ export async function action({ request }: ActionFunctionArgs) {
               uploadsInSession: { increment: 1 },
               lastActivityAt: new Date(),
             },
-          });
+          })
         }
-        
-        console.log(`[Upload Complete] Updated visitor ${upload.visitorId} metrics`);
+
+        console.log(`[Upload Complete] Updated visitor ${upload.visitorId} metrics`)
       } catch (visitorErr) {
         // Non-blocking: visitor tracking is optional
-        console.warn("[Upload Complete] Failed to update visitor metrics:", visitorErr);
+        console.warn('[Upload Complete] Failed to update visitor metrics:', visitorErr)
       }
     }
 
-    return corsJson({
-      success: true,
-      uploadId,
-      status: "processing",
-      message: "Upload complete. Preflight checks started.",
-    }, request);
+    return corsJson(
+      {
+        success: true,
+        uploadId,
+        status: 'processing',
+        message: 'Upload complete. Preflight checks started.',
+      },
+      request
+    )
   } catch (error) {
-    console.error("[Upload Complete] Error:", error);
-    return corsJson({ error: "Failed to complete upload" }, request, { status: 500 });
+    console.error('[Upload Complete] Error:', error)
+    return corsJson({ error: 'Failed to complete upload' }, request, { status: 500 })
   }
 }
 
 // GET /api/upload/complete?uploadId=xxx&shopDomain=xxx (get upload status)
 export async function loader({ request }: LoaderFunctionArgs) {
   // Handle CORS preflight - loader handles GET but action handles OPTIONS
-  if (request.method === "OPTIONS") {
-    return handleCorsOptions(request);
+  if (request.method === 'OPTIONS') {
+    return handleCorsOptions(request)
   }
 
-  const url = new URL(request.url);
-  const uploadId = url.searchParams.get("uploadId");
-  const shopDomain = url.searchParams.get("shopDomain");
+  const url = new URL(request.url)
+  const uploadId = url.searchParams.get('uploadId')
+  const shopDomain = url.searchParams.get('shopDomain')
 
   if (!shopDomain) {
-    return corsJson({ error: "Missing shopDomain" }, request, { status: 400 });
+    return corsJson({ error: 'Missing shopDomain' }, request, { status: 400 })
   }
 
   if (!uploadId) {
-    return corsJson({ error: "Missing uploadId" }, request, { status: 400 });
+    return corsJson({ error: 'Missing uploadId' }, request, { status: 400 })
   }
 
   const shop = await prisma.shop.findUnique({
     where: { shopDomain },
-  });
+  })
 
   if (!shop) {
-    return corsJson({ error: "Shop not found" }, request, { status: 404 });
+    return corsJson({ error: 'Shop not found' }, request, { status: 404 })
   }
-
 
   const upload = await prisma.upload.findFirst({
     where: { id: uploadId, shopId: shop.id },
@@ -276,20 +278,22 @@ export async function loader({ request }: LoaderFunctionArgs) {
         },
       },
     },
-  });
+  })
 
   if (!upload) {
-    return corsJson({ error: "Upload not found" }, request, { status: 404 });
+    return corsJson({ error: 'Upload not found' }, request, { status: 404 })
   }
 
-  return corsJson({
-    uploadId: upload.id,
-    status: upload.status,
-    mode: upload.mode,
-    preflightSummary: upload.preflightSummary,
-    items: upload.items,
-    createdAt: upload.createdAt,
-    updatedAt: upload.updatedAt,
-  }, request);
+  return corsJson(
+    {
+      uploadId: upload.id,
+      status: upload.status,
+      mode: upload.mode,
+      preflightSummary: upload.preflightSummary,
+      items: upload.items,
+      createdAt: upload.createdAt,
+      updatedAt: upload.updatedAt,
+    },
+    request
+  )
 }
-

@@ -1,18 +1,15 @@
-import type { ActionFunctionArgs } from "@remix-run/node";
-import { json } from "@remix-run/node";
-import crypto from "crypto";
-import prisma from "~/lib/prisma.server";
-import { shopifyGraphQL } from "~/lib/shopify.server";
-import { recordOrderForVisitor } from "~/lib/visitor.server";
+import type { ActionFunctionArgs } from '@remix-run/node'
+import { json } from '@remix-run/node'
+import crypto from 'crypto'
+import prisma from '~/lib/prisma.server'
+import { shopifyGraphQL } from '~/lib/shopify.server'
+import { recordOrderForVisitor } from '~/lib/visitor.server'
 
 // Verify Shopify webhook signature
 function verifyWebhookSignature(body: string, hmac: string, secret: string): boolean {
-  const hash = crypto
-    .createHmac("sha256", secret)
-    .update(body, "utf8")
-    .digest("base64");
+  const hash = crypto.createHmac('sha256', secret).update(body, 'utf8').digest('base64')
 
-  return crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(hmac));
+  return crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(hmac))
 }
 
 // GraphQL mutation to write order metafield
@@ -28,57 +25,57 @@ const ORDER_METAFIELD_MUTATION = `
       }
     }
   }
-`;
+`
 
 // POST /webhooks/orders-paid
 export async function action({ request }: ActionFunctionArgs) {
-  if (request.method !== "POST") {
-    return json({ error: "Method not allowed" }, { status: 405 });
+  if (request.method !== 'POST') {
+    return json({ error: 'Method not allowed' }, { status: 405 })
   }
 
-  const hmac = request.headers.get("X-Shopify-Hmac-Sha256");
-  const shopDomain = request.headers.get("X-Shopify-Shop-Domain");
+  const hmac = request.headers.get('X-Shopify-Hmac-Sha256')
+  const shopDomain = request.headers.get('X-Shopify-Shop-Domain')
 
   if (!hmac || !shopDomain) {
-    return json({ error: "Missing headers" }, { status: 400 });
+    return json({ error: 'Missing headers' }, { status: 400 })
   }
 
-  const body = await request.text();
-  const secret = process.env.SHOPIFY_API_SECRET || "";
+  const body = await request.text()
+  const secret = process.env.SHOPIFY_API_SECRET || ''
 
   if (!verifyWebhookSignature(body, hmac, secret)) {
-    return json({ error: "Invalid signature" }, { status: 401 });
+    return json({ error: 'Invalid signature' }, { status: 401 })
   }
 
   try {
-    const order = JSON.parse(body);
-    console.log(`[Webhook] Order paid: ${order.id} for shop: ${shopDomain}`);
+    const order = JSON.parse(body)
+    console.log(`[Webhook] Order paid: ${order.id} for shop: ${shopDomain}`)
 
     // Get shop from database
     const shop = await prisma.shop.findUnique({
       where: { shopDomain },
-    });
+    })
 
     if (!shop) {
-      console.log(`[Webhook] Shop not found: ${shopDomain}`);
-      return json({ success: true });
+      console.log(`[Webhook] Shop not found: ${shopDomain}`)
+      return json({ success: true })
     }
 
     // Find all uploads linked to this order's line items
     const uploadDesigns: Array<{
-      lineItemId: string;
-      uploadId: string;
-      location: string;
-      originalFile: string;
-      previewUrl: string;
-      transform: unknown;
-      preflightStatus: string;
-    }> = [];
+      lineItemId: string
+      uploadId: string
+      location: string
+      originalFile: string
+      previewUrl: string
+      transform: unknown
+      preflightStatus: string
+    }> = []
 
     for (const lineItem of order.line_items || []) {
       const uploadId = lineItem.properties?.find(
-        (p: { name: string }) => p.name === "_ul_upload_id"
-      )?.value;
+        (p: { name: string }) => p.name === '_ul_upload_id'
+      )?.value
 
       if (uploadId) {
         // Get upload details
@@ -96,7 +93,7 @@ export async function action({ request }: ActionFunctionArgs) {
               },
             },
           },
-        });
+        })
 
         if (upload) {
           // WI-007: Idempotent upsert - webhook can be delivered multiple times
@@ -117,24 +114,26 @@ export async function action({ request }: ActionFunctionArgs) {
               uploadId: upload.id,
               lineItemId: String(lineItem.id),
             },
-          });
+          })
 
           // Update upload status with order revenue data
-          const orderTotal = parseFloat(order.total_price) || 0;
-          const orderCurrency = order.currency || "USD";
-          
+          const orderTotal = parseFloat(order.total_price) || 0
+          const orderCurrency = order.currency || 'USD'
+
           await prisma.upload.update({
             where: { id: upload.id },
             data: {
-              status: "approved",
+              status: 'approved',
               orderId: String(order.id),
               orderTotal: orderTotal,
               orderCurrency: orderCurrency,
               orderPaidAt: new Date(),
             },
-          });
-          
-          console.log(`[Webhook] Upload ${upload.id} updated with order data: ${orderTotal} ${orderCurrency}`);
+          })
+
+          console.log(
+            `[Webhook] Upload ${upload.id} updated with order data: ${orderTotal} ${orderCurrency}`
+          )
 
           // Add to designs array
           for (const item of upload.items) {
@@ -142,26 +141,28 @@ export async function action({ request }: ActionFunctionArgs) {
               lineItemId: String(lineItem.id),
               uploadId: upload.id,
               location: item.location,
-              originalFile: item.originalName || "",
-              previewUrl: item.thumbnailKey || item.previewKey || "",
+              originalFile: item.originalName || '',
+              previewUrl: item.thumbnailKey || item.previewKey || '',
               transform: item.transform,
               preflightStatus: item.preflightStatus,
-            });
+            })
           }
 
           // 📊 Visitor Revenue Tracking: Record order for visitor analytics
           if (upload.visitorId) {
             try {
-              const orderTotal = parseFloat(order.total_price) || 0;
-              await recordOrderForVisitor(upload.visitorId, orderTotal);
-              console.log(`[Webhook] Revenue recorded for visitor ${upload.visitorId}: $${orderTotal}`);
+              const orderTotal = parseFloat(order.total_price) || 0
+              await recordOrderForVisitor(upload.visitorId, orderTotal)
+              console.log(
+                `[Webhook] Revenue recorded for visitor ${upload.visitorId}: $${orderTotal}`
+              )
             } catch (visitorErr) {
               // Non-blocking: visitor tracking is optional enhancement
-              console.warn(`[Webhook] Visitor revenue tracking failed:`, visitorErr);
+              console.warn(`[Webhook] Visitor revenue tracking failed:`, visitorErr)
             }
           }
 
-          console.log(`[Webhook] Linked upload ${uploadId} to order ${order.id}`);
+          console.log(`[Webhook] Linked upload ${uploadId} to order ${order.id}`)
         }
       }
     }
@@ -169,11 +170,11 @@ export async function action({ request }: ActionFunctionArgs) {
     // Write order metafield with design data
     if (uploadDesigns.length > 0 && shop.accessToken) {
       const metafieldValue = JSON.stringify({
-        version: "1.0",
+        version: '1.0',
         totalDesigns: uploadDesigns.length,
         designs: uploadDesigns,
         processedAt: new Date().toISOString(),
-      });
+      })
 
       try {
         await shopifyGraphQL(shopDomain, shop.accessToken, ORDER_METAFIELD_MUTATION, {
@@ -181,25 +182,24 @@ export async function action({ request }: ActionFunctionArgs) {
             id: `gid://shopify/Order/${order.id}`,
             metafields: [
               {
-                namespace: "upload_lift",
-                key: "designs",
+                namespace: 'upload_lift',
+                key: 'designs',
                 value: metafieldValue,
-                type: "json",
+                type: 'json',
               },
             ],
           },
-        });
+        })
 
-        console.log(`[Webhook] Order metafield written for order ${order.id}`);
+        console.log(`[Webhook] Order metafield written for order ${order.id}`)
       } catch (error) {
-        console.error(`[Webhook] Failed to write order metafield:`, error);
+        console.error(`[Webhook] Failed to write order metafield:`, error)
       }
     }
 
-    return json({ success: true, designsLinked: uploadDesigns.length });
+    return json({ success: true, designsLinked: uploadDesigns.length })
   } catch (error) {
-    console.error("[Webhook] Error processing orders/paid:", error);
-    return json({ error: "Processing failed" }, { status: 500 });
+    console.error('[Webhook] Error processing orders/paid:', error)
+    return json({ error: 'Processing failed' }, { status: 500 })
   }
 }
-

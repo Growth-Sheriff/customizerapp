@@ -1,65 +1,59 @@
 /**
  * Visitor Server Utilities
  * Handles visitor identification, session management, and tracking
- * 
+ *
  * @module visitor.server
  * @version 1.0.0
- * 
+ *
  * ⚠️ IMPORTANT: This module is ADDITIVE ONLY
  * - Does NOT modify existing upload/cart/webhook flows
  * - All visitor fields are OPTIONAL/NULLABLE
  * - Mevcut sistem etkilenmez
  */
 
-import { prisma } from "./prisma.server";
-import {
-  getGeoWithFallback,
-  extractUtmParams,
-  parseReferrer,
-  determineReferrerType,
-  type GeoInfo,
-} from "./geo.server";
+import { determineReferrerType, getGeoWithFallback, parseReferrer } from './geo.server'
+import { prisma } from './prisma.server'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES
 // ═══════════════════════════════════════════════════════════════════════════
 
 export interface VisitorIdentity {
-  localStorageId: string;
-  fingerprint?: string | null;
-  sessionToken: string;
+  localStorageId: string
+  fingerprint?: string | null
+  sessionToken: string
 }
 
 export interface DeviceInfo {
-  deviceType?: string | null;
-  browser?: string | null;
-  browserVersion?: string | null;
-  os?: string | null;
-  osVersion?: string | null;
-  screenResolution?: string | null;
-  language?: string | null;
-  timezone?: string | null;
+  deviceType?: string | null
+  browser?: string | null
+  browserVersion?: string | null
+  os?: string | null
+  osVersion?: string | null
+  screenResolution?: string | null
+  language?: string | null
+  timezone?: string | null
 }
 
 export interface AttributionData {
-  utmSource?: string | null;
-  utmMedium?: string | null;
-  utmCampaign?: string | null;
-  utmTerm?: string | null;
-  utmContent?: string | null;
-  gclid?: string | null;
-  fbclid?: string | null;
-  msclkid?: string | null;
-  ttclid?: string | null;
-  referrer?: string | null;
-  landingPage?: string | null;
+  utmSource?: string | null
+  utmMedium?: string | null
+  utmCampaign?: string | null
+  utmTerm?: string | null
+  utmContent?: string | null
+  gclid?: string | null
+  fbclid?: string | null
+  msclkid?: string | null
+  ttclid?: string | null
+  referrer?: string | null
+  landingPage?: string | null
 }
 
 export interface VisitorUpsertResult {
-  visitorId: string;
-  sessionId: string;
-  isNewVisitor: boolean;
-  isNewSession: boolean;
+  visitorId: string
+  sessionId: string
+  isNewVisitor: boolean
+  isNewSession: boolean
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -78,11 +72,11 @@ export async function upsertVisitorAndSession(
   request: Request
 ): Promise<VisitorUpsertResult> {
   // Get geo with IP-based fallback
-  const geo = await getGeoWithFallback(request);
-  
+  const geo = await getGeoWithFallback(request)
+
   // Parse referrer
-  const { referrerDomain } = parseReferrer(attribution.referrer || null);
-  
+  const { referrerDomain } = parseReferrer(attribution.referrer || null)
+
   // Determine referrer type
   const referrerType = determineReferrerType(
     referrerDomain,
@@ -91,23 +85,23 @@ export async function upsertVisitorAndSession(
     attribution.fbclid || null,
     attribution.msclkid || null,
     attribution.ttclid || null
-  );
-  
+  )
+
   // Parse landing page path
-  let landingPath: string | null = null;
+  let landingPath: string | null = null
   if (attribution.landingPage) {
     try {
-      landingPath = new URL(attribution.landingPage).pathname;
+      landingPath = new URL(attribution.landingPage).pathname
     } catch {
-      landingPath = null;
+      landingPath = null
     }
   }
-  
+
   // Try to find existing visitor
-  let visitor = await findVisitor(shopId, identity);
-  let isNewVisitor = false;
-  let isNewSession = false;
-  
+  let visitor = await findVisitor(shopId, identity)
+  let isNewVisitor = false
+  let isNewSession = false
+
   if (!visitor) {
     // Create new visitor
     visitor = await prisma.visitor.create({
@@ -128,8 +122,8 @@ export async function upsertVisitorAndSession(
         city: geo.city,
         totalSessions: 1,
       },
-    });
-    isNewVisitor = true;
+    })
+    isNewVisitor = true
   } else {
     // Update last seen
     await prisma.visitor.update({
@@ -140,9 +134,9 @@ export async function upsertVisitorAndSession(
         ...(geo.country && { country: geo.country }),
         ...(geo.city && { city: geo.city }),
       },
-    });
+    })
   }
-  
+
   // Check for existing session
   let session = await prisma.visitorSession.findUnique({
     where: {
@@ -151,8 +145,8 @@ export async function upsertVisitorAndSession(
         sessionToken: identity.sessionToken,
       },
     },
-  });
-  
+  })
+
   if (!session) {
     // Create new session
     session = await prisma.visitorSession.create({
@@ -175,9 +169,9 @@ export async function upsertVisitorAndSession(
         landingPage: attribution.landingPage,
         landingPath,
       },
-    });
-    isNewSession = true;
-    
+    })
+    isNewSession = true
+
     // Increment visitor session count if new session
     if (!isNewVisitor) {
       await prisma.visitor.update({
@@ -185,7 +179,7 @@ export async function upsertVisitorAndSession(
         data: {
           totalSessions: { increment: 1 },
         },
-      });
+      })
     }
   } else {
     // Update session activity
@@ -195,25 +189,22 @@ export async function upsertVisitorAndSession(
         lastActivityAt: new Date(),
         pageViews: { increment: 1 },
       },
-    });
+    })
   }
-  
+
   return {
     visitorId: visitor.id,
     sessionId: session.id,
     isNewVisitor,
     isNewSession,
-  };
+  }
 }
 
 /**
  * Find existing visitor by fingerprint or localStorage ID
  * Priority: fingerprint > localStorageId
  */
-async function findVisitor(
-  shopId: string,
-  identity: VisitorIdentity
-) {
+async function findVisitor(shopId: string, identity: VisitorIdentity) {
   // First try fingerprint match (more reliable)
   if (identity.fingerprint) {
     const byFingerprint = await prisma.visitor.findUnique({
@@ -223,10 +214,10 @@ async function findVisitor(
           fingerprint: identity.fingerprint,
         },
       },
-    });
-    if (byFingerprint) return byFingerprint;
+    })
+    if (byFingerprint) return byFingerprint
   }
-  
+
   // Fall back to localStorage ID
   const byLocalStorage = await prisma.visitor.findUnique({
     where: {
@@ -235,9 +226,9 @@ async function findVisitor(
         localStorageId: identity.localStorageId,
       },
     },
-  });
-  
-  return byLocalStorage;
+  })
+
+  return byLocalStorage
 }
 
 /**
@@ -255,7 +246,7 @@ export async function linkUploadToVisitor(
       where: { id: uploadId },
       data: { visitorId, sessionId },
     }),
-    
+
     // Increment visitor upload count
     prisma.visitor.update({
       where: { id: visitorId },
@@ -263,7 +254,7 @@ export async function linkUploadToVisitor(
         totalUploads: { increment: 1 },
       },
     }),
-    
+
     // Increment session upload count
     prisma.visitorSession.update({
       where: { id: sessionId },
@@ -271,7 +262,7 @@ export async function linkUploadToVisitor(
         uploadsInSession: { increment: 1 },
       },
     }),
-  ]);
+  ])
 }
 
 /**
@@ -283,32 +274,26 @@ export async function recordAddToCart(sessionId: string): Promise<void> {
     data: {
       addToCartCount: { increment: 1 },
     },
-  });
+  })
 }
 
 /**
  * Record order completion (called from webhook, OPTIONAL enhancement)
  */
-export async function recordOrderForVisitor(
-  visitorId: string,
-  orderTotal: number
-): Promise<void> {
+export async function recordOrderForVisitor(visitorId: string, orderTotal: number): Promise<void> {
   await prisma.visitor.update({
     where: { id: visitorId },
     data: {
       totalOrders: { increment: 1 },
       totalRevenue: { increment: orderTotal },
     },
-  });
+  })
 }
 
 /**
  * Get visitor by ID with sessions
  */
-export async function getVisitorWithSessions(
-  shopId: string,
-  visitorId: string
-) {
+export async function getVisitorWithSessions(shopId: string, visitorId: string) {
   return prisma.visitor.findFirst({
     where: {
       id: visitorId,
@@ -316,11 +301,11 @@ export async function getVisitorWithSessions(
     },
     include: {
       sessions: {
-        orderBy: { startedAt: "desc" },
+        orderBy: { startedAt: 'desc' },
         take: 10,
       },
       uploads: {
-        orderBy: { createdAt: "desc" },
+        orderBy: { createdAt: 'desc' },
         take: 10,
         select: {
           id: true,
@@ -330,16 +315,13 @@ export async function getVisitorWithSessions(
         },
       },
     },
-  });
+  })
 }
 
 /**
  * Get visitor statistics for analytics dashboard
  */
-export async function getVisitorStats(
-  shopId: string,
-  dateRange?: { start: Date; end: Date }
-) {
+export async function getVisitorStats(shopId: string, dateRange?: { start: Date; end: Date }) {
   const where = {
     shopId,
     ...(dateRange && {
@@ -348,77 +330,70 @@ export async function getVisitorStats(
         lte: dateRange.end,
       },
     }),
-  };
-  
-  const [
-    totalVisitors,
-    returningVisitors,
-    topCountries,
-    topReferrerTypes,
-    topCampaigns,
-  ] = await Promise.all([
-    // Total unique visitors
-    prisma.visitor.count({ where }),
-    
-    // Returning visitors (more than 1 session)
-    prisma.visitor.count({
-      where: {
-        ...where,
-        totalSessions: { gt: 1 },
-      },
-    }),
-    
-    // Top countries
-    prisma.visitor.groupBy({
-      by: ["country"],
-      where,
-      _count: { id: true },
-      orderBy: { _count: { id: "desc" } },
-      take: 10,
-    }),
-    
-    // Top referrer types
-    prisma.visitorSession.groupBy({
-      by: ["referrerType"],
-      where: { shopId },
-      _count: { id: true },
-      orderBy: { _count: { id: "desc" } },
-      take: 10,
-    }),
-    
-    // Top campaigns
-    prisma.visitorSession.groupBy({
-      by: ["utmCampaign"],
-      where: {
-        shopId,
-        utmCampaign: { not: null },
-      },
-      _count: { id: true },
-      orderBy: { _count: { id: "desc" } },
-      take: 10,
-    }),
-  ]);
-  
+  }
+
+  const [totalVisitors, returningVisitors, topCountries, topReferrerTypes, topCampaigns] =
+    await Promise.all([
+      // Total unique visitors
+      prisma.visitor.count({ where }),
+
+      // Returning visitors (more than 1 session)
+      prisma.visitor.count({
+        where: {
+          ...where,
+          totalSessions: { gt: 1 },
+        },
+      }),
+
+      // Top countries
+      prisma.visitor.groupBy({
+        by: ['country'],
+        where,
+        _count: { id: true },
+        orderBy: { _count: { id: 'desc' } },
+        take: 10,
+      }),
+
+      // Top referrer types
+      prisma.visitorSession.groupBy({
+        by: ['referrerType'],
+        where: { shopId },
+        _count: { id: true },
+        orderBy: { _count: { id: 'desc' } },
+        take: 10,
+      }),
+
+      // Top campaigns
+      prisma.visitorSession.groupBy({
+        by: ['utmCampaign'],
+        where: {
+          shopId,
+          utmCampaign: { not: null },
+        },
+        _count: { id: true },
+        orderBy: { _count: { id: 'desc' } },
+        take: 10,
+      }),
+    ])
+
   return {
     totalVisitors,
     returningVisitors,
     newVisitors: totalVisitors - returningVisitors,
-    returningRate: totalVisitors > 0 
-      ? Math.round((returningVisitors / totalVisitors) * 100) 
-      : 0,
-    topCountries: topCountries.map(c => ({
-      country: c.country || "Unknown",
+    returningRate: totalVisitors > 0 ? Math.round((returningVisitors / totalVisitors) * 100) : 0,
+    topCountries: topCountries.map((c) => ({
+      country: c.country || 'Unknown',
       count: c._count.id,
     })),
-    topReferrerTypes: topReferrerTypes.map(r => ({
-      type: r.referrerType || "direct",
+    topReferrerTypes: topReferrerTypes.map((r) => ({
+      type: r.referrerType || 'direct',
       count: r._count.id,
     })),
-    topCampaigns: topCampaigns.map(c => ({
-      campaign: c.utmCampaign || "None",
+    topCampaigns: topCampaigns.map((c) => ({
+      campaign: c.utmCampaign || 'None',
       count: c._count.id,
     })),
-  };
+  }
 }
 
 /**
@@ -435,7 +410,7 @@ export async function updateVisitorConsent(
       consentTimestamp: consentGiven ? new Date() : null,
       degradedMode: !consentGiven,
     },
-  });
+  })
 }
 
 /**
@@ -452,5 +427,5 @@ export async function linkCustomerToVisitor(
       shopifyCustomerId,
       customerEmail,
     },
-  });
+  })
 }

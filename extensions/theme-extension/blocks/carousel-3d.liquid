@@ -34,7 +34,7 @@
     <div class="ul-carousel-track" id="ulTrack-{{ block.id }}">
       {% assign max_products = block.settings.max_products | default: 6 %}
       {% assign collection = block.settings.collection %}
-      
+
       {% if collection and collection.products.size > 0 %}
         {% for p in collection.products limit: max_products %}
         <div class="ul-carousel-card" data-product-id="{{ p.id }}" data-variant-id="{{ p.selected_or_first_available_variant.id }}" data-product-title="{{ p.title | escape }}" data-product-price="{{ p.price | money }}" data-product-image="{{ p.featured_image | image_url: width: 400 }}">

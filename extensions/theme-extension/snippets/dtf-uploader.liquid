@@ -3,7 +3,7 @@
   ============================
   FAZ 1: Core DTF Upload Widget
   FAZ 6: Mobile Experience
-  
+
   Features:
   - Drag & Drop file upload
   - Shopify Variants as DROPDOWN (not grid)
@@ -14,11 +14,11 @@
   - Price display
   - HIDES default Shopify Add to Cart, Checkout, Shop Pay buttons
   - HIDES default Shopify variant selectors
-  
+
   Prepared for:
   - FAZ 2: T-Shirt Modal integration (openTShirtModal event)
   - FAZ 3: Confirmation Screen
-  
+
   Usage: {% render 'dtf-uploader', product: product %}
 {% endcomment %}
 
@@ -35,7 +35,7 @@
 
 {{ 'dtf-uploader.css' | asset_url | stylesheet_tag }}
 
-{% comment %} 
+{% comment %}
   ============================================================================
   ULTRA UNIVERSAL: Shopify Varsayılan Elementlerini Gizleme v2.0
   ============================================================================
@@ -43,7 +43,7 @@
   - Dawn, Debut, Brooklyn, Minimal, Supply, Sense, Taste, Studio
   - Premium temalar: Impulse, Turbo, Prestige, Motion, Symmetry
   - 3rd party temalar: Out of the Sandbox, Pixel Union, vb.
-  
+
   Yöntem:
   1. CSS: Bilinen tüm seçiciler + wildcard attribute selector'lar
   2. JavaScript: MutationObserver ile dinamik gizleme (geç yüklenen elementler için)
@@ -54,7 +54,7 @@
   /* =========================================================================
      MEGA CSS SELECTOR LİSTESİ - Tüm Shopify Temaları
      ========================================================================= */
-  
+
   /* === ADD TO CART BUTONLARI === */
   /* Dawn / OS 2.0 Themes */
   .product-form__submit,
@@ -62,7 +62,7 @@
   .product-form button[type="submit"],
   .product-form input[type="submit"],
   product-form button[type="submit"],
-  
+
   /* Debut / Vintage Themes */
   .product__submit,
   .product-add-to-cart,
@@ -74,11 +74,11 @@
   #add-to-cart,
   #addToCart,
   .AddToCart,
-  
+
   /* Brooklyn / Narrative */
   .product-form__add-button,
   .product-form--add-to-cart,
-  
+
   /* Premium Themes (Turbo, Impulse, etc) */
   .add_to_cart,
   .addtocart,
@@ -86,20 +86,20 @@
   .add-to-cart-button,
   .product__add-to-cart-button,
   .product-submit,
-  
+
   /* Form action based selectors */
   form[action="/cart/add"] > button[type="submit"],
   form[action="/cart/add"] > input[type="submit"],
   form[action="/cart/add"] button.btn,
   form[action*="/cart/add"] button[type="submit"],
   form[action*="/cart/add"] input[type="submit"],
-  
+
   /* Attribute based (catches custom themes) */
   [data-add-to-cart],
   [data-add-to-cart-button],
   button[name="add"],
   button[data-action="add-to-cart"],
-  
+
   /* === DYNAMIC CHECKOUT / SHOP PAY / ACCELERATED CHECKOUT === */
   .shopify-payment-button,
   .shopify-payment-button__button,
@@ -112,34 +112,34 @@
   .dynamic-checkout__content,
   .dynamic-checkout__buttons,
   .dynamic-checkout-buttons,
-  
+
   /* Shop Pay specific */
   .shopify-cleanslate,
   shopify-accelerated-checkout,
   shopify-accelerated-checkout-cart,
   shopify-buy-it-now,
   .shopify-accelerated-checkout,
-  
+
   /* Additional checkout buttons (Apple Pay, Google Pay, etc) */
   .additional-checkout-buttons,
   .additional-checkout-button,
   .additional-payment-buttons,
   #shopify-payment-button,
-  
+
   /* Buy Now / Buy It Now */
   .product-form__buy-now,
   .buy-now-button,
   .buy-it-now,
   .buy-now,
   [data-buy-now],
-  
+
   /* Payment Terms (Affirm, Klarna, etc) */
   .payment-terms,
   .product__payment-terms,
   .afterpay-paragraph,
   #shopify-installments,
   shopify-payment-terms,
-  
+
   /* === VARIANT SELECTORS === */
   /* Dawn / OS 2.0 */
   .product-form__input,
@@ -149,7 +149,7 @@
   variant-selects,
   variant-radios,
   .variant-input-wrapper,
-  
+
   /* Debut / Classic themes */
   .variant-wrapper,
   .variant-input-wrap,
@@ -158,7 +158,7 @@
   .product-single__variants,
   .product-variants,
   .product__variants,
-  
+
   /* Swatch / Color selectors */
   .swatch,
   .swatches,
@@ -166,12 +166,12 @@
   .color-swatch,
   .color-swatches,
   .product-form__swatch,
-  
+
   /* Size selectors */
   .size-selector,
   .size-swatches,
   .product-form__size,
-  
+
   /* Option selectors */
   [data-variant-option],
   [data-option-selector],
@@ -179,21 +179,21 @@
   .product-option,
   .product-options,
   .option-selector,
-  
+
   /* Variant picker components */
   .product-variant-picker,
   .variant-picker,
   .variant-selector,
   variant-picker,
   product-variant-picker,
-  
+
   /* Premium theme selectors */
   .product__option,
   .product__options,
   .product-block-options,
   fieldset.product-form__input,
   .js-variant-selector,
-  
+
   /* === QUANTITY SELECTORS (we have our own) === */
   .product-form__quantity,
   .quantity-selector,
@@ -205,19 +205,19 @@
   .quantity-input,
   .quantity-controls,
   [data-quantity-wrapper],
-  
+
   /* === PRODUCT FORM (if needed to hide entire form) === */
   /* Uncomment below if you want to hide the entire form:
   product-form,
   .product-form,
   .product-single__form,
   */
-  
+
   /* === INSTALLMENT/PAYMENT TERMS === */
   .installment,
   .product-form__installment,
   #installment-price,
-  
+
   /* === GIFT CARD RECIPIENT (if enabled) === */
   .product-form__gift-card,
   .gift-card-recipient {
@@ -235,7 +235,7 @@
     left: -9999px !important;
     width: 0 !important;
   }
-  
+
   /* === SHADOW DOM / WEB COMPONENTS İÇİN EKSTRA === */
   /* Bazı temalar Shadow DOM kullanıyor, ::part ile erişim */
   shopify-payment-button::part(button),
@@ -244,14 +244,14 @@
   }
 </style>
 
-{% comment %} 
+{% comment %}
   JavaScript ile Dinamik Gizleme
   MutationObserver kullanarak geç yüklenen elementleri de yakalar
 {% endcomment %}
 <script>
 (function() {
   'use strict';
-  
+
   // Gizlenecek element seçicileri (CSS'te olmayanlar veya dinamik olanlar)
   const HIDE_SELECTORS = [
     // Add to Cart
@@ -260,13 +260,13 @@
     '.product-form button[type="submit"]',
     'form[action="/cart/add"] button',
     'form[action*="/cart/add"] button[type="submit"]',
-    
+
     // Shopify Payment Buttons
     '.shopify-payment-button',
     'shopify-payment-button',
     'shopify-accelerated-checkout',
     '[data-shopify="payment-button"]',
-    
+
     // Variant Selectors
     'variant-selects',
     'variant-radios',
@@ -274,12 +274,12 @@
     '.variant-wrapper',
     '.product-form__input',
     '.selector-wrapper',
-    
+
     // Quantity
     'quantity-input',
     '.product-form__quantity'
   ];
-  
+
   // Element'i gizle
   function hideElement(el) {
     if (el && !el.dataset.ulHidden) {
@@ -287,7 +287,7 @@
       el.dataset.ulHidden = 'true';
     }
   }
-  
+
   // Tüm eşleşen elementleri bul ve gizle
   function hideAllMatching() {
     HIDE_SELECTORS.forEach(selector => {
@@ -297,7 +297,7 @@
         // Invalid selector, skip
       }
     });
-    
+
     // Özel durumlar: Text içeriğine göre buton bulma
     document.querySelectorAll('button, input[type="submit"]').forEach(btn => {
       const text = (btn.textContent || btn.value || '').toLowerCase();
@@ -315,7 +315,7 @@
         }
       }
     });
-    
+
     // Shopify accelerated checkout iframes
     document.querySelectorAll('iframe[src*="shopify"]').forEach(iframe => {
       if (iframe.src.includes('payment') || iframe.src.includes('checkout')) {
@@ -323,21 +323,21 @@
       }
     });
   }
-  
+
   // Sayfa yüklendiğinde çalıştır
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', hideAllMatching);
   } else {
     hideAllMatching();
   }
-  
+
   // Window load'da tekrar çalıştır (lazy loaded için)
   window.addEventListener('load', function() {
     setTimeout(hideAllMatching, 100);
     setTimeout(hideAllMatching, 500);
     setTimeout(hideAllMatching, 1000);
   });
-  
+
   // MutationObserver: DOM değişikliklerini izle
   const observer = new MutationObserver(function(mutations) {
     let shouldHide = false;
@@ -352,7 +352,7 @@
       window._ulHideTimeout = setTimeout(hideAllMatching, 50);
     }
   });
-  
+
   // Body'yi izlemeye başla
   if (document.body) {
     observer.observe(document.body, {
@@ -367,18 +367,18 @@
       });
     });
   }
-  
+
   // Global erişim için (debug amaçlı)
   window.ULHideShopifyDefaults = {
     hide: hideAllMatching,
     selectors: HIDE_SELECTORS
   };
-  
+
   console.log('[UL] Shopify default elements hiding system initialized');
 })();
 </script>
 
-<div 
+<div
   id="ul-dtf-{{ product.id }}"
   class="ul-dtf-uploader"
   data-api-base="{{ api_base }}"
@@ -403,7 +403,7 @@
 
   <!-- Main Content -->
   <div id="ul-content-{{ product.id }}" style="display: none;">
-    
+
     <!-- STEP 1: Upload Design -->
     <div class="ul-section" id="ul-upload-section-{{ product.id }}">
       <div class="ul-section-header ul-section-header--centered">
@@ -471,14 +471,14 @@
         <div class="ul-option-dropdown-group" data-option-index="{{ forloop.index0 }}">
           <label class="ul-option-dropdown-label">{{ option.name }}</label>
           <div class="ul-option-dropdown-wrapper">
-            <select 
-              class="ul-option-dropdown" 
+            <select
+              class="ul-option-dropdown"
               id="ul-option-{{ product.id }}-{{ forloop.index0 }}"
               data-option-index="{{ forloop.index0 }}"
               data-product-id="{{ product.id }}"
             >
               {% for value in option.values %}
-                <option 
+                <option
                   value="{{ value | escape }}"
                   {% if option.selected_value == value %}selected{% endif %}
                 >
@@ -560,9 +560,9 @@
     <!-- Action Buttons -->
     <div class="ul-buttons-stack">
       <!-- T-Shirt Button (conditional) -->
-      <button 
-        type="button" 
-        class="ul-btn ul-btn-secondary" 
+      <button
+        type="button"
+        class="ul-btn ul-btn-secondary"
         id="ul-tshirt-btn-{{ product.id }}"
         style="display: none;"
         disabled
@@ -572,9 +572,9 @@
       </button>
 
       <!-- Add to Cart Button -->
-      <button 
-        type="button" 
-        class="ul-btn ul-btn-primary" 
+      <button
+        type="button"
+        class="ul-btn ul-btn-primary"
         id="ul-add-cart-{{ product.id }}"
         disabled
       >

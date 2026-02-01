@@ -1,57 +1,70 @@
-import type { LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node";
-import { json } from "@remix-run/node";
-import { useLoaderData, Form, useNavigation } from "@remix-run/react";
+import type { ActionFunctionArgs, LoaderFunctionArgs } from '@remix-run/node'
+import { json } from '@remix-run/node'
+import { Form, useLoaderData, useNavigation } from '@remix-run/react'
 import {
-  Page, Layout, Card, Text, BlockStack, InlineStack,
-  Button, Banner, Badge, Box, Divider, DataTable, EmptyState,
-  Modal, TextField, Spinner
-} from "@shopify/polaris";
-import { useState, useCallback } from "react";
-import { authenticate } from "~/shopify.server";
-import prisma from "~/lib/prisma.server";
+  Badge,
+  Banner,
+  BlockStack,
+  Box,
+  Button,
+  Card,
+  DataTable,
+  Divider,
+  EmptyState,
+  InlineStack,
+  Layout,
+  Modal,
+  Page,
+  Spinner,
+  Text,
+  TextField,
+} from '@shopify/polaris'
+import { useCallback, useState } from 'react'
+import prisma from '~/lib/prisma.server'
+import { authenticate } from '~/shopify.server'
 
 // Fixed commission per order: $0.015 (1.5 cents)
-const COMMISSION_PER_ORDER = 0.10;
-const PAYPAL_EMAIL = "payments@customizerapp.dev"; // PayPal hesabı
+const COMMISSION_PER_ORDER = 0.1
+const PAYPAL_EMAIL = 'payments@customizerapp.dev' // PayPal hesabı
 
 interface CommissionSummary {
-  totalCommission: number;
-  pendingAmount: number;
-  paidAmount: number;
-  totalOrders: number;
-  pendingOrders: number;
-  paidOrders: number;
+  totalCommission: number
+  pendingAmount: number
+  paidAmount: number
+  totalOrders: number
+  pendingOrders: number
+  paidOrders: number
 }
 
 interface OrderRecord {
-  orderId: string;
-  orderNumber: string | null;
-  commissionAmount: number;
-  status: string; // pending or paid
-  createdAt: string;
-  paidAt: string | null;
-  paymentRef: string | null;
+  orderId: string
+  orderNumber: string | null
+  commissionAmount: number
+  status: string // pending or paid
+  createdAt: string
+  paidAt: string | null
+  paymentRef: string | null
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const { session } = await authenticate.admin(request);
-  const shopDomain = session.shop;
+  const { session } = await authenticate.admin(request)
+  const shopDomain = session.shop
 
   let shop = await prisma.shop.findUnique({
     where: { shopDomain },
-  });
+  })
 
   if (!shop) {
     shop = await prisma.shop.create({
       data: {
         shopDomain,
-        accessToken: session.accessToken || "",
-        plan: "commission",
-        billingStatus: "active",
-        storageProvider: "bunny",
+        accessToken: session.accessToken || '',
+        plan: 'commission',
+        billingStatus: 'active',
+        storageProvider: 'bunny',
         settings: {},
       },
-    });
+    })
   }
 
   // Get ALL unique orders from OrderLink table (this is the source of truth)
@@ -62,17 +75,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
       orderId: true,
       createdAt: true,
     },
-    orderBy: { createdAt: "desc" },
-  });
+    orderBy: { createdAt: 'desc' },
+  })
 
   // Get unique order IDs (one commission per order, not per upload)
-  const uniqueOrderIds = [...new Set(orderLinks.map(ol => ol.orderId))];
-  
+  const uniqueOrderIds = [...new Set(orderLinks.map((ol) => ol.orderId))]
+
   // Create a map of orderId -> earliest createdAt
-  const orderDateMap = new Map<string, Date>();
+  const orderDateMap = new Map<string, Date>()
   for (const ol of orderLinks) {
     if (!orderDateMap.has(ol.orderId) || ol.createdAt < orderDateMap.get(ol.orderId)!) {
-      orderDateMap.set(ol.orderId, ol.createdAt);
+      orderDateMap.set(ol.orderId, ol.createdAt)
     }
   }
 
@@ -86,17 +99,24 @@ export async function loader({ request }: LoaderFunctionArgs) {
       paidAt: true,
       paymentRef: true,
     },
-  });
-  
+  })
+
   // Create maps for commission info
-  const commissionInfo = new Map(allCommissions.map(c => [c.orderId, {
-    orderNumber: c.orderNumber,
-    status: c.status,
-    paidAt: c.paidAt,
-    paymentRef: c.paymentRef,
-  }]));
-  
-  const paidOrderIds = new Set(allCommissions.filter(c => c.status === "paid").map(c => c.orderId));
+  const commissionInfo = new Map(
+    allCommissions.map((c) => [
+      c.orderId,
+      {
+        orderNumber: c.orderNumber,
+        status: c.status,
+        paidAt: c.paidAt,
+        paymentRef: c.paymentRef,
+      },
+    ])
+  )
+
+  const paidOrderIds = new Set(
+    allCommissions.filter((c) => c.status === 'paid').map((c) => c.orderId)
+  )
 
   // Calculate total transfer size from uploads
   const uploadStats = await prisma.uploadItem.aggregate({
@@ -109,33 +129,33 @@ export async function loader({ request }: LoaderFunctionArgs) {
       fileSize: true,
     },
     _count: true,
-  });
-  
-  const totalTransferBytes = uploadStats._sum.fileSize || 0;
-  const totalTransferGB = Number(totalTransferBytes) / (1024 * 1024 * 1024); // Convert to GB
+  })
+
+  const totalTransferBytes = uploadStats._sum.fileSize || 0
+  const totalTransferGB = Number(totalTransferBytes) / (1024 * 1024 * 1024) // Convert to GB
 
   // Build records list
-  const records: OrderRecord[] = uniqueOrderIds.map(orderId => {
-    const commission = commissionInfo.get(orderId);
-    const isPaid = paidOrderIds.has(orderId);
-    const createdAt = orderDateMap.get(orderId) || new Date();
-    
+  const records: OrderRecord[] = uniqueOrderIds.map((orderId) => {
+    const commission = commissionInfo.get(orderId)
+    const isPaid = paidOrderIds.has(orderId)
+    const createdAt = orderDateMap.get(orderId) || new Date()
+
     return {
       orderId,
       orderNumber: commission?.orderNumber || `#${orderId.slice(-6)}`, // Use real orderNumber from Commission
       commissionAmount: COMMISSION_PER_ORDER,
-      status: isPaid ? "paid" : "pending",
+      status: isPaid ? 'paid' : 'pending',
       createdAt: createdAt.toISOString(),
       paidAt: commission?.paidAt?.toISOString() || null,
       paymentRef: commission?.paymentRef || null,
-    };
-  });
+    }
+  })
 
   // Calculate summary
-  const totalOrders = uniqueOrderIds.length;
-  const paidOrders = paidOrderIds.size;
-  const pendingOrders = totalOrders - paidOrders;
-  
+  const totalOrders = uniqueOrderIds.length
+  const paidOrders = paidOrderIds.size
+  const pendingOrders = totalOrders - paidOrders
+
   const summary: CommissionSummary = {
     totalCommission: totalOrders * COMMISSION_PER_ORDER,
     pendingAmount: pendingOrders * COMMISSION_PER_ORDER,
@@ -143,7 +163,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     totalOrders,
     pendingOrders,
     paidOrders,
-  };
+  }
 
   return json({
     shopDomain,
@@ -153,35 +173,35 @@ export async function loader({ request }: LoaderFunctionArgs) {
     totalFiles: uploadStats._count,
     commissionPerOrder: COMMISSION_PER_ORDER,
     paypalEmail: PAYPAL_EMAIL,
-  });
+  })
 }
 
 export async function action({ request }: ActionFunctionArgs) {
-  const { session } = await authenticate.admin(request);
-  const shopDomain = session.shop;
+  const { session } = await authenticate.admin(request)
+  const shopDomain = session.shop
 
   const shop = await prisma.shop.findUnique({
     where: { shopDomain },
-  });
+  })
 
   if (!shop) {
-    return json({ error: "Shop not found" }, { status: 404 });
+    return json({ error: 'Shop not found' }, { status: 404 })
   }
 
-  const formData = await request.formData();
-  const actionType = formData.get("_action") as string;
+  const formData = await request.formData()
+  const actionType = formData.get('_action') as string
 
   // Mark orders as paid - creates/updates commission records
-  if (actionType === "mark_paid") {
-    const paymentRef = formData.get("paymentRef") as string;
-    const orderIds = formData.get("orderIds") as string;
-    
+  if (actionType === 'mark_paid') {
+    const paymentRef = formData.get('paymentRef') as string
+    const orderIds = formData.get('orderIds') as string
+
     if (!paymentRef || !orderIds) {
-      return json({ error: "Payment reference and order IDs required" }, { status: 400 });
+      return json({ error: 'Payment reference and order IDs required' }, { status: 400 })
     }
 
-    const ids = orderIds.split(",").filter(Boolean);
-    
+    const ids = orderIds.split(',').filter(Boolean)
+
     // Create or update commission records for each order
     for (const orderId of ids) {
       await prisma.commission.upsert({
@@ -196,27 +216,27 @@ export async function action({ request }: ActionFunctionArgs) {
           orderId: orderId,
           orderNumber: `#${orderId.slice(-6)}`,
           orderTotal: 0, // Not tracking order total anymore
-          orderCurrency: "USD",
+          orderCurrency: 'USD',
           commissionRate: 0,
           commissionAmount: COMMISSION_PER_ORDER,
-          status: "paid",
+          status: 'paid',
           paidAt: new Date(),
           paymentRef: paymentRef,
         },
         update: {
-          status: "paid",
+          status: 'paid',
           paidAt: new Date(),
           paymentRef: paymentRef,
         },
-      });
+      })
     }
 
     // Audit log
     await prisma.auditLog.create({
       data: {
         shopId: shop.id,
-        action: "commissions_marked_paid",
-        resourceType: "commission",
+        action: 'commissions_marked_paid',
+        resourceType: 'commission',
         resourceId: paymentRef,
         metadata: {
           orderIds: ids,
@@ -225,64 +245,72 @@ export async function action({ request }: ActionFunctionArgs) {
           totalAmount: ids.length * COMMISSION_PER_ORDER,
         },
       },
-    });
+    })
 
-    return json({ success: true, message: `${ids.length} orders marked as paid` });
+    return json({ success: true, message: `${ids.length} orders marked as paid` })
   }
 
-  return json({ error: "Unknown action" }, { status: 400 });
+  return json({ error: 'Unknown action' }, { status: 400 })
 }
 
 export default function BillingPage() {
-  const { shopDomain, summary, records, totalTransferGB, totalFiles, commissionPerOrder, paypalEmail } = useLoaderData<typeof loader>();
-  const navigation = useNavigation();
-  const isSubmitting = navigation.state === "submitting";
+  const {
+    shopDomain,
+    summary,
+    records,
+    totalTransferGB,
+    totalFiles,
+    commissionPerOrder,
+    paypalEmail,
+  } = useLoaderData<typeof loader>()
+  const navigation = useNavigation()
+  const isSubmitting = navigation.state === 'submitting'
 
   // Payment modal state
-  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
-  const [paymentRef, setPaymentRef] = useState("");
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false)
+  const [paymentRef, setPaymentRef] = useState('')
 
-  const handlePaymentModalOpen = useCallback(() => setPaymentModalOpen(true), []);
+  const handlePaymentModalOpen = useCallback(() => setPaymentModalOpen(true), [])
   const handlePaymentModalClose = useCallback(() => {
-    setPaymentModalOpen(false);
-    setPaymentRef("");
-  }, []);
+    setPaymentModalOpen(false)
+    setPaymentRef('')
+  }, [])
 
   // Format date for display
   const formatDate = (iso: string) => {
-    return new Date(iso).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  };
+    return new Date(iso).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    })
+  }
 
   // Get pending order IDs for payment
   const pendingOrderIds = records
-    .filter(r => r.status === "pending")
-    .map(r => r.orderId)
-    .join(",");
+    .filter((r) => r.status === 'pending')
+    .map((r) => r.orderId)
+    .join(',')
 
   // DataTable rows - simplified without order total
-  const tableRows = records.map(r => [
+  const tableRows = records.map((r) => [
     r.orderNumber,
     `$${r.commissionAmount.toFixed(3)}`,
-    <Badge key={r.orderId} tone={r.status === "paid" ? "success" : "warning"}>
-      {r.status === "paid" ? "Paid" : "Pending"}
+    <Badge key={r.orderId} tone={r.status === 'paid' ? 'success' : 'warning'}>
+      {r.status === 'paid' ? 'Paid' : 'Pending'}
     </Badge>,
     formatDate(r.createdAt),
-    r.paidAt ? formatDate(r.paidAt) : "-",
-  ]);
+    r.paidAt ? formatDate(r.paidAt) : '-',
+  ])
 
   return (
-    <Page title="Billing & Commissions" backAction={{ content: "Dashboard", url: "/app" }}>
+    <Page title="Billing & Commissions" backAction={{ content: 'Dashboard', url: '/app' }}>
       <Layout>
         {/* Commission Info */}
         <Layout.Section>
           <Banner tone="info">
             <p>
-              <strong>Commission:</strong> ${commissionPerOrder.toFixed(3)} per order with Upload Lift items (fixed fee).
-              Payments are collected manually via PayPal.
+              <strong>Commission:</strong> ${commissionPerOrder.toFixed(3)} per order with Upload
+              Lift items (fixed fee). Payments are collected manually via PayPal.
             </p>
           </Banner>
         </Layout.Section>
@@ -294,8 +322,12 @@ export default function BillingPage() {
             <Box width="25%">
               <Card>
                 <BlockStack gap="200">
-                  <Text as="p" variant="bodySm" tone="subdued">Total Commission</Text>
-                  <Text as="p" variant="headingXl">${summary.totalCommission.toFixed(2)}</Text>
+                  <Text as="p" variant="bodySm" tone="subdued">
+                    Total Commission
+                  </Text>
+                  <Text as="p" variant="headingXl">
+                    ${summary.totalCommission.toFixed(2)}
+                  </Text>
                   <Text as="p" variant="bodySm" tone="subdued">
                     {summary.totalOrders} orders
                   </Text>
@@ -307,7 +339,9 @@ export default function BillingPage() {
             <Box width="25%">
               <Card>
                 <BlockStack gap="200">
-                  <Text as="p" variant="bodySm" tone="subdued">Pending Payment</Text>
+                  <Text as="p" variant="bodySm" tone="subdued">
+                    Pending Payment
+                  </Text>
                   <Text as="p" variant="headingXl" tone="critical">
                     ${summary.pendingAmount.toFixed(2)}
                   </Text>
@@ -322,7 +356,9 @@ export default function BillingPage() {
             <Box width="25%">
               <Card>
                 <BlockStack gap="200">
-                  <Text as="p" variant="bodySm" tone="subdued">Paid</Text>
+                  <Text as="p" variant="bodySm" tone="subdued">
+                    Paid
+                  </Text>
                   <Text as="p" variant="headingXl" tone="success">
                     ${summary.paidAmount.toFixed(2)}
                   </Text>
@@ -337,10 +373,12 @@ export default function BillingPage() {
             <Box width="25%">
               <Card>
                 <BlockStack gap="200">
-                  <Text as="p" variant="bodySm" tone="subdued">Total Transfer</Text>
+                  <Text as="p" variant="bodySm" tone="subdued">
+                    Total Transfer
+                  </Text>
                   <Text as="p" variant="headingXl">
-                    {totalTransferGB >= 1 
-                      ? `${totalTransferGB.toFixed(2)} GB` 
+                    {totalTransferGB >= 1
+                      ? `${totalTransferGB.toFixed(2)} GB`
                       : `${(totalTransferGB * 1024).toFixed(0)} MB`}
                   </Text>
                   <Text as="p" variant="bodySm" tone="subdued">
@@ -359,7 +397,9 @@ export default function BillingPage() {
               <BlockStack gap="400">
                 <InlineStack align="space-between">
                   <BlockStack gap="100">
-                    <Text as="h2" variant="headingMd">Payment Due</Text>
+                    <Text as="h2" variant="headingMd">
+                      Payment Due
+                    </Text>
                     <Text as="p" variant="bodyMd">
                       Please send <strong>${summary.pendingAmount.toFixed(2)}</strong> via PayPal
                     </Text>
@@ -374,16 +414,28 @@ export default function BillingPage() {
                 <Box background="bg-surface-secondary" padding="400" borderRadius="200">
                   <BlockStack gap="200">
                     <InlineStack gap="200">
-                      <Text as="p" variant="bodyMd" fontWeight="semibold">PayPal Email:</Text>
-                      <Text as="p" variant="bodyMd">{paypalEmail}</Text>
+                      <Text as="p" variant="bodyMd" fontWeight="semibold">
+                        PayPal Email:
+                      </Text>
+                      <Text as="p" variant="bodyMd">
+                        {paypalEmail}
+                      </Text>
                     </InlineStack>
                     <InlineStack gap="200">
-                      <Text as="p" variant="bodyMd" fontWeight="semibold">Amount:</Text>
-                      <Text as="p" variant="bodyMd">${summary.pendingAmount.toFixed(2)} USD</Text>
+                      <Text as="p" variant="bodyMd" fontWeight="semibold">
+                        Amount:
+                      </Text>
+                      <Text as="p" variant="bodyMd">
+                        ${summary.pendingAmount.toFixed(2)} USD
+                      </Text>
                     </InlineStack>
                     <InlineStack gap="200">
-                      <Text as="p" variant="bodyMd" fontWeight="semibold">Reference:</Text>
-                      <Text as="p" variant="bodyMd">{shopDomain}</Text>
+                      <Text as="p" variant="bodyMd" fontWeight="semibold">
+                        Reference:
+                      </Text>
+                      <Text as="p" variant="bodyMd">
+                        {shopDomain}
+                      </Text>
                     </InlineStack>
                   </BlockStack>
                 </Box>
@@ -400,19 +452,23 @@ export default function BillingPage() {
         <Layout.Section>
           <Card>
             <BlockStack gap="400">
-              <Text as="h2" variant="headingMd">Commission History</Text>
-              
+              <Text as="h2" variant="headingMd">
+                Commission History
+              </Text>
+
               {records.length === 0 ? (
                 <EmptyState
                   heading="No commissions yet"
                   image="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"
                 >
-                  <p>When orders with Upload Lift items are placed, commissions will appear here.</p>
+                  <p>
+                    When orders with Upload Lift items are placed, commissions will appear here.
+                  </p>
                 </EmptyState>
               ) : (
                 <DataTable
-                  columnContentTypes={["text", "text", "text", "text", "text"]}
-                  headings={["Order", "Commission", "Status", "Order Date", "Paid Date"]}
+                  columnContentTypes={['text', 'text', 'text', 'text', 'text']}
+                  headings={['Order', 'Commission', 'Status', 'Order Date', 'Paid Date']}
                   rows={tableRows}
                 />
               )}
@@ -424,19 +480,23 @@ export default function BillingPage() {
         <Layout.Section>
           <Card>
             <BlockStack gap="400">
-              <Text as="h3" variant="headingMd">How Commission Billing Works</Text>
+              <Text as="h3" variant="headingMd">
+                How Commission Billing Works
+              </Text>
               <BlockStack gap="200">
                 <Text as="p" variant="bodyMd">
                   1. <strong>Order Placed</strong> - Customer places order with Upload Lift items
                 </Text>
                 <Text as="p" variant="bodyMd">
-                  2. <strong>Commission Recorded</strong> - Fixed fee of ${commissionPerOrder.toFixed(3)} per order
+                  2. <strong>Commission Recorded</strong> - Fixed fee of $
+                  {commissionPerOrder.toFixed(3)} per order
                 </Text>
                 <Text as="p" variant="bodyMd">
                   3. <strong>Monthly Payment</strong> - Send pending commission via PayPal
                 </Text>
                 <Text as="p" variant="bodyMd">
-                  4. <strong>Confirmation</strong> - Click "I've Made Payment" and enter PayPal transaction ID
+                  4. <strong>Confirmation</strong> - Click "I've Made Payment" and enter PayPal
+                  transaction ID
                 </Text>
               </BlockStack>
             </BlockStack>
@@ -444,9 +504,7 @@ export default function BillingPage() {
         </Layout.Section>
 
         <Layout.Section>
-          <Banner tone="info">
-            Questions about billing? Contact support@customizerapp.dev
-          </Banner>
+          <Banner tone="info">Questions about billing? Contact support@customizerapp.dev</Banner>
         </Layout.Section>
       </Layout>
 
@@ -456,13 +514,13 @@ export default function BillingPage() {
         onClose={handlePaymentModalClose}
         title="Confirm Payment"
         primaryAction={{
-          content: isSubmitting ? "Submitting..." : "Confirm Payment",
+          content: isSubmitting ? 'Submitting...' : 'Confirm Payment',
           disabled: !paymentRef || isSubmitting,
           submit: true,
         }}
         secondaryActions={[
           {
-            content: "Cancel",
+            content: 'Cancel',
             onAction: handlePaymentModalClose,
           },
         ]}
@@ -471,12 +529,14 @@ export default function BillingPage() {
           <Modal.Section>
             <BlockStack gap="400">
               <Text as="p" variant="bodyMd">
-                Enter your PayPal transaction ID to confirm payment of <strong>${summary.pendingAmount.toFixed(2)}</strong> for {summary.pendingOrders} orders.
+                Enter your PayPal transaction ID to confirm payment of{' '}
+                <strong>${summary.pendingAmount.toFixed(2)}</strong> for {summary.pendingOrders}{' '}
+                orders.
               </Text>
-              
+
               <input type="hidden" name="_action" value="mark_paid" />
               <input type="hidden" name="orderIds" value={pendingOrderIds} />
-              
+
               <TextField
                 label="PayPal Transaction ID"
                 name="paymentRef"
@@ -490,7 +550,9 @@ export default function BillingPage() {
               {isSubmitting && (
                 <InlineStack gap="200" align="center">
                   <Spinner size="small" />
-                  <Text as="p" variant="bodySm">Processing...</Text>
+                  <Text as="p" variant="bodySm">
+                    Processing...
+                  </Text>
                 </InlineStack>
               )}
             </BlockStack>
@@ -498,5 +560,5 @@ export default function BillingPage() {
         </Form>
       </Modal>
     </Page>
-  );
+  )
 }
