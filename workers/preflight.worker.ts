@@ -450,7 +450,14 @@ const preflightWorker = new Worker<PreflightJobData>(
       await job.updateProgress(100)
       
       const durationMs = Date.now() - jobStartTime
-      workerLog.info('JOB_COMPLETED', {\n        jobId: job.id,\n        uploadId,\n        itemId,\n        result: result.overall,\n        durationMs,\n        thumbnailKey: finalThumbnailKey?.substring(0, 60),\n      })
+      workerLog.info('JOB_COMPLETED', {
+        jobId: job.id,
+        uploadId,
+        itemId,
+        result: result.overall,
+        durationMs,
+        thumbnailKey: finalThumbnailKey?.substring(0, 60),
+      })
 
       return {
         status: result.overall,
