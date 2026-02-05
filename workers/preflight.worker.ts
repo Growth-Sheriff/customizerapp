@@ -30,6 +30,151 @@ const workerLog = {
   },
 }
 
+// PNG Magic bytes for validation
+const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+
+// Validate PNG file has correct header
+async function validatePngFile(filePath: string): Promise<{ valid: boolean; error?: string }> {
+  try {
+    const stats = await fs.stat(filePath)
+    if (stats.size < 100) {
+      return { valid: false, error: `File too small: ${stats.size} bytes` }
+    }
+
+    const fd = await fs.open(filePath, 'r')
+    const buffer = Buffer.alloc(8)
+    await fd.read(buffer, 0, 8, 0)
+    await fd.close()
+
+    if (!buffer.equals(PNG_MAGIC)) {
+      return { valid: false, error: 'Invalid PNG magic bytes (IHDR corruption)' }
+    }
+
+    return { valid: true }
+  } catch (error) {
+    return { valid: false, error: error instanceof Error ? error.message : 'Unknown error' }
+  }
+}
+
+// Validate downloaded file is not corrupted
+async function validateDownloadedFile(filePath: string, expectedMinSize: number = 100): Promise<{ valid: boolean; size: number; error?: string }> {
+  try {
+    const stats = await fs.stat(filePath)
+    if (stats.size < expectedMinSize) {
+      return { valid: false, size: stats.size, error: `Downloaded file too small: ${stats.size} bytes (expected >= ${expectedMinSize})` }
+    }
+    return { valid: true, size: stats.size }
+  } catch (error) {
+    return { valid: false, size: 0, error: `File not found or unreadable: ${error instanceof Error ? error.message : 'Unknown'}` }
+  }
+}
+
+// Get file type extension for placeholder
+function getFileTypeLabel(detectedType: string | null, storageKey: string): string {
+  if (detectedType === 'application/postscript') {
+    const ext = path.extname(storageKey).toLowerCase()
+    return ext === '.ai' ? 'AI' : 'EPS'
+  }
+  if (detectedType === 'application/pdf') return 'PDF'
+  if (detectedType === 'image/vnd.adobe.photoshop' || detectedType === 'application/x-photoshop') return 'PSD'
+  if (detectedType === 'image/tiff') return 'TIFF'
+  return path.extname(storageKey).replace('.', '').toUpperCase() || 'FILE'
+}
+
+// Create placeholder thumbnail when conversion fails
+async function createPlaceholderThumbnail(
+  outputPath: string,
+  fileType: string,
+  size: number = 400
+): Promise<boolean> {
+  try {
+    // Create a styled placeholder with file type label
+    const { exec } = await import('child_process')
+    const { promisify } = await import('util')
+    const execAsync = promisify(exec)
+
+    const cmd = `convert -size ${size}x${size} xc:"#f3f4f6" -gravity center -pointsize 64 -fill "#6b7280" -font "DejaVu-Sans-Bold" -annotate 0 "${fileType}" -quality 85 "${outputPath}"`
+    
+    await execAsync(cmd, { timeout: 10000 })
+    
+    const stats = await fs.stat(outputPath).catch(() => null)
+    if (stats && stats.size > 100) {
+      workerLog.info('PLACEHOLDER_CREATED', { fileType, outputPath: outputPath.substring(0, 50) })
+      return true
+    }
+    return false
+  } catch (error) {
+    workerLog.warn('PLACEHOLDER_FAILED', { fileType, error: error instanceof Error ? error.message : String(error) })
+    return false
+  }
+}
+
+// Safe file conversion with validation and graceful fallback
+interface ConversionResult {
+  success: boolean
+  processedPath: string
+  usedPlaceholder: boolean
+  error?: string
+}
+
+async function safeConvertFile(
+  originalPath: string,
+  tempDir: string,
+  detectedType: string | null,
+  storageKey: string,
+  convertFn: () => Promise<void>
+): Promise<ConversionResult> {
+  const pngPath = path.join(tempDir, 'converted.png')
+  const fileTypeLabel = getFileTypeLabel(detectedType, storageKey)
+  
+  try {
+    workerLog.info('CONVERSION_STARTED', { fileType: fileTypeLabel, detectedType })
+    
+    // Attempt conversion
+    await convertFn()
+    
+    // Validate the converted PNG
+    const validation = await validatePngFile(pngPath)
+    
+    if (!validation.valid) {
+      workerLog.warn('CONVERSION_INVALID_PNG', {
+        fileType: fileTypeLabel,
+        error: validation.error,
+      })
+      
+      // PNG is invalid - use original file for what we can
+      return {
+        success: false,
+        processedPath: originalPath,
+        usedPlaceholder: false,
+        error: validation.error,
+      }
+    }
+    
+    workerLog.info('CONVERSION_SUCCESS', { fileType: fileTypeLabel })
+    return {
+      success: true,
+      processedPath: pngPath,
+      usedPlaceholder: false,
+    }
+    
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error)
+    workerLog.warn('CONVERSION_FAILED', {
+      fileType: fileTypeLabel,
+      error: errorMsg,
+    })
+    
+    // Conversion failed - return original path, checks will use defaults
+    return {
+      success: false,
+      processedPath: originalPath,
+      usedPlaceholder: false,
+      error: errorMsg,
+    }
+  }
+}
+
 // Initialize Prisma
 const prisma = new PrismaClient()
 
@@ -300,6 +445,25 @@ const preflightWorker = new Worker<PreflightJobData>(
         await downloadFile(client, storageKey, originalPath)
       }
 
+      await job.updateProgress(15)
+
+      // Validate downloaded file is not corrupted or partial
+      const downloadValidation = await validateDownloadedFile(originalPath, 100)
+      if (!downloadValidation.valid) {
+        workerLog.error('DOWNLOAD_VALIDATION_FAILED', {
+          itemId,
+          storageKey: storageKey.substring(0, 60),
+          error: downloadValidation.error,
+          size: downloadValidation.size,
+        })
+        throw new Error(`Downloaded file validation failed: ${downloadValidation.error}`)
+      }
+
+      workerLog.info('DOWNLOAD_VALIDATED', {
+        itemId,
+        size: downloadValidation.size,
+      })
+
       await job.updateProgress(20)
 
       // Get file stats
@@ -318,52 +482,142 @@ const preflightWorker = new Worker<PreflightJobData>(
       // 1. Generating thumbnail preview
       // 2. Running DPI/dimension checks
       // The converted file is NOT uploaded - it's temporary
+      // 
+      // GRACEFUL DEGRADATION: If conversion fails, we continue with:
+      // - Original file preserved (merchant can always download)
+      // - Placeholder thumbnail used
+      // - Preflight status = 'warning' (not error)
       let processedPath = originalPath
+      let conversionFailed = false
+      let conversionError: string | undefined
+      let usePlaceholderThumbnail = false
 
       // Get S3 client for remote storage (reuse for uploads)
       const client = storageProvider !== 'local' ? getStorageClient(storageProvider) : null
 
       if (detectedType === 'application/pdf') {
-        console.log(`[Preflight] Converting PDF to PNG for analysis (original preserved)`)
-        const pngPath = path.join(tempDir, 'converted.png')
-        await convertPdfToPng(originalPath, pngPath, 300)
-        processedPath = pngPath
-        // NO upload of converted file - original PDF is preserved for merchant
+        const result = await safeConvertFile(
+          originalPath,
+          tempDir,
+          detectedType,
+          storageKey,
+          async () => {
+            const pngPath = path.join(tempDir, 'converted.png')
+            await convertPdfToPng(originalPath, pngPath, 300)
+          }
+        )
+        processedPath = result.processedPath
+        conversionFailed = !result.success
+        conversionError = result.error
+        usePlaceholderThumbnail = conversionFailed
       } else if (detectedType === 'application/postscript') {
-        console.log(`[Preflight] Converting AI/EPS to PNG for analysis (original preserved)`)
-        const pngPath = path.join(tempDir, 'converted.png')
-        await convertEpsToPng(originalPath, pngPath, 300)
-        processedPath = pngPath
-        // NO upload of converted file - original AI/EPS is preserved for merchant
+        const result = await safeConvertFile(
+          originalPath,
+          tempDir,
+          detectedType,
+          storageKey,
+          async () => {
+            const pngPath = path.join(tempDir, 'converted.png')
+            await convertEpsToPng(originalPath, pngPath, 300)
+          }
+        )
+        processedPath = result.processedPath
+        conversionFailed = !result.success
+        conversionError = result.error
+        usePlaceholderThumbnail = conversionFailed
       } else if (detectedType === 'image/tiff') {
-        console.log(`[Preflight] Converting TIFF to PNG for analysis (original preserved)`)
-        const pngPath = path.join(tempDir, 'converted.png')
-        await convertTiffToPng(originalPath, pngPath)
-        processedPath = pngPath
-        // NO upload of converted file - original TIFF is preserved for merchant
+        const result = await safeConvertFile(
+          originalPath,
+          tempDir,
+          detectedType,
+          storageKey,
+          async () => {
+            const pngPath = path.join(tempDir, 'converted.png')
+            await convertTiffToPng(originalPath, pngPath)
+          }
+        )
+        processedPath = result.processedPath
+        conversionFailed = !result.success
+        conversionError = result.error
+        usePlaceholderThumbnail = conversionFailed
       } else if (
         detectedType === 'image/vnd.adobe.photoshop' ||
         detectedType === 'application/x-photoshop'
       ) {
-        console.log(`[Preflight] Converting PSD to PNG for analysis (original preserved)`)
-        const pngPath = path.join(tempDir, 'converted.png')
-        await convertPsdToPng(originalPath, pngPath)
-        processedPath = pngPath
-        // NO upload of converted file - original PSD is preserved for merchant
+        const result = await safeConvertFile(
+          originalPath,
+          tempDir,
+          detectedType,
+          storageKey,
+          async () => {
+            const pngPath = path.join(tempDir, 'converted.png')
+            await convertPsdToPng(originalPath, pngPath)
+          }
+        )
+        processedPath = result.processedPath
+        conversionFailed = !result.success
+        conversionError = result.error
+        usePlaceholderThumbnail = conversionFailed
       }
 
       await job.updateProgress(50)
 
       // Run preflight checks
-      console.log(`[Preflight] Running checks`)
-      const result = await runPreflightChecks(processedPath, detectedType || '', fileSize, config)
+      // If conversion failed, we run checks on original file with limited analysis
+      console.log(`[Preflight] Running checks (conversionFailed: ${conversionFailed})`)
+      let result = await runPreflightChecks(processedPath, detectedType || '', fileSize, config)
+
+      // If conversion failed, add a warning check and downgrade from error to warning
+      // CRITICAL: File is preserved, only analysis was limited
+      if (conversionFailed) {
+        result.checks.push({
+          name: 'conversion',
+          status: 'warning',
+          message: `File preview could not be generated: ${conversionError || 'Unknown error'}. Original file is preserved and downloadable.`,
+          details: {
+            fileType: getFileTypeLabel(detectedType, storageKey),
+            reason: conversionError,
+            originalPreserved: true,
+          },
+        })
+        // Downgrade overall to warning if it was ok (preserve existing warnings/errors)
+        if (result.overall === 'ok') {
+          result.overall = 'warning'
+        }
+        workerLog.warn('PREFLIGHT_CONVERSION_WARNING', {
+          itemId,
+          fileType: getFileTypeLabel(detectedType, storageKey),
+          error: conversionError,
+        })
+      }
 
       await job.updateProgress(70)
 
       // Generate thumbnail
-      console.log(`[Preflight] Generating thumbnail`)
+      // If conversion failed, use placeholder thumbnail
+      console.log(`[Preflight] Generating thumbnail (usePlaceholder: ${usePlaceholderThumbnail})`)
       const thumbnailPath = path.join(tempDir, 'thumbnail.webp')
-      await generateThumbnail(processedPath, thumbnailPath, 400)
+      let thumbnailGenerated = false
+
+      if (usePlaceholderThumbnail) {
+        // Create placeholder thumbnail with file type label
+        const fileTypeLabel = getFileTypeLabel(detectedType, storageKey)
+        thumbnailGenerated = await createPlaceholderThumbnail(thumbnailPath, fileTypeLabel, 400)
+      } else {
+        // Try normal thumbnail generation
+        try {
+          await generateThumbnail(processedPath, thumbnailPath, 400)
+          thumbnailGenerated = true
+        } catch (thumbError) {
+          workerLog.warn('THUMBNAIL_GENERATION_FAILED', {
+            itemId,
+            error: thumbError instanceof Error ? thumbError.message : String(thumbError),
+          })
+          // Fallback to placeholder
+          const fileTypeLabel = getFileTypeLabel(detectedType, storageKey)
+          thumbnailGenerated = await createPlaceholderThumbnail(thumbnailPath, fileTypeLabel, 400)
+        }
+      }
 
       // Upload thumbnail - preserve bunny: prefix for proper URL generation
       // storageKey might be "bunny:path/to/file.psd" - we need "bunny:path/to/file_thumb.webp"
@@ -372,35 +626,59 @@ const preflightWorker = new Worker<PreflightJobData>(
       // Determine actual upload path (strip bunny: prefix for upload)
       const uploadPath = thumbnailKey.replace(/^bunny:/, '')
 
-      if (storageProvider === 'bunny' || storageKey.startsWith('bunny:')) {
-        await uploadToBunny(uploadPath, thumbnailPath, 'image/webp')
-      } else if (storageProvider === 'local') {
-        await uploadLocalFile(uploadPath, thumbnailPath)
-      } else if (client) {
-        await uploadFile(client, uploadPath, thumbnailPath, 'image/webp')
+      // Only upload thumbnail if it was generated successfully
+      if (thumbnailGenerated) {
+        try {
+          if (storageProvider === 'bunny' || storageKey.startsWith('bunny:')) {
+            await uploadToBunny(uploadPath, thumbnailPath, 'image/webp')
+          } else if (storageProvider === 'local') {
+            await uploadLocalFile(uploadPath, thumbnailPath)
+          } else if (client) {
+            await uploadFile(client, uploadPath, thumbnailPath, 'image/webp')
+          }
+          workerLog.info('THUMBNAIL_UPLOADED', { uploadPath: uploadPath.substring(0, 60) })
+        } catch (uploadError) {
+          workerLog.error('THUMBNAIL_UPLOAD_FAILED', {
+            itemId,
+            error: uploadError instanceof Error ? uploadError.message : String(uploadError),
+          })
+          // Continue without thumbnail - not a critical failure
+        }
+      } else {
+        workerLog.warn('THUMBNAIL_NOT_GENERATED', { itemId, storageKey: storageKey.substring(0, 60) })
       }
 
       await job.updateProgress(90)
 
       // Determine final thumbnailKey with proper prefix for URL generation
       // If Bunny storage, ensure bunny: prefix is present
-      const finalThumbnailKey =
-        storageProvider === 'bunny' || storageKey.startsWith('bunny:')
+      // If thumbnail wasn't generated, set to null
+      const finalThumbnailKey = thumbnailGenerated
+        ? storageProvider === 'bunny' || storageKey.startsWith('bunny:')
           ? thumbnailKey.startsWith('bunny:')
             ? thumbnailKey
             : `bunny:${uploadPath}`
           : uploadPath
+        : null
 
       // Update database
       // IMPORTANT: previewKey = storageKey (original file) - merchant always gets original
+      // CRITICAL: Original file is NEVER deleted, even on conversion failure
       await prisma.uploadItem.update({
         where: { id: itemId },
         data: {
           preflightStatus: result.overall,
           preflightResult: result as any,
           thumbnailKey: finalThumbnailKey,
-          previewKey: storageKey, // Always use original file for merchant download
+          previewKey: storageKey, // Always use original file for merchant download - NEVER DELETE
         },
+      })
+
+      workerLog.info('DB_UPDATED', {
+        itemId,
+        status: result.overall,
+        hasThumbnail: !!finalThumbnailKey,
+        conversionFailed,
       })
 
       // Update upload status
