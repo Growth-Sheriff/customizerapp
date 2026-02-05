@@ -752,9 +752,18 @@
         elements.progressText.textContent = 'Finalizing...'
 
         // Step 3: Complete upload
-        // For CDN uploads (Bunny/R2), include the publicUrl so backend can update storageKey
+        // CRITICAL FIX: Use uploadResult's provider/URL when fallback was used
         // Calculate upload duration for analytics
         const uploadDurationMs = Date.now() - instance.uploadStartTime
+        const actualStorageProvider = uploadResult?.storageProvider || intentData.storageProvider || 'local'
+        const actualFileUrl = uploadResult?.fileUrl || intentData.publicUrl || null
+        
+        console.log('[UL] Completing upload with:', {
+          provider: actualStorageProvider,
+          fileUrl: actualFileUrl?.substring(0, 80),
+          fallbackUsed: actualStorageProvider !== (intentData.storageProvider || 'local'),
+        })
+        
         const completeResponse = await fetch(`${apiBase}/api/upload/complete`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -765,8 +774,8 @@
               {
                 itemId: intentData.itemId,
                 location: 'front',
-                fileUrl: uploadResult?.fileUrl || intentData.publicUrl || null,
-                storageProvider: intentData.storageProvider || 'local',
+                fileUrl: actualFileUrl,
+                storageProvider: actualStorageProvider,
                 uploadDurationMs: uploadDurationMs,
               },
             ],
@@ -870,7 +879,11 @@
 
         if (bunnyResult.success) {
           console.log('[UL] ✅ Primary upload (Bunny) succeeded')
-          return bunnyResult.data
+          // Return with provider info for api/upload/complete
+          return {
+            ...bunnyResult.data,
+            storageProvider: 'bunny',
+          }
         }
 
         console.warn('[UL] ⚠️ Primary upload (Bunny) failed after retries:', bunnyResult.error)
@@ -897,7 +910,12 @@
             console.log('[UL] ✅ R2 fallback succeeded')
             // Update state with new provider info
             state.upload.actualProvider = 'r2'
-            return r2Result.data
+            // Return with correct URL and provider for api/upload/complete
+            return {
+              ...r2Result.data,
+              fileUrl: fallbackUrls.r2.publicUrl,
+              storageProvider: 'r2',
+            }
           }
 
           console.warn('[UL] ⚠️ R2 fallback failed:', r2Result.error)
@@ -924,7 +942,12 @@
           if (localResult.success) {
             console.log('[UL] ✅ Local fallback succeeded')
             state.upload.actualProvider = 'local'
-            return localResult.data
+            // Return with correct URL and provider for api/upload/complete
+            return {
+              ...localResult.data,
+              fileUrl: fallbackUrls.local.publicUrl,
+              storageProvider: 'local',
+            }
           }
 
           console.error('[UL] ❌ All storage options failed')
