@@ -1042,11 +1042,49 @@
             elements.progressText.textContent = `✓ ${totalMB} MB uploaded in ${duration}s`
             resolve({ fileUrl: intentData.publicUrl })
           } else {
-            reject(new Error(`Bunny upload failed (${xhr.status})`))
+            // Enhanced error logging
+            const errorDetails = {
+              status: xhr.status,
+              statusText: xhr.statusText,
+              responseText: xhr.responseText?.substring(0, 500) || '',
+              url: intentData.uploadUrl?.substring(0, 100) || '',
+            }
+            console.error('[UL] Bunny upload HTTP error:', errorDetails)
+            reject(new Error(`Bunny upload failed: HTTP ${xhr.status} - ${xhr.statusText}`))
           }
         })
 
-        xhr.addEventListener('error', () => reject(new Error('Network error during Bunny upload')))
+        xhr.addEventListener('error', (event) => {
+          // Enhanced network error logging
+          const errorDetails = {
+            type: 'network_error',
+            readyState: xhr.readyState,
+            status: xhr.status,
+            statusText: xhr.statusText,
+            responseType: xhr.responseType,
+            withCredentials: xhr.withCredentials,
+            url: intentData.uploadUrl?.substring(0, 100) || '',
+            fileSize: file.size,
+            elapsed: Date.now() - startTime,
+          }
+          console.error('[UL] Bunny network error details:', errorDetails)
+          
+          // Try to provide more specific error message
+          let errorMsg = 'Network error during Bunny upload'
+          if (xhr.readyState === 4 && xhr.status === 0) {
+            errorMsg = 'Connection failed - CORS or network issue'
+          } else if (xhr.readyState < 4) {
+            errorMsg = `Connection interrupted at state ${xhr.readyState}`
+          }
+          
+          reject(new Error(errorMsg))
+        })
+
+        xhr.addEventListener('timeout', () => {
+          console.error('[UL] Bunny upload timeout after', Date.now() - startTime, 'ms')
+          reject(new Error('Upload timeout - connection too slow'))
+        })
+
         xhr.addEventListener('abort', () => reject(new Error('Bunny upload cancelled')))
 
         xhr.open('PUT', intentData.uploadUrl)
@@ -1111,11 +1149,29 @@
             elements.progressText.textContent = `✓ ${totalMB} MB uploaded in ${duration}s`
             resolve({ fileUrl: intentData.publicUrl })
           } else {
-            reject(new Error(`R2 upload failed (${xhr.status})`))
+            // Enhanced error logging for R2
+            const errorDetails = {
+              status: xhr.status,
+              statusText: xhr.statusText,
+              responseText: xhr.responseText?.substring(0, 500) || '',
+            }
+            console.error('[UL] R2 upload HTTP error:', errorDetails)
+            reject(new Error(`R2 upload failed: HTTP ${xhr.status} - ${xhr.statusText}`))
           }
         })
 
-        xhr.addEventListener('error', () => reject(new Error('Network error during R2 upload')))
+        xhr.addEventListener('error', (event) => {
+          const errorDetails = {
+            type: 'network_error',
+            readyState: xhr.readyState,
+            status: xhr.status,
+            fileSize: file.size,
+            elapsed: Date.now() - startTime,
+          }
+          console.error('[UL] R2 network error details:', errorDetails)
+          reject(new Error('Network error during R2 upload - check CORS'))
+        })
+
         xhr.addEventListener('abort', () => reject(new Error('R2 upload cancelled')))
 
         xhr.open('PUT', intentData.uploadUrl)
