@@ -5,6 +5,7 @@ import { corsJson, handleCorsOptions } from '~/lib/cors.server'
 import { triggerUploadReceived } from '~/lib/flow.server'
 import prisma from '~/lib/prisma.server'
 import { getIdentifier, rateLimitGuard } from '~/lib/rateLimit.server'
+import { uploadLogger } from '~/lib/uploadLogger.server'
 
 // ============================================================================
 // FAZ 0 - API-001: Singleton Redis Connection
@@ -132,6 +133,16 @@ export async function action({ request }: ActionFunctionArgs) {
 
         // MULTI-STORAGE: Handle different storage providers
         const provider = item.storageProvider || 'local'
+        
+        // Log the complete call with actual provider info
+        await uploadLogger.completeCalled(
+          `complete_${uploadId}`,
+          uploadId,
+          provider as any,
+          item.fileUrl || 'local'
+        )
+        
+        console.log(`[Upload Complete] Provider: ${provider}, FileUrl: ${item.fileUrl?.substring(0, 80) || 'N/A'}`)
 
         if (item.fileUrl) {
           // CDN uploads (Bunny/R2): Store the public URL directly

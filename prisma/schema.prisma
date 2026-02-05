@@ -601,3 +601,35 @@ model Commission {
   @@index([shopId, createdAt])
   @@map("commissions")
 }
+
+// ══════════════════════════════════════════════════════════════
+// UPLOAD LOGS (Error Tracking & Analytics)
+// ══════════════════════════════════════════════════════════════
+model UploadLog {
+  id        String   @id @default(cuid())
+  
+  // Event info
+  event     String   // INTENT_CREATED, UPLOAD_STARTED, UPLOAD_RETRY, etc.
+  level     String   // info, warn, error
+  traceId   String?  @map("trace_id") // For tracking request flow
+  
+  // Relations (nullable for flexibility)
+  uploadId  String?  @map("upload_id")
+  itemId    String?  @map("item_id")
+  shopId    String?  @map("shop_id")
+  
+  // Storage info
+  provider  String?  // bunny, r2, local
+  
+  // Full context as JSON
+  context   Json?    @map("context_json")
+  
+  createdAt DateTime @default(now()) @map("created_at")
+  
+  @@index([uploadId])
+  @@index([shopId, createdAt])
+  @@index([event, level])
+  @@index([traceId])
+  @@index([createdAt])
+  @@map("upload_logs")
+}

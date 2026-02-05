@@ -10,6 +10,7 @@ import {
   getUploadSignedUrl,
   type UploadUrlResult,
 } from '~/lib/storage.server'
+import { uploadLogger } from '~/lib/uploadLogger.server'
 
 // Plan limits - Updated for 1GB standard, 1453MB pro
 const PLAN_LIMITS = {
@@ -303,6 +304,25 @@ export async function action({ request }: ActionFunctionArgs) {
       })
     }
 
+    // Log intent creation
+    await uploadLogger.intentCreated(uploadId, {
+      shopId: shop.id,
+      shopDomain,
+      fileName,
+      fileSize,
+      contentType,
+      provider: uploadResult.provider as any,
+      metadata: {
+        mode,
+        productId,
+        variantId,
+        hasR2Fallback: !!uploadResult.fallbackUrls?.r2,
+        hasLocalFallback: !!uploadResult.fallbackUrls?.local,
+        visitorId,
+        sessionId,
+      },
+    })
+
     return corsJson(
       {
         uploadId,
@@ -325,6 +345,14 @@ export async function action({ request }: ActionFunctionArgs) {
     )
   } catch (error) {
     console.error('[Upload Intent] Error:', error)
+    
+    // Log intent creation failure
+    await uploadLogger.uploadFailed('intent_error', 'unknown', {
+      code: 'INTENT_CREATION_FAILED',
+      message: error instanceof Error ? error.message : 'Unknown error',
+      details: { shopDomain, fileName },
+    })
+    
     return corsJson({ error: 'Failed to create upload intent' }, request, { status: 500 })
   }
 }

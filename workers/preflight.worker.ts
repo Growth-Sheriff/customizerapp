@@ -17,6 +17,19 @@ import {
   type PreflightConfig,
 } from '../app/lib/preflight.server'
 
+// Simple logger for worker (can't import from app due to module resolution)
+const workerLog = {
+  info: (event: string, ctx: Record<string, unknown>) => {
+    console.log(`[Preflight:${event}]`, JSON.stringify(ctx))
+  },
+  warn: (event: string, ctx: Record<string, unknown>) => {
+    console.warn(`[Preflight:${event}]`, JSON.stringify(ctx))
+  },
+  error: (event: string, ctx: Record<string, unknown>) => {
+    console.error(`[Preflight:${event}]`, JSON.stringify(ctx))
+  },
+}
+
 // Initialize Prisma
 const prisma = new PrismaClient()
 
@@ -106,15 +119,32 @@ async function downloadFromBunny(storageKey: string, localPath: string): Promise
     url = `${cdnUrl}/${storageKey}`
   }
 
-  console.log(`[Preflight] Downloading from Bunny CDN: ${url}`)
+  workerLog.info('DOWNLOAD_STARTED', { provider: 'bunny', url: url.substring(0, 100), storageKey })
+  const startTime = Date.now()
 
   const response = await fetch(url)
   if (!response.ok) {
+    const durationMs = Date.now() - startTime
+    workerLog.error('DOWNLOAD_FAILED', {
+      provider: 'bunny',
+      status: response.status,
+      statusText: response.statusText,
+      url: url.substring(0, 100),
+      storageKey,
+      durationMs,
+    })
     throw new Error(`Failed to download from Bunny: ${response.status} ${response.statusText}`)
   }
 
   const buffer = Buffer.from(await response.arrayBuffer())
   await fs.writeFile(localPath, buffer)
+  
+  const durationMs = Date.now() - startTime
+  workerLog.info('DOWNLOAD_SUCCESS', {
+    provider: 'bunny',
+    fileSize: buffer.length,
+    durationMs,
+  })
 }
 
 // Upload file to Bunny.net storage
@@ -222,9 +252,14 @@ const preflightWorker = new Worker<PreflightJobData>(
   'preflight',
   async (job: Job<PreflightJobData>) => {
     const { uploadId, shopId, itemId, storageKey } = job.data
-    console.log(
-      `[Preflight Worker] Processing job ${job.id} for upload ${uploadId}, item ${itemId}`
-    )
+    const jobStartTime = Date.now()
+    
+    workerLog.info('JOB_STARTED', {
+      jobId: job.id,
+      uploadId,
+      itemId,
+      storageKey: storageKey.substring(0, 80),
+    })
 
     const tempDir = path.join(os.tmpdir(), `preflight-${itemId}`)
     await fs.mkdir(tempDir, { recursive: true })
@@ -413,7 +448,9 @@ const preflightWorker = new Worker<PreflightJobData>(
       }
 
       await job.updateProgress(100)
-      console.log(`[Preflight] Completed for ${uploadId}/${itemId}: ${result.overall}`)
+      
+      const durationMs = Date.now() - jobStartTime
+      workerLog.info('JOB_COMPLETED', {\n        jobId: job.id,\n        uploadId,\n        itemId,\n        result: result.overall,\n        durationMs,\n        thumbnailKey: finalThumbnailKey?.substring(0, 60),\n      })
 
       return {
         status: result.overall,
@@ -421,7 +458,15 @@ const preflightWorker = new Worker<PreflightJobData>(
         thumbnailKey: finalThumbnailKey,
       }
     } catch (error) {
-      console.error(`[Preflight Worker] Error:`, error)
+      const durationMs = Date.now() - jobStartTime
+      workerLog.error('JOB_FAILED', {
+        jobId: job.id,
+        uploadId,
+        itemId,
+        storageKey: storageKey.substring(0, 80),
+        error: error instanceof Error ? error.message : String(error),
+        durationMs,
+      })
 
       // Update item with error status
       await prisma.uploadItem.update({
