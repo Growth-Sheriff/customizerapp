@@ -829,25 +829,168 @@
     },
 
     /**
-     * Upload file to storage with progress tracking
-     * MULTI-STORAGE: Provider-aware upload (Bunny PUT, Local POST)
+     * Sleep helper for retry delays
+     */
+    sleep(ms) {
+      return new Promise((resolve) => setTimeout(resolve, ms))
+    },
+
+    /**
+     * Upload file to storage with BULLETPROOF retry + fallback
+     * MULTI-STORAGE v3.0: Bunny → R2 → Local fallback chain
+     *
+     * Retry Strategy:
+     * 1. Try primary storage (Bunny) up to 3 times with exponential backoff
+     * 2. If all retries fail, try R2 fallback (if available)
+     * 3. If R2 fails, try Local fallback
+     * 4. If all fail, report error to user
      */
     async uploadToStorage(productId, file, intentData) {
       const instance = this.instances[productId]
-      const { elements } = instance
+      const { elements, state } = instance
 
-      const provider = intentData.storageProvider || 'local'
-      console.log('[UL] uploadToStorage - provider:', provider)
+      const primaryProvider = intentData.storageProvider || 'local'
+      const retryConfig = intentData.retryConfig || { maxRetries: 3, retryDelayMs: 2000 }
+      const fallbackUrls = intentData.fallbackUrls || {}
 
-      // Provider-aware upload
-      switch (provider) {
-        case 'bunny':
-          return this.uploadToBunny(file, intentData, elements, productId)
+      console.log('[UL] uploadToStorage - primary provider:', primaryProvider)
+      console.log('[UL] uploadToStorage - fallback available:', {
+        r2: !!fallbackUrls.r2,
+        local: !!fallbackUrls.local,
+      })
+
+      // Try primary provider with retries
+      if (primaryProvider === 'bunny') {
+        const bunnyResult = await this.uploadWithRetry(
+          () => this.uploadToBunny(file, intentData, elements, productId),
+          'Bunny',
+          retryConfig,
+          elements
+        )
+
+        if (bunnyResult.success) {
+          console.log('[UL] ✅ Primary upload (Bunny) succeeded')
+          return bunnyResult.data
+        }
+
+        console.warn('[UL] ⚠️ Primary upload (Bunny) failed after retries:', bunnyResult.error)
+
+        // Try R2 fallback
+        if (fallbackUrls.r2) {
+          elements.progressText.textContent = 'Switching to backup storage...'
+
+          const r2IntentData = {
+            ...intentData,
+            uploadUrl: fallbackUrls.r2.url,
+            publicUrl: fallbackUrls.r2.publicUrl,
+            storageProvider: 'r2',
+          }
+
+          const r2Result = await this.uploadWithRetry(
+            () => this.uploadToR2(file, r2IntentData, elements, productId),
+            'R2',
+            { maxRetries: 2, retryDelayMs: 1000 },
+            elements
+          )
+
+          if (r2Result.success) {
+            console.log('[UL] ✅ R2 fallback succeeded')
+            // Update state with new provider info
+            state.upload.actualProvider = 'r2'
+            return r2Result.data
+          }
+
+          console.warn('[UL] ⚠️ R2 fallback failed:', r2Result.error)
+        }
+
+        // Try Local fallback
+        if (fallbackUrls.local) {
+          elements.progressText.textContent = 'Switching to local storage...'
+
+          const localIntentData = {
+            ...intentData,
+            uploadUrl: fallbackUrls.local.url,
+            publicUrl: fallbackUrls.local.publicUrl,
+            storageProvider: 'local',
+          }
+
+          const localResult = await this.uploadWithRetry(
+            () => this.uploadToLocal(file, localIntentData, elements, productId),
+            'Local',
+            { maxRetries: 1, retryDelayMs: 500 },
+            elements
+          )
+
+          if (localResult.success) {
+            console.log('[UL] ✅ Local fallback succeeded')
+            state.upload.actualProvider = 'local'
+            return localResult.data
+          }
+
+          console.error('[UL] ❌ All storage options failed')
+        }
+
+        // All failed - throw the original error
+        throw new Error(bunnyResult.error || 'Upload failed - all storage options exhausted')
+      }
+
+      // Non-bunny primary providers (r2, local) - single attempt with fallback
+      switch (primaryProvider) {
         case 'r2':
           return this.uploadToR2(file, intentData, elements, productId)
         case 'local':
         default:
           return this.uploadToLocal(file, intentData, elements, productId)
+      }
+    },
+
+    /**
+     * Retry wrapper with exponential backoff
+     * @param {Function} uploadFn - The upload function to retry
+     * @param {string} providerName - Provider name for logging
+     * @param {Object} config - Retry configuration
+     * @param {Object} elements - UI elements for progress updates
+     * @returns {Promise<{success: boolean, data?: any, error?: string}>}
+     */
+    async uploadWithRetry(uploadFn, providerName, config, elements) {
+      const { maxRetries, retryDelayMs } = config
+      let lastError = null
+
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          console.log(`[UL] ${providerName} upload attempt ${attempt}/${maxRetries}`)
+
+          const result = await uploadFn()
+          return { success: true, data: result }
+        } catch (error) {
+          lastError = error
+
+          // Log detailed error info
+          console.warn(`[UL] ${providerName} attempt ${attempt} failed:`, {
+            message: error.message,
+            name: error.name,
+            attempt,
+            maxRetries,
+          })
+
+          // Don't retry on user cancellation
+          if (error.message?.includes('cancelled') || error.message?.includes('aborted')) {
+            return { success: false, error: error.message }
+          }
+
+          // If not last attempt, wait and retry
+          if (attempt < maxRetries) {
+            const delay = retryDelayMs * Math.pow(2, attempt - 1) // Exponential backoff
+            elements.progressText.textContent = `Retrying (${attempt}/${maxRetries})... Please wait ${Math.ceil(delay / 1000)}s`
+
+            await this.sleep(delay)
+          }
+        }
+      }
+
+      return {
+        success: false,
+        error: lastError?.message || `${providerName} upload failed after ${maxRetries} attempts`,
       }
     },
 

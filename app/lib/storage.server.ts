@@ -1,18 +1,30 @@
+import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import crypto from 'crypto'
 import { existsSync } from 'fs'
 import { mkdir, readFile, unlink, writeFile } from 'fs/promises'
 import { dirname, join } from 'path'
 
 /**
- * MULTI-STORAGE SYSTEM v2.0
- * =========================
- * Supports: Bunny.net (primary), Local (fallback), R2 (optional)
+ * MULTI-STORAGE SYSTEM v3.0 - BULLETPROOF EDITION
+ * ================================================
+ * Supports: Bunny.net (primary), R2 (fallback), Local (last resort)
+ *
+ * Features:
+ * - Automatic retry with exponential backoff (3 attempts)
+ * - R2 fallback when Bunny fails
+ * - Local fallback when both cloud storages fail
+ * - Detailed error logging
  *
  * Environment Variables:
  * - DEFAULT_STORAGE_PROVIDER: bunny | local | r2
  * - BUNNY_STORAGE_ZONE: Storage zone name
  * - BUNNY_API_KEY: Storage zone password
  * - BUNNY_CDN_URL: Pull zone URL (https://xxx.b-cdn.net)
+ * - R2_ACCOUNT_ID: Cloudflare account ID
+ * - R2_ACCESS_KEY_ID: R2 API access key
+ * - R2_SECRET_ACCESS_KEY: R2 API secret key
+ * - R2_BUCKET_NAME: R2 bucket name
  * - LOCAL_STORAGE_PATH: Local storage directory
  * - SECRET_KEY: HMAC secret for signed URLs
  */
@@ -36,6 +48,43 @@ const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID || ''
 const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY || ''
 const R2_BUCKET_NAME = process.env.R2_BUCKET_NAME || ''
 const R2_PUBLIC_URL = process.env.R2_PUBLIC_URL || ''
+const R2_ENDPOINT = process.env.R2_ENDPOINT || `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`
+
+// Retry Configuration
+const MAX_RETRIES = 3
+const RETRY_DELAY_MS = 2000 // 2 seconds, doubles each retry
+
+// ============================================================
+// R2 CLIENT (Lazy initialization)
+// ============================================================
+
+let r2Client: S3Client | null = null
+
+function getR2Client(): S3Client | null {
+  if (!R2_ACCOUNT_ID || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY) {
+    return null
+  }
+
+  if (!r2Client) {
+    r2Client = new S3Client({
+      region: 'auto',
+      endpoint: R2_ENDPOINT,
+      credentials: {
+        accessKeyId: R2_ACCESS_KEY_ID,
+        secretAccessKey: R2_SECRET_ACCESS_KEY,
+      },
+    })
+  }
+
+  return r2Client
+}
+
+/**
+ * Check if R2 fallback is available
+ */
+export function isR2FallbackAvailable(): boolean {
+  return !!(R2_ACCOUNT_ID && R2_ACCESS_KEY_ID && R2_SECRET_ACCESS_KEY && R2_BUCKET_NAME)
+}
 
 // ============================================================
 // TYPES
@@ -66,6 +115,16 @@ export interface UploadUrlResult {
   publicUrl: string
   method: 'PUT' | 'POST'
   headers?: Record<string, string>
+  // Fallback URLs for client-side retry
+  fallbackUrls?: {
+    r2?: { url: string; publicUrl: string; method: 'PUT' | 'POST' }
+    local?: { url: string; publicUrl: string; method: 'PUT' | 'POST' }
+  }
+  // Retry configuration for client
+  retryConfig?: {
+    maxRetries: number
+    retryDelayMs: number
+  }
 }
 
 // ============================================================
@@ -182,6 +241,7 @@ export function validateLocalFileToken(key: string, token: string): boolean {
 
 /**
  * Generate upload URL based on storage provider
+ * Includes fallback URLs for client-side retry mechanism
  */
 export async function getUploadSignedUrl(
   config: StorageConfig,
@@ -191,28 +251,60 @@ export async function getUploadSignedUrl(
 ): Promise<UploadUrlResult> {
   const effectiveProvider = getEffectiveStorageProvider(config)
 
+  // Get primary URL
+  let primaryResult: UploadUrlResult
+
   switch (effectiveProvider) {
     case 'bunny':
-      return getBunnyUploadUrl(config, key, contentType)
+      primaryResult = await getBunnyUploadUrlWithFallbacks(config, key, contentType)
+      break
     case 'r2':
-      return getR2UploadUrl(config, key, contentType)
+      primaryResult = await getR2UploadUrl(config, key, contentType)
+      break
     case 'local':
     default:
-      return getLocalUploadUrl(config, key)
+      primaryResult = getLocalUploadUrl(config, key)
   }
+
+  return primaryResult
 }
 
 /**
- * Bunny.net Direct Upload URL
+ * Bunny.net Direct Upload URL with R2 and Local fallbacks
  * Client uploads directly to Bunny Storage via PUT
  */
-function getBunnyUploadUrl(
+async function getBunnyUploadUrlWithFallbacks(
   config: StorageConfig,
   key: string,
-  _contentType: string
-): UploadUrlResult {
+  contentType: string
+): Promise<UploadUrlResult> {
   const uploadUrl = `https://${BUNNY_STORAGE_HOST}/${config.bunnyZone}/${key}`
   const publicUrl = `${config.bunnyCdnUrl}/${key}`
+
+  // Build fallback URLs
+  const fallbackUrls: UploadUrlResult['fallbackUrls'] = {}
+
+  // R2 fallback
+  if (isR2FallbackAvailable()) {
+    try {
+      const r2Result = await getR2UploadUrl(config, key, contentType)
+      fallbackUrls.r2 = {
+        url: r2Result.url,
+        publicUrl: r2Result.publicUrl,
+        method: r2Result.method,
+      }
+    } catch (error) {
+      console.warn('[Storage] Failed to generate R2 fallback URL:', error)
+    }
+  }
+
+  // Local fallback (always available)
+  const localResult = getLocalUploadUrl(config, key)
+  fallbackUrls.local = {
+    url: localResult.url,
+    publicUrl: localResult.publicUrl,
+    method: localResult.method,
+  }
 
   return {
     url: uploadUrl,
@@ -223,17 +315,54 @@ function getBunnyUploadUrl(
     headers: {
       AccessKey: config.bunnyApiKey || '',
     },
+    fallbackUrls,
+    retryConfig: {
+      maxRetries: MAX_RETRIES,
+      retryDelayMs: RETRY_DELAY_MS,
+    },
   }
 }
 
 /**
- * R2 Presigned Upload URL (placeholder - needs AWS SDK)
+ * R2 Presigned Upload URL
  */
-function getR2UploadUrl(config: StorageConfig, key: string, _contentType: string): UploadUrlResult {
-  // TODO: Implement R2 presigned URL with AWS SDK v3
-  // For now, fallback to local
-  console.warn('[Storage] R2 presigned URL not implemented, using local')
-  return getLocalUploadUrl(config, key)
+async function getR2UploadUrl(
+  config: StorageConfig,
+  key: string,
+  contentType: string
+): Promise<UploadUrlResult> {
+  const client = getR2Client()
+
+  if (!client) {
+    console.warn('[Storage] R2 not configured, using local')
+    return getLocalUploadUrl(config, key)
+  }
+
+  try {
+    const command = new PutObjectCommand({
+      Bucket: config.r2BucketName || R2_BUCKET_NAME,
+      Key: key,
+      ContentType: contentType,
+    })
+
+    const presignedUrl = await getSignedUrl(client, command, { expiresIn: 3600 })
+
+    // R2 public URL - use custom domain or r2.dev URL
+    const publicUrl = config.r2PublicUrl
+      ? `${config.r2PublicUrl}/${key}`
+      : `https://pub-${R2_ACCOUNT_ID}.r2.dev/${key}`
+
+    return {
+      url: presignedUrl,
+      key,
+      provider: 'r2',
+      publicUrl,
+      method: 'PUT',
+    }
+  } catch (error) {
+    console.error('[Storage] R2 presigned URL error:', error)
+    return getLocalUploadUrl(config, key)
+  }
 }
 
 /**

@@ -292,8 +292,16 @@ export async function action({ request }: ActionFunctionArgs) {
       },
     })
 
-    // Generate signed upload URL (provider-aware)
+    // Generate signed upload URL (provider-aware) with fallback URLs
     const uploadResult: UploadUrlResult = await getUploadSignedUrl(storageConfig, key, contentType)
+
+    // Log fallback availability
+    if (uploadResult.fallbackUrls) {
+      console.log('[Upload Intent] Fallback URLs generated:', {
+        r2: !!uploadResult.fallbackUrls.r2,
+        local: !!uploadResult.fallbackUrls.local,
+      })
+    }
 
     return corsJson(
       {
@@ -309,6 +317,9 @@ export async function action({ request }: ActionFunctionArgs) {
         storageProvider: uploadResult.provider,
         uploadMethod: uploadResult.method,
         uploadHeaders: uploadResult.headers || {},
+        // BULLETPROOF v3.0: Include fallback URLs and retry config
+        fallbackUrls: uploadResult.fallbackUrls || {},
+        retryConfig: uploadResult.retryConfig || { maxRetries: 3, retryDelayMs: 2000 },
       },
       request
     )
