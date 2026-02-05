@@ -180,7 +180,20 @@ export async function action({ request }: ActionFunctionArgs) {
     const connection = getRedisConnection()
     const preflightQueue = new Queue('preflight', { connection })
 
-    for (const uploadItem of upload.items) {
+    // CRITICAL: Re-fetch items from DB to get UPDATED storageKey values
+    // The upload.items contains STALE data from before the update loop above
+    // This was causing 404 errors because items updated with bunny: prefix
+    // weren't being used - instead old storageKey without prefix was sent to preflight
+    const updatedItems = await prisma.uploadItem.findMany({
+      where: { uploadId },
+      select: { id: true, storageKey: true },
+    })
+
+    console.log(`[Upload Complete] Queueing ${updatedItems.length} items for preflight`)
+
+    for (const uploadItem of updatedItems) {
+      console.log(`[Upload Complete] Preflight queue: itemId=${uploadItem.id}, storageKey=${uploadItem.storageKey?.substring(0, 60)}`)
+      
       await preflightQueue.add('preflight', {
         uploadId,
         shopId: shop.id,
