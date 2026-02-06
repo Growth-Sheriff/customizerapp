@@ -5,8 +5,9 @@ import {
   Scripts,
   ScrollRestoration,
 } from "@remix-run/react";
+import { withSentry } from "@sentry/remix";
 
-export default function App() {
+function App() {
   return (
     <html>
       <head>
@@ -28,4 +29,6 @@ export default function App() {
     </html>
   );
 }
+
+export default withSentry(App);
 
