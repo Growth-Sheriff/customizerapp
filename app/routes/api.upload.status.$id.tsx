@@ -178,6 +178,18 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     return key.startsWith('shopify:')
   }
 
+  // Check if storageKey is an R2 key (r2:path/to/file)
+  const isR2Key = (key: string | null | undefined): boolean => {
+    if (!key) return false
+    return key.startsWith('r2:')
+  }
+
+  // Check if storageKey is a local key (local:path/to/file)
+  const isLocalKey = (key: string | null | undefined): boolean => {
+    if (!key) return false
+    return key.startsWith('local:')
+  }
+
   if (firstItem?.storageKey) {
     if (isExternalUrl(firstItem.storageKey)) {
       // Already a full URL - use directly
@@ -195,6 +207,26 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         .map((segment) => encodeURIComponent(segment))
         .join('/')
       downloadUrl = `${cdnUrl}/${encodedPath}`
+    } else if (isR2Key(firstItem.storageKey)) {
+      // R2 storage - build public URL
+      const r2Key = firstItem.storageKey.replace('r2:', '')
+      const r2PublicUrl = storageConfig.r2PublicUrl || process.env.R2_PUBLIC_URL
+      if (r2PublicUrl) {
+        // Custom domain configured
+        const encodedPath = r2Key
+          .split('/')
+          .map((segment) => encodeURIComponent(segment))
+          .join('/')
+        downloadUrl = `${r2PublicUrl}/${encodedPath}`
+      } else {
+        // Use r2.dev URL format
+        const r2AccountId = storageConfig.r2AccountId || process.env.R2_ACCOUNT_ID
+        const encodedPath = r2Key
+          .split('/')
+          .map((segment) => encodeURIComponent(segment))
+          .join('/')
+        downloadUrl = `https://pub-${r2AccountId}.r2.dev/${encodedPath}`
+      }
     } else if (isShopifyFileId(firstItem.storageKey)) {
       // Shopify fileId - resolve to URL via API
       const fileId = firstItem.storageKey.replace('shopify:', '')
@@ -214,8 +246,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       }
     } else {
       // Local storage - generate signed URL
-      const token = generateLocalFileToken(firstItem.storageKey, expiresAt)
-      downloadUrl = `${host}/api/files/${encodeURIComponent(firstItem.storageKey)}?token=${encodeURIComponent(token)}`
+      // Strip local: prefix if present
+      const localKey = firstItem.storageKey.startsWith('local:') 
+        ? firstItem.storageKey.replace('local:', '') 
+        : firstItem.storageKey
+      const token = generateLocalFileToken(localKey, expiresAt)
+      downloadUrl = `${host}/api/files/${encodeURIComponent(localKey)}?token=${encodeURIComponent(token)}`
     }
   }
 
@@ -231,13 +267,34 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     } else if (isBunnyKey(firstItem.thumbnailKey)) {
       // Bunny key - use optimizer
       thumbnailUrl = getThumbnailUrl(storageConfig, firstItem.thumbnailKey, 200)
+    } else if (isR2Key(firstItem.thumbnailKey)) {
+      // R2 thumbnail - build public URL
+      const r2Key = firstItem.thumbnailKey.replace('r2:', '')
+      const r2PublicUrl = storageConfig.r2PublicUrl || process.env.R2_PUBLIC_URL
+      if (r2PublicUrl) {
+        const encodedPath = r2Key
+          .split('/')
+          .map((segment) => encodeURIComponent(segment))
+          .join('/')
+        thumbnailUrl = `${r2PublicUrl}/${encodedPath}`
+      } else {
+        const r2AccountId = storageConfig.r2AccountId || process.env.R2_ACCOUNT_ID
+        const encodedPath = r2Key
+          .split('/')
+          .map((segment) => encodeURIComponent(segment))
+          .join('/')
+        thumbnailUrl = `https://pub-${r2AccountId}.r2.dev/${encodedPath}`
+      }
     } else if (isShopifyFileId(firstItem.thumbnailKey)) {
       const fileId = firstItem.thumbnailKey.replace('shopify:', '')
       thumbnailUrl = await resolveShopifyFileUrl(fileId, shop.shopDomain, shop.accessToken)
     } else {
-      // Local storage
-      const token = generateLocalFileToken(firstItem.thumbnailKey, expiresAt)
-      thumbnailUrl = `${host}/api/files/${encodeURIComponent(firstItem.thumbnailKey)}?token=${encodeURIComponent(token)}`
+      // Local storage - strip local: prefix if present
+      const localKey = firstItem.thumbnailKey.startsWith('local:')
+        ? firstItem.thumbnailKey.replace('local:', '')
+        : firstItem.thumbnailKey
+      const token = generateLocalFileToken(localKey, expiresAt)
+      thumbnailUrl = `${host}/api/files/${encodeURIComponent(localKey)}?token=${encodeURIComponent(token)}`
     }
   }
   // FIX: Remove fallbacks that return downloadUrl as thumbnail
