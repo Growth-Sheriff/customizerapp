@@ -763,6 +763,10 @@ export default function ProductionQueuePage() {
           </Form>
         </Modal.Section>
       </Modal>
+      <UploadDetailModal 
+          uploadId={selectedUploadId} 
+          onClose={() => setSelectedUploadId(null)} 
+      />
     </Page>
   )
 }
