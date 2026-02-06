@@ -200,6 +200,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
   return json({ error: 'Unknown action' }, { status: 400 })
 }
 
+function getStorageProviderLabel(storageKey: string): { label: string; tone: 'success' | 'info' | 'warning' } {
+  if (storageKey.startsWith('r2:')) return { label: 'Cloudflare R2', tone: 'info' }
+  if (storageKey.startsWith('local:')) return { label: 'Local Server', tone: 'warning' }
+  if (storageKey.startsWith('bunny:')) return { label: 'Bunny CDN', tone: 'success' }
+  return { label: 'Bunny CDN', tone: 'success' } // Default
+}
+
 function PreflightBadge({ status }: { status: string }) {
   // Merchant-friendly labels with softer tones
   const config: Record<
@@ -475,12 +482,17 @@ export default function UploadDetail() {
                       <Text as="p" variant="bodySm">
                         Location: {item.location}
                       </Text>
-                      <Text as="p" variant="bodySm">
-                        Size:{' '}
-                        {item.fileSize
-                          ? `${(item.fileSize / 1024 / 1024).toFixed(2)} MB`
-                          : 'Unknown'}
-                      </Text>
+                      <InlineStack gap="200" align="start">
+                        <Text as="p" variant="bodySm">
+                          Size:{' '}
+                          {item.fileSize
+                            ? `${(item.fileSize / 1024 / 1024).toFixed(2)} MB`
+                            : 'Unknown'}
+                        </Text>
+                        <Badge tone={getStorageProviderLabel(item.storageKey).tone}>
+                          {getStorageProviderLabel(item.storageKey).label}
+                        </Badge>
+                      </InlineStack>
 
                       {/* Preflight Checks - Merchant Friendly */}
                       {item.preflightResult?.checks && (
