@@ -42,6 +42,44 @@ export default function Auth() {
   const [shop, setShop] = useState("");
   const { errors } = actionData || loaderData;
 
+  // If we are inside an iframe (embedded) but showing the login page,
+  // it means the session is lost/expired. We should help the user reload.
+  if (typeof window !== "undefined" && window.top !== window.self) {
+    return (
+      <PolarisAppProvider i18n={loaderData.polarisTranslations}>
+        <Page>
+          <Card>
+             <div style={{ padding: "2rem", textAlign: "center" }}>
+                <Text variant="headingMd" as="h2">Session Expired</Text>
+                <div style={{ margin: "1rem 0" }}>
+                  <Text as="p">Your session has expired or the connection was lost.</Text>
+                </div>
+                <Button 
+                   variant="primary" 
+                   onClick={() => {
+                        // Try to reload the top frame
+                        // If cross-origin prevents it, the link below is a fallback
+                        try {
+                            if (window.top) window.top.location.reload();
+                        } catch (e) {
+                           // Access denied, ignore
+                        }
+                   }}
+                >
+                   Reload App
+                </Button>
+                <div style={{ marginTop: "1rem" }}>
+                    <Text variant="bodySm" as="p" tone="subdued">
+                        If the button doesn't work, <a href="/auth/login" target="_blank">open in new tab</a> to log in.
+                    </Text>
+                </div>
+             </div>
+          </Card>
+        </Page>
+      </PolarisAppProvider>
+    );
+  }
+
   return (
     <PolarisAppProvider i18n={loaderData.polarisTranslations}>
       <Page>

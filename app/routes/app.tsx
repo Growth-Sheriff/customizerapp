@@ -7,6 +7,7 @@ import { authenticate } from "~/shopify.server";
 import { AppFrame } from "~/components/AppFrame";
 import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
 import prisma from "~/lib/prisma.server";
+import { useAppBridgeNavigation } from "~/hooks/useAppBridgeNavigation";
 
 export const links = () => [{ rel: "stylesheet", href: polarisStyles }];
 
@@ -51,6 +52,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export default function AppLayout() {
   const { apiKey, shop, pendingUploads, pendingQueue } = useLoaderData<typeof loader>();
+  
+  // Sync Remix navigation with Shopify Admin history
+  useAppBridgeNavigation();
 
   return (
     <AppProvider isEmbeddedApp apiKey={apiKey}>
