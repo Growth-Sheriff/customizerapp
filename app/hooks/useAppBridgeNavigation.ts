@@ -14,73 +14,39 @@ export function useAppBridgeNavigation(): void {
   const location = useLocation();
 
   useEffect(() => {
-    // Basic safety check for window
     if (typeof window === 'undefined') return;
-
-    // Use a more robust check for the global shopify object
     const win = window as any;
-    
-    // Retry mechanism because App Bridge might load async
+
+    // Sync function
     const syncHistory = () => {
-        if (win.shopify && win.shopify.navigate && win.shopify.navigate.history) {
-            try {
-                win.shopify.navigate.history.replace(location.pathname + location.search);
-            } catch (error) {
-                // Ignore errors during history replacement (common in dev/unstable connections)
-            }
+      if (win.shopify?.navigate?.history) {
+        try {
+          win.shopify.navigate.history.replace(location.pathname + location.search);
+        } catch (e) {
+          // ignore
         }
+      }
     };
 
-    // Attempt immediately
+    // Initial sync
     syncHistory();
-    
-    // And try again briefly after, just in case
     const timer = setTimeout(syncHistory, 500);
-    return () => clearTimeout(timer);
 
-  }, [location.pathname, location.search]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const win = window as any;
-
-    // PopState event handler - geri/ileri tuşları için
-    const handlePopState = (event: PopStateEvent): void => {
-      if (!win.shopify?.navigate?.history) {
-        return;
-      }
-      // ... rest of logic
-    }; 
-    
-    // We don't implement full popstate logic here as it often conflicts with Remix Router
-    // defaulting to simple replacement above is safer.
-    
-  }, []);
-}
-
-    // PopState event handler - geri/ileri tuşları için
-    const handlePopState = (event: PopStateEvent): void => {
-      if (!shopify?.navigate?.history) {
-        return;
-      }
-
-      try {
-        // Mevcut konumu koru - iframe'in boşalmasını engelle
-        const currentPath = location.pathname + location.search;
-
-        // Shopify admin'e mevcut konumu bildir
-        shopify.navigate.history.replace(currentPath);
-
-        // Event'i işlenmiş olarak işaretle
-        event.preventDefault();
-      } catch (error) {
-        console.debug('[AppBridge] PopState handling error:', error);
-      }
+    // PopState handler
+    const handlePopState = (event: PopStateEvent) => {
+       if (win.shopify?.navigate?.history) {
+         try {
+            win.shopify.navigate.history.replace(location.pathname + location.search);
+         } catch (e) {
+            console.debug('[AppBridge] PopState error', e); 
+         }
+       }
     };
 
     window.addEventListener('popstate', handlePopState);
 
     return () => {
+      clearTimeout(timer);
       window.removeEventListener('popstate', handlePopState);
     };
   }, [location.pathname, location.search]);
