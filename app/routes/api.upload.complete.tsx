@@ -148,31 +148,46 @@ export async function action({ request }: ActionFunctionArgs) {
         // storageKey is now set at INTENT time with correct provider prefix (e.g., "bunny:...")
         // This ensures preflight worker ALWAYS has the correct key from the start
         // 
-        // LEGACY FALLBACK: Only update storageKey if it's missing the provider prefix
-        // This handles old uploads that may not have the prefix
+        // FALLBACK HANDLING: If client used a different provider than intent (fallback scenario),
+        // we MUST update the storageKey to reflect the ACTUAL storage location
         const existingItem = await prisma.uploadItem.findUnique({
           where: { id: item.itemId },
           select: { storageKey: true },
         })
         
         const currentStorageKey = existingItem?.storageKey || ''
-        const hasProviderPrefix = currentStorageKey.startsWith('bunny:') || 
-                                  currentStorageKey.startsWith('r2:') || 
-                                  currentStorageKey.startsWith('local:') ||
-                                  currentStorageKey.startsWith('shopify:')
         
-        // Only update storageKey if it doesn't have a provider prefix (legacy compatibility)
-        if (!hasProviderPrefix && item.fileUrl && provider === 'bunny') {
+        // Extract current prefix and check if it matches the actual provider
+        const currentPrefix = currentStorageKey.split(':')[0]
+        const hasProviderPrefix = ['bunny', 'r2', 'local', 'shopify'].includes(currentPrefix)
+        
+        // CRITICAL: Check if provider CHANGED (fallback scenario)
+        // If intent was bunny but client uploaded to r2, we MUST update the key
+        const providerMismatch = hasProviderPrefix && currentPrefix !== provider
+        
+        if (providerMismatch) {
+          // FALLBACK DETECTED: Provider changed, update storageKey to reflect actual location
+          const pathWithoutPrefix = currentStorageKey.replace(/^(bunny|r2|local|shopify):/, '')
+          updateData.storageKey = `${provider}:${pathWithoutPrefix}`
+          console.log(`[Upload Complete] FALLBACK DETECTED: Changed from ${currentPrefix}: to ${provider}: - storageKey updated`)
+        } else if (!hasProviderPrefix && item.fileUrl && provider === 'bunny') {
+          // Legacy: No prefix, add bunny prefix
           updateData.storageKey = `bunny:${item.fileUrl.replace(/^https?:\/\/[^/]+\//, '')}`
           console.log(`[Upload Complete] LEGACY FIX: Added bunny: prefix to storageKey`)
         } else if (!hasProviderPrefix && item.fileUrl && provider === 'r2') {
+          // Legacy: No prefix, add r2 prefix
           updateData.storageKey = `r2:${item.fileUrl.replace(/^https?:\/\/[^/]+\//, '')}`
           console.log(`[Upload Complete] LEGACY FIX: Added r2: prefix to storageKey`)
+        } else if (!hasProviderPrefix && provider === 'local') {
+          // Legacy: No prefix, add local prefix
+          const pathWithoutPrefix = currentStorageKey
+          updateData.storageKey = `local:${pathWithoutPrefix}`
+          console.log(`[Upload Complete] LEGACY FIX: Added local: prefix to storageKey`)
         } else if (!hasProviderPrefix && item.fileId && provider === 'shopify') {
           updateData.storageKey = `shopify:${item.fileId}`
           console.log(`[Upload Complete] LEGACY FIX: Added shopify: prefix`)
         } else {
-          console.log(`[Upload Complete] storageKey already has prefix, no update needed: ${currentStorageKey.substring(0, 60)}`)
+          console.log(`[Upload Complete] storageKey OK, provider matches: ${currentStorageKey.substring(0, 60)}`)
         }
 
         await prisma.uploadItem.update({
