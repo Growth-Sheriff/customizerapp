@@ -144,29 +144,36 @@ export async function action({ request }: ActionFunctionArgs) {
         
         console.log(`[Upload Complete] Provider: ${provider}, FileUrl: ${item.fileUrl?.substring(0, 80) || 'N/A'}`)
 
-        if (item.fileUrl) {
-          // CDN uploads (Bunny/R2): Store the public URL directly
-          if (provider === 'bunny') {
-            // Store with bunny: prefix for provider identification
-            updateData.storageKey = `bunny:${item.fileUrl.replace(/^https?:\/\/[^/]+\//, '')}`
-            console.log(`[Upload Complete] Stored Bunny CDN key: ${updateData.storageKey}`)
-          } else if (provider === 'r2') {
-            // Store R2 URL directly
-            updateData.storageKey = item.fileUrl
-            console.log(`[Upload Complete] Stored R2 URL: ${item.fileUrl}`)
-          } else {
-            // Local or other - store URL as-is
-            updateData.storageKey = item.fileUrl
-            console.log(`[Upload Complete] Updated storageKey: ${item.fileUrl}`)
-          }
-        } else if (item.fileId && provider === 'shopify') {
-          // Legacy Shopify: Store fileId with prefix for later resolution
+        // CRITICAL DATABASE-LEVEL FIX:
+        // storageKey is now set at INTENT time with correct provider prefix (e.g., "bunny:...")
+        // This ensures preflight worker ALWAYS has the correct key from the start
+        // 
+        // LEGACY FALLBACK: Only update storageKey if it's missing the provider prefix
+        // This handles old uploads that may not have the prefix
+        const existingItem = await prisma.uploadItem.findUnique({
+          where: { id: item.itemId },
+          select: { storageKey: true },
+        })
+        
+        const currentStorageKey = existingItem?.storageKey || ''
+        const hasProviderPrefix = currentStorageKey.startsWith('bunny:') || 
+                                  currentStorageKey.startsWith('r2:') || 
+                                  currentStorageKey.startsWith('local:') ||
+                                  currentStorageKey.startsWith('shopify:')
+        
+        // Only update storageKey if it doesn't have a provider prefix (legacy compatibility)
+        if (!hasProviderPrefix && item.fileUrl && provider === 'bunny') {
+          updateData.storageKey = `bunny:${item.fileUrl.replace(/^https?:\/\/[^/]+\//, '')}`
+          console.log(`[Upload Complete] LEGACY FIX: Added bunny: prefix to storageKey`)
+        } else if (!hasProviderPrefix && item.fileUrl && provider === 'r2') {
+          updateData.storageKey = `r2:${item.fileUrl.replace(/^https?:\/\/[^/]+\//, '')}`
+          console.log(`[Upload Complete] LEGACY FIX: Added r2: prefix to storageKey`)
+        } else if (!hasProviderPrefix && item.fileId && provider === 'shopify') {
           updateData.storageKey = `shopify:${item.fileId}`
-          console.log(
-            `[Upload Complete] Stored Shopify fileId for later resolution: ${item.fileId}`
-          )
+          console.log(`[Upload Complete] LEGACY FIX: Added shopify: prefix`)
+        } else {
+          console.log(`[Upload Complete] storageKey already has prefix, no update needed: ${currentStorageKey.substring(0, 60)}`)
         }
-        // For local storage, storageKey was already set during intent - no update needed
 
         await prisma.uploadItem.update({
           where: { id: item.itemId },

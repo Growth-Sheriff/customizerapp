@@ -539,6 +539,25 @@ export function buildStorageKey(
   return `${safeShop}/${env}/${uploadId}/${itemId}/${filename}`
 }
 
+/**
+ * Build storage key WITH provider prefix (for database storage)
+ * This is the CANONICAL format stored in database
+ * Format: "bunny:shop/prod/uploadId/itemId/file.png" or "r2:..." or "local:..."
+ * 
+ * CRITICAL: This ensures preflight worker always has correct provider info
+ */
+export function buildStorageKeyWithPrefix(
+  provider: StorageProvider,
+  shopDomain: string,
+  uploadId: string,
+  itemId: string,
+  filename: string
+): string {
+  const baseKey = buildStorageKey(shopDomain, uploadId, itemId, filename)
+  // Always prefix with provider for unambiguous storage resolution
+  return `${provider}:${baseKey}`
+}
+
 export function getLocalFilePath(key: string): string {
   return join(LOCAL_STORAGE_BASE, key)
 }

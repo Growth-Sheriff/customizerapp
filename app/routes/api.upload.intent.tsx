@@ -6,6 +6,7 @@ import prisma from '~/lib/prisma.server'
 import { getIdentifier, rateLimitGuard } from '~/lib/rateLimit.server'
 import {
   buildStorageKey,
+  buildStorageKeyWithPrefix,
   getStorageConfig,
   getUploadSignedUrl,
   type UploadUrlResult,
@@ -252,8 +253,18 @@ export async function action({ request }: ActionFunctionArgs) {
 
   console.log(`[Upload Intent] Shop: ${shopDomain}, Storage: ${storageConfig.provider}`)
 
-  // Build storage key
+  // Build storage key (raw path without prefix - used for signed URL)
   const key = buildStorageKey(shopDomain, uploadId, itemId, fileName)
+  
+  // Build storage key WITH provider prefix (stored in DB - used by preflight worker)
+  // CRITICAL: This ensures preflight always knows which provider to use
+  const storageKeyWithPrefix = buildStorageKeyWithPrefix(
+    storageConfig.provider,
+    shopDomain,
+    uploadId,
+    itemId,
+    fileName
+  )
 
   try {
     // Create upload record with visitor tracking
@@ -280,12 +291,14 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     // Create upload item record
+    // CRITICAL: storageKey includes provider prefix (e.g., "bunny:shop/prod/...")
+    // This is the canonical format - preflight worker uses this directly
     await prisma.uploadItem.create({
       data: {
         id: itemId,
         uploadId: upload.id,
         location: 'front', // default, will be updated later
-        storageKey: key,
+        storageKey: storageKeyWithPrefix, // WITH prefix for unambiguous provider resolution
         originalName: fileName,
         mimeType: contentType,
         fileSize: fileSize || null,
