@@ -33,6 +33,18 @@ export default function SentryTest() {
       
       <div style={{ display: "flex", gap: "10px", marginTop: "20px" }}>
         <button 
+            onClick={() => {
+                console.log("Console Log Test from Client");
+                console.warn("Console Warn Test from Client");
+                console.error("Console Error Test from Client");
+                alert("Logs sent to console. Check Sentry Logs.");
+            }}
+            style={{ padding: "10px 20px", background: "#3498db", color: "white", border: "none", borderRadius: "5px", cursor: "pointer" }}
+        >
+            Trigger Console Logs
+        </button>
+
+        <button 
           onClick={() => Sentry.captureMessage("Manual Sentry Test Message")}
           style={{ padding: "10px 20px", background: "#f1c40f", color: "black", border: "none", borderRadius: "5px", cursor: "pointer" }}
         >
