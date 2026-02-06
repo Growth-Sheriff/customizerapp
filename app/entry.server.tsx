@@ -12,6 +12,7 @@ import { addDocumentResponseHeaders } from "./shopify.server";
 Sentry.init({
     dsn: "https://808c0fd1491e58940acad91a5c893df6@o4510838496821248.ingest.us.sentry.io/4510838504030208", 
     tracesSampleRate: 1,
+    debug: true, // Hata ayıklama için geçici olarak açık
 });
 
 export const streamTimeout = 5000;

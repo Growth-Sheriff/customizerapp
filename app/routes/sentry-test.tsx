@@ -4,6 +4,8 @@ import { useLoaderData } from "@remix-run/react";
 import * as Sentry from "@sentry/remix";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
+  // Test Sentry in Loader
+  // Sentry.captureMessage("Sentry Loader Test Message");
   return json({ message: "Sentry Test Route" });
 };
 
@@ -11,8 +13,13 @@ export default function SentryTest() {
   const data = useLoaderData<typeof loader>();
 
   const triggerError = () => {
-    // @ts-ignore
-    myUndefinedFunction();
+    try {
+      // @ts-ignore
+      myUndefinedFunction();
+    } catch (e) {
+      Sentry.captureException(e);
+      throw e; // Re-throw to trigger ErrorBoundary visually
+    }
   };
 
   const triggerServerError = () => {
@@ -55,5 +62,10 @@ export default function SentryTest() {
 }
 
 export const action = async () => {
-    throw new Error("This is a simulated Server Action Error!");
+    try {
+      throw new Error("This is a simulated Server Action Error (MANUAL CAPTURE)!");
+    } catch (e) {
+      Sentry.captureException(e);
+      throw e;
+    }
 }
