@@ -387,6 +387,7 @@ export default function AnalyticsPage() {
   const [customEndDate, setCustomEndDate] = useState('')
   const [showCustomDatePicker, setShowCustomDatePicker] = useState(period === 'custom')
   const navigate = useNavigate()
+  const [selectedUploadId, setSelectedUploadId] = useState<string | null>(null)
 
   const handlePeriodChange = useCallback(
     (value: string) => {
