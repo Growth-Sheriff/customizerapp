@@ -36,21 +36,23 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
     return new Response('File not found', { status: 404 })
   }
 
-  // WI-004: Validate signed URL token
-  const url = new URL(request.url)
-  const token = url.searchParams.get('token')
   const decodedKey = decodeURIComponent(key)
 
-  if (!token || !validateLocalFileToken(decodedKey, token)) {
-    return new Response('Unauthorized - invalid or expired token', {
-      status: 401,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-      },
-    })
-  }
-
   try {
+    // If the key is R2, redirect to signed URL
+    // NOTE: We do this BEFORE token check because dashboard doesn't have token for these
+    if (decodedKey.startsWith('r2:')) {
+      const r2Key = decodedKey.replace('r2:', '')
+      const config = getStorageConfig()
+      const signedUrl = await getR2SignedGetUrl(config, r2Key)
+
+      if (signedUrl) {
+        return Response.redirect(signedUrl, 302)
+      }
+      console.error('[FileServe] Failed to sign R2 URL for key:', r2Key)
+      return new Response('File not found / R2 Error', { status: 404 })
+    }
+
     // If the key is a Bunny URL or bunny: prefixed, redirect to CDN
     if (isBunnyUrl(decodedKey) || decodedKey.startsWith('bunny:')) {
       const cdnUrl = process.env.BUNNY_CDN_URL || 'https://customizerappdev.b-cdn.net'
@@ -66,17 +68,17 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
       return Response.redirect(redirectUrl, 302)
     }
 
-    // If the key is R2, redirect to signed URL
-    if (decodedKey.startsWith('r2:')) {
-      const r2Key = decodedKey.replace('r2:', '')
-      const config = getStorageConfig()
-      const signedUrl = await getR2SignedGetUrl(config, r2Key)
+    // WI-004: Validate signed URL token (ONLY for local files)
+    const url = new URL(request.url)
+    const token = url.searchParams.get('token')
 
-      if (signedUrl) {
-        return Response.redirect(signedUrl, 302)
-      }
-      console.error('[FileServe] Failed to sign R2 URL for key:', r2Key)
-      return new Response('File not found / R2 Error', { status: 404 })
+    if (!token || !validateLocalFileToken(decodedKey, token)) {
+      return new Response('Unauthorized - invalid or expired token', {
+        status: 401,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+        },
+      })
     }
 
     // Otherwise serve from local storage
