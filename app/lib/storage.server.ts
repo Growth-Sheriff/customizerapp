@@ -390,6 +390,8 @@ function getLocalUploadUrl(_config: StorageConfig, key: string): UploadUrlResult
 
 /**
  * Generate download/public URL based on storage provider
+ * IMPORTANT: Checks for provider prefix in key FIRST (bunny:, r2:, local:)
+ * This ensures correct URL generation regardless of shop's current provider setting
  */
 export async function getDownloadSignedUrl(
   config: StorageConfig,
@@ -401,21 +403,64 @@ export async function getDownloadSignedUrl(
     return key
   }
 
-  // Check if key indicates Bunny storage
+  // Check if key indicates Bunny storage (prefix-based detection)
   if (key.startsWith('bunny:')) {
     const bunnyKey = key.replace('bunny:', '')
-    return `${config.bunnyCdnUrl || BUNNY_CDN_URL}/${bunnyKey}`
+    // Encode path segments to handle spaces and special characters
+    const encodedPath = bunnyKey
+      .split('/')
+      .map((segment) => encodeURIComponent(segment))
+      .join('/')
+    return `${config.bunnyCdnUrl || BUNNY_CDN_URL}/${encodedPath}`
   }
 
+  // Check if key indicates R2 storage (prefix-based detection)
+  if (key.startsWith('r2:')) {
+    const r2Key = key.replace('r2:', '')
+    // Encode path segments to handle spaces and special characters
+    const encodedPath = r2Key
+      .split('/')
+      .map((segment) => encodeURIComponent(segment))
+      .join('/')
+    const r2PublicUrl = config.r2PublicUrl || process.env.R2_PUBLIC_URL
+    if (r2PublicUrl) {
+      return `${r2PublicUrl}/${encodedPath}`
+    }
+    // Fallback to R2 dev URL format
+    const r2AccountId = config.r2AccountId || process.env.R2_ACCOUNT_ID
+    return `https://pub-${r2AccountId}.r2.dev/${encodedPath}`
+  }
+
+  // Check if key indicates Local storage (prefix-based detection)
+  if (key.startsWith('local:')) {
+    const localKey = key.replace('local:', '')
+    let host = process.env.SHOPIFY_APP_URL || process.env.HOST || 'https://customizerapp.dev'
+    if (!host.startsWith('http://') && !host.startsWith('https://')) {
+      host = `https://${host}`
+    }
+    const expiresAt = Date.now() + expiresIn * 1000
+    const token = generateLocalFileToken(localKey, expiresAt)
+    return `${host}/api/files/${encodeURIComponent(localKey)}?token=${token}`
+  }
+
+  // Fallback: Use effective provider from config (no prefix in key)
   const effectiveProvider = getEffectiveStorageProvider(config)
 
   switch (effectiveProvider) {
     case 'bunny':
       // Bunny CDN URL (public)
-      return `${config.bunnyCdnUrl}/${key}`
+      const encodedBunnyPath = key
+        .split('/')
+        .map((segment) => encodeURIComponent(segment))
+        .join('/')
+      return `${config.bunnyCdnUrl || BUNNY_CDN_URL}/${encodedBunnyPath}`
     case 'r2':
       // R2 public URL
-      return `${config.r2PublicUrl}/${key}`
+      const encodedR2Path = key
+        .split('/')
+        .map((segment) => encodeURIComponent(segment))
+        .join('/')
+      return `${config.r2PublicUrl || process.env.R2_PUBLIC_URL}/${encodedR2Path}`
     case 'local':
     default:
       // Local signed URL
@@ -432,6 +477,7 @@ export async function getDownloadSignedUrl(
 /**
  * Generate thumbnail URL with Bunny Optimizer
  * IMPORTANT: URL encodes the path to handle special characters and spaces
+ * Supports prefix-based detection: bunny:, r2:, local:
  */
 export function getThumbnailUrl(
   config: StorageConfig,
@@ -460,7 +506,34 @@ export function getThumbnailUrl(
     return `${config.bunnyCdnUrl || BUNNY_CDN_URL}/${encodedPath}?width=${width}${height ? `&height=${height}` : ''}&format=webp&quality=85`
   }
 
-  // Local - no optimizer, return as-is
+  // R2 key - R2 doesn't have image optimizer, return direct URL
+  if (key.startsWith('r2:')) {
+    const r2Key = key.replace('r2:', '')
+    const encodedPath = r2Key
+      .split('/')
+      .map((segment) => encodeURIComponent(segment))
+      .join('/')
+    const r2PublicUrl = config.r2PublicUrl || process.env.R2_PUBLIC_URL
+    if (r2PublicUrl) {
+      return `${r2PublicUrl}/${encodedPath}`
+    }
+    const r2AccountId = config.r2AccountId || process.env.R2_ACCOUNT_ID
+    return `https://pub-${r2AccountId}.r2.dev/${encodedPath}`
+  }
+
+  // Local key - return signed URL for local files
+  if (key.startsWith('local:')) {
+    const localKey = key.replace('local:', '')
+    let host = process.env.SHOPIFY_APP_URL || process.env.HOST || 'https://customizerapp.dev'
+    if (!host.startsWith('http://') && !host.startsWith('https://')) {
+      host = `https://${host}`
+    }
+    const expiresAt = Date.now() + 3600 * 1000 // 1 hour for thumbnails
+    const token = generateLocalFileToken(localKey, expiresAt)
+    return `${host}/api/files/${encodeURIComponent(localKey)}?token=${token}`
+  }
+
+  // Local - no optimizer, return as-is (legacy, no prefix)
   return key
 }
 
