@@ -31,6 +31,8 @@ import { authenticate } from '~/shopify.server'
 
 import { UploadDetailModal } from '~/components/UploadDetailModal'
 
+import { UploadDetailModal } from '~/components/UploadDetailModal'
+
 export async function loader({ request }: LoaderFunctionArgs) {
   const { session } = await authenticate.admin(request)
   const shopDomain = session.shop
@@ -437,8 +439,10 @@ export default function AnalyticsPage() {
   }
 
   const recentRows = recentUploads.map((u: any) => [
-    u.id.slice(0, 8) + '...',
-    <Badge key={u.id}>{u.mode}</Badge>,
+    <Button variant="plain" onClick={() => setSelectedUploadId(u.id)} key={u.id}>
+      {u.id.slice(0, 8) + '...'}
+    </Button>,
+    <Badge key={`mode-${u.id}`}>{u.mode}</Badge>,
     <Badge
       key={`status-${u.id}`}
       tone={
@@ -1133,7 +1137,13 @@ export default function AnalyticsPage() {
             </BlockStack>
           </Card>
         </Layout.Section>
+
+        <UploadDetailModal 
+            uploadId={selectedUploadId} 
+            onClose={() => setSelectedUploadId(null)} 
+        />
       </Layout>
     </Page>
   )
 }
+

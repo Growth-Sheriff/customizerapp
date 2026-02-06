@@ -3,6 +3,7 @@ import { json } from '@remix-run/node'
 import { Link, useLoaderData, useSearchParams } from '@remix-run/react'
 import {
   Badge,
+  Button,
   BlockStack,
   Box,
   Card,
@@ -18,10 +19,11 @@ import {
   Tooltip,
 } from '@shopify/polaris'
 import { PersonIcon } from '@shopify/polaris-icons'
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import prisma from '~/lib/prisma.server'
 import { getDownloadSignedUrl, getStorageConfig } from '~/lib/storage.server'
 import { authenticate } from '~/shopify.server'
+import { UploadDetailModal } from '~/components/UploadDetailModal'
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { session } = await authenticate.admin(request)
@@ -370,6 +372,7 @@ function VisitorInfo({
 export default function UploadsPage() {
   const data = useLoaderData<typeof loader>()
   const [searchParams, setSearchParams] = useSearchParams()
+  const [selectedUploadId, setSelectedUploadId] = useState<string | null>(null)
 
   if ('error' in data) {
     return (
@@ -437,9 +440,9 @@ export default function UploadsPage() {
           </Text>
         </Box>
       )}
-      <Link to={`/app/uploads/${upload.id}`} style={{ textDecoration: 'none' }}>
+      <Button variant="plain" onClick={() => setSelectedUploadId(upload.id)}>
         {upload.id.slice(0, 10)}...
-      </Link>
+      </Button>
     </InlineStack>,
     // Mode
     upload.mode,
@@ -618,7 +621,13 @@ export default function UploadsPage() {
             </BlockStack>
           </Card>
         </Layout.Section>
+        
+        <UploadDetailModal 
+            uploadId={selectedUploadId} 
+            onClose={() => setSelectedUploadId(null)} 
+        />
       </Layout>
     </Page>
   )
 }
+
