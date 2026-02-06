@@ -1,6 +1,12 @@
 import type { LoaderFunctionArgs } from '@remix-run/node'
 import mime from 'mime-types'
-import { isBunnyUrl, readLocalFile, validateLocalFileToken } from '~/lib/storage.server'
+import {
+  getStorageConfig,
+  getR2SignedGetUrl,
+  isBunnyUrl,
+  readLocalFile,
+  validateLocalFileToken,
+} from '~/lib/storage.server'
 
 /**
  * GET /api/files/:key?token=xxx
@@ -58,6 +64,19 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
       }
 
       return Response.redirect(redirectUrl, 302)
+    }
+
+    // If the key is R2, redirect to signed URL
+    if (decodedKey.startsWith('r2:')) {
+      const r2Key = decodedKey.replace('r2:', '')
+      const config = getStorageConfig()
+      const signedUrl = await getR2SignedGetUrl(config, r2Key)
+
+      if (signedUrl) {
+        return Response.redirect(signedUrl, 302)
+      }
+      console.error('[FileServe] Failed to sign R2 URL for key:', r2Key)
+      return new Response('File not found / R2 Error', { status: 404 })
     }
 
     // Otherwise serve from local storage
