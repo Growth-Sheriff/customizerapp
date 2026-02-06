@@ -35,6 +35,8 @@ import prisma from '~/lib/prisma.server'
 import { getDownloadSignedUrl, getStorageConfig } from '~/lib/storage.server'
 import { authenticate } from '~/shopify.server'
 
+import { UploadDetailModal } from '~/components/UploadDetailModal'
+
 // Production Queue Statuses
 const QUEUE_STATUSES = [
   { value: 'needs_review', label: 'Needs Review', tone: 'attention' as const },
@@ -357,6 +359,7 @@ export default function ProductionQueuePage() {
   const isLoading = navigation.state === 'loading'
   const isSubmitting = navigation.state === 'submitting'
 
+  const [selectedUploadId, setSelectedUploadId] = useState<string | null>(null)
   const [selectedUploads, setSelectedUploads] = useState<string[]>([])
   const [bulkActionOpen, setBulkActionOpen] = useState(false)
   const [statusModalOpen, setStatusModalOpen] = useState(false)
@@ -481,7 +484,7 @@ export default function ProductionQueuePage() {
       <Button size="slim" onClick={() => openStatusModal(upload)}>
         Update
       </Button>
-      <Button size="slim" url={`/app/uploads/${upload.id}`}>
+      <Button size="slim" onClick={() => setSelectedUploadId(upload.id)}>
         View
       </Button>
     </InlineStack>,
