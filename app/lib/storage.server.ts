@@ -463,10 +463,15 @@ export async function getDownloadSignedUrl(
       .split('/')
       .map((segment) => encodeURIComponent(segment))
       .join('/')
+      
+    // Use configured Public URL (Recommended)
     const r2PublicUrl = config.r2PublicUrl || process.env.R2_PUBLIC_URL
     if (r2PublicUrl) {
-      return `${r2PublicUrl}/${encodedPath}`
+       // Ensure no double slash if url ends with /
+       const baseUrl = r2PublicUrl.endsWith('/') ? r2PublicUrl.slice(0, -1) : r2PublicUrl
+       return `${baseUrl}/${encodedPath}`
     }
+
     // Fallback: Private bucket proxy using our API
     let host = process.env.SHOPIFY_APP_URL || process.env.HOST || 'https://customizerapp.dev'
     if (!host.startsWith('http://') && !host.startsWith('https://')) {
