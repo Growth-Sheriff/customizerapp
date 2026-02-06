@@ -225,8 +225,10 @@ function getStorageClient(provider: string): S3Client | null {
 // Download file from local storage with Unicode normalization
 async function downloadLocalFile(storageKey: string, localPath: string): Promise<void> {
   const uploadsDir = process.env.LOCAL_UPLOAD_DIR || path.join(process.cwd(), 'uploads')
-  const dir = path.join(uploadsDir, path.dirname(storageKey))
-  const expectedFileName = path.basename(storageKey)
+  // Strip local: prefix if present
+  const cleanKey = storageKey.startsWith('local:') ? storageKey.replace('local:', '') : storageKey
+  const dir = path.join(uploadsDir, path.dirname(cleanKey))
+  const expectedFileName = path.basename(cleanKey)
 
   // Find file with matching NFC normalized name (handles NFD/NFC differences)
   const files = await fs.readdir(dir)
@@ -243,8 +245,9 @@ async function downloadLocalFile(storageKey: string, localPath: string): Promise
 // Upload file to local storage with Unicode normalization
 async function uploadLocalFile(storageKey: string, localPath: string): Promise<void> {
   const uploadsDir = process.env.LOCAL_UPLOAD_DIR || path.join(process.cwd(), 'uploads')
-  // Normalize storage key to NFC for consistent naming
-  const normalizedKey = storageKey.normalize('NFC')
+  // Strip local: prefix if present, then normalize to NFC
+  const cleanKey = storageKey.startsWith('local:') ? storageKey.replace('local:', '') : storageKey
+  const normalizedKey = cleanKey.normalize('NFC')
   const destPath = path.join(uploadsDir, normalizedKey)
   await fs.mkdir(path.dirname(destPath), { recursive: true })
   await fs.copyFile(localPath, destPath)
@@ -435,7 +438,7 @@ const preflightWorker = new Worker<PreflightJobData>(
       // Check for Bunny storage first (bunny: prefix or CDN URL)
       if (storageProvider === 'bunny' || isBunnyStorage(storageKey)) {
         await downloadFromBunny(storageKey, originalPath)
-      } else if (storageProvider === 'local') {
+      } else if (storageProvider === 'local' || storageKey.startsWith('local:')) {
         await downloadLocalFile(storageKey, originalPath)
       } else {
         const client = getStorageClient(storageProvider)

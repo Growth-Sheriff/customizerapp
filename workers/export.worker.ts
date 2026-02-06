@@ -92,7 +92,9 @@ async function downloadFromBunny(storageKey: string, localPath: string): Promise
 // Download file from local storage
 async function downloadFromLocal(storageKey: string, localPath: string): Promise<void> {
   const uploadsDir = process.env.LOCAL_UPLOAD_DIR || join(process.cwd(), 'uploads')
-  const sourcePath = join(uploadsDir, storageKey)
+  // Strip local: prefix if present
+  const cleanKey = storageKey.startsWith('local:') ? storageKey.replace('local:', '') : storageKey
+  const sourcePath = join(uploadsDir, cleanKey)
   const content = await fs.readFile(sourcePath)
   await fs.writeFile(localPath, content)
 }
@@ -109,8 +111,8 @@ async function downloadFileFromStorage(
     return
   }
 
-  // Check if local storage (explicit provider or no R2 config)
-  if (storageProvider === 'local' || (!key.startsWith('http') && !process.env.R2_BUCKET_NAME)) {
+  // Check if local storage (explicit provider, local: prefix, or no R2 config)
+  if (storageProvider === 'local' || key.startsWith('local:') || (!key.startsWith('http') && !key.startsWith('r2:') && !process.env.R2_BUCKET_NAME)) {
     await downloadFromLocal(key, localPath)
     return
   }
