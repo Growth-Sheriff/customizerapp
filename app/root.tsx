@@ -4,8 +4,10 @@ import {
   Outlet,
   Scripts,
   ScrollRestoration,
+  useRouteError,
+  isRouteErrorResponse
 } from "@remix-run/react";
-import { withSentry } from "@sentry/remix";
+import { withSentry, captureRemixErrorBoundaryError } from "@sentry/remix";
 
 function App() {
   return (
@@ -24,6 +26,34 @@ function App() {
       <body>
         <Outlet />
         <ScrollRestoration />
+        <Scripts />
+      </body>
+    </html>
+  );
+}
+
+export function ErrorBoundary() {
+  const error = useRouteError();
+  // Capture the error to Sentry
+  captureRemixErrorBoundaryError(error);
+
+  return (
+    <html>
+      <head>
+        <title>Application Error</title>
+        <Meta />
+        <Links />
+      </head>
+      <body>
+        <div style={{ padding: "20px", fontFamily: "system-ui, sans-serif" }}>
+          <h1>Application Error</h1>
+          <p>An unexpected error occurred. The support team has been notified.</p>
+          {isRouteErrorResponse(error) ? (
+            <p>{error.status} {error.statusText}</p>
+          ) : (
+            <p>{error instanceof Error ? error.message : "Unknown Error"}</p>
+          )}
+        </div>
         <Scripts />
       </body>
     </html>
