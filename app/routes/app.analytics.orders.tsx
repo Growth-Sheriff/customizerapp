@@ -14,14 +14,18 @@ import {
   Card,
   DataTable,
   Divider,
+  Icon,
   InlineStack,
   Layout,
+  Modal,
   Page,
   Select,
   Text,
   TextField,
+  Thumbnail,
   Tooltip,
 } from '@shopify/polaris'
+import { NoteIcon } from '@shopify/polaris-icons'
 import { useCallback, useState } from 'react'
 import prisma from '~/lib/prisma.server'
 import { authenticate } from '~/shopify.server'
@@ -414,6 +418,11 @@ export default function OrderAnalyticsPage() {
   const [customStartDate, setCustomStartDate] = useState('')
   const [customEndDate, setCustomEndDate] = useState('')
   const [showCustomDatePicker, setShowCustomDatePicker] = useState(data.period === 'custom')
+  
+  // Modal State
+  const [selectedOrder, setSelectedOrder] = useState<any>(null)
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  
   const navigate = useNavigate()
 
   const handlePeriodChange = useCallback(
@@ -480,7 +489,16 @@ export default function OrderAnalyticsPage() {
       order.shopifyData?.currency || order.orderCurrency
     ),
     order.uploadCount,
-    order.uploads.flatMap((u: any) => u.locations).join(', ') || '-',
+    <Button
+      key={`btn-${order.orderId}`}
+      variant="plain"
+      onClick={() => {
+        setSelectedOrder(order)
+        setIsModalOpen(true)
+      }}
+    >
+      Upload Files
+    </Button>,
     new Date(order.shopifyData?.createdAt || order.createdAt).toLocaleDateString(),
   ])
 
@@ -745,7 +763,7 @@ export default function OrderAnalyticsPage() {
                     'Fulfillment',
                     'Total',
                     'Uploads',
-                    'Locations',
+                    'Files',
                     'Date',
                   ]}
                   rows={orderRows}
@@ -767,6 +785,66 @@ export default function OrderAnalyticsPage() {
           </Card>
         </Layout.Section>
       </Layout>
+
+      {/* Upload Details Modal */}
+      <Modal
+        open={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        title={`Uploads for Order #${selectedOrder?.shopifyData?.name || selectedOrder?.orderId}`}
+        large
+      >
+        <Modal.Section>
+          {selectedOrder && (
+            <BlockStack gap="400">
+              {selectedOrder.uploads.map((upload: any) => (
+                <Card key={upload.id}>
+                  <BlockStack gap="400">
+                    <InlineStack align="space-between">
+                      <Text as="h3" variant="headingSm">
+                        Upload ID: {upload.id}
+                      </Text>
+                      <Badge tone={upload.status === 'approved' ? 'success' : 'attention'}>
+                        {upload.status}
+                      </Badge>
+                    </InlineStack>
+                    <Divider />
+                    {upload.items?.map((item: any) => (
+                      <InlineStack key={item.id} gap="400" blockAlign="center">
+                        {item.thumbnailUrl ? (
+                          <Thumbnail source={item.thumbnailUrl} alt={item.location} size="medium" />
+                        ) : (
+                          <Box
+                            background="bg-surface-secondary"
+                            padding="300"
+                            borderRadius="200"
+                            minWidth="60px"
+                            minHeight="60px"
+                          >
+                            <InlineStack align="center" blockAlign="center">
+                              <Icon source={NoteIcon} tone="subdued" />
+                            </InlineStack>
+                          </Box>
+                        )}
+                        <BlockStack gap="100">
+                          <Text as="span" fontWeight="bold">
+                            {item.location}
+                          </Text>
+                          <Text as="span" tone="subdued" variant="bodySm">
+                            {item.originalName || 'No filename'}
+                          </Text>
+                          <Button url={`/app/uploads/${upload.id}`} variant="plain" size="micro">
+                            View Details
+                          </Button>
+                        </BlockStack>
+                      </InlineStack>
+                    ))}
+                  </BlockStack>
+                </Card>
+              ))}
+            </BlockStack>
+          )}
+        </Modal.Section>
+      </Modal>
     </Page>
   )
 }

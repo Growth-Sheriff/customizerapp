@@ -48,6 +48,20 @@ export async function action({ request }: ActionFunctionArgs) {
       return json({ success: true }) // Still return success to Shopify
     }
 
+    // Get all configured products for this shop to detect missing uploads
+    const productConfigs = await prisma.productConfig.findMany({
+      where: { shopId: shop.id, uploadEnabled: true },
+      select: { productId: true, mode: true },
+    })
+    
+    // Create a Set of product IDs (numeric strings) from GIDs
+    const configuredProductIds = new Map(
+      productConfigs.map((p) => [
+        p.productId.split('/').pop() || '',
+        p.mode
+      ])
+    )
+
     // Process line items looking for upload_lift properties
     const processedUploads: string[] = []
     let hasUploadLiftItems = false
@@ -119,6 +133,81 @@ export async function action({ request }: ActionFunctionArgs) {
         } else {
           console.warn(`[Webhook] Upload ${uploadLiftId} not found for shop ${shopDomain}`)
         }
+      } else if (!uploadLiftId && configuredProductIds.has(String(lineItem.product_id))) {
+        // CASE: "Buy Now" button bypass or JS error
+        // The product is configured for upload, but no upload ID is passed in properties.
+        // We create a "Missing Upload" record to alert the merchant.
+        
+        console.warn(`[Webhook] Missing upload for configured product ${lineItem.product_id} in order ${order.id}`)
+        hasUploadLiftItems = true // Mark as valid app order for commission logic
+        
+        const mode = configuredProductIds.get(String(lineItem.product_id)) || 'dtf'
+        
+        // Create a ghost upload record
+        const ghostUpload = await prisma.upload.create({
+          data: {
+            shopId: shop.id,
+            productId: `gid://shopify/Product/${lineItem.product_id}`,
+            variantId: `gid://shopify/ProductVariant/${lineItem.variant_id}`,
+            customerId: order.customer?.id ? String(order.customer.id) : null,
+            customerEmail: order.email,
+            orderId: String(order.id),
+            status: 'blocked', // Blocked so merchant sees it immediately
+            mode: mode,
+            preflightSummary: {
+              overall: 'error',
+              errorType: 'missing_upload',
+              message: 'Upload data missing. Customer likely used "Buy Now" button or bypassed upload.',
+              lineItems: [lineItem.name],
+            },
+          },
+        })
+        
+        // Link it to order
+        await prisma.orderLink.create({
+          data: {
+            shopId: shop.id,
+            orderId: String(order.id),
+            uploadId: ghostUpload.id,
+            lineItemId: String(lineItem.id),
+          },
+        })
+        
+        // Create an empty item so it shows in the UI list (with error status)
+        await prisma.uploadItem.create({
+          data: {
+            uploadId: ghostUpload.id,
+            location: 'unknown',
+            storageKey: '', // Empty
+            originalName: 'Missing File',
+            preflightStatus: 'error',
+            preflightResult: {
+              overall: 'error',
+              checks: [{
+                name: 'upload_check',
+                status: 'error',
+                message: 'File not found. Please contact customer for the file.'
+              }]
+            }
+          }
+        })
+        
+        processedUploads.push(ghostUpload.id)
+        
+        // Audit log
+        await prisma.auditLog.create({
+          data: {
+            shopId: shop.id,
+            action: 'ghost_upload_created',
+            resourceType: 'upload',
+            resourceId: ghostUpload.id,
+            metadata: {
+              orderId: order.id,
+              reason: 'missing_properties',
+              productId: lineItem.product_id
+            },
+          },
+        })
       }
     }
 
