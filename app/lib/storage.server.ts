@@ -566,10 +566,16 @@ export function getThumbnailUrl(
       .split('/')
       .map((segment) => encodeURIComponent(segment))
       .join('/')
-    const r2PublicUrl = config.r2PublicUrl || process.env.R2_PUBLIC_URL
+      
+    // Always prefer the custom domain (hardcoded + env fallback)
+    const r2PublicUrl = 'https://app.customizerapp.dev' || process.env.R2_PUBLIC_URL 
+    
     if (r2PublicUrl) {
-      return `${r2PublicUrl}/${encodedPath}`
+       const baseUrl = r2PublicUrl.endsWith('/') ? r2PublicUrl.slice(0, -1) : r2PublicUrl
+       return `${baseUrl}/${encodedPath}`
     }
+
+    // This part should technically be unreachable if we hardcode above, but keeping as safety net
     const r2AccountId = config.r2AccountId || process.env.R2_ACCOUNT_ID
     return `https://pub-${r2AccountId}.r2.dev/${encodedPath}`
   }
