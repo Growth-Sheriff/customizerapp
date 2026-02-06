@@ -18,23 +18,21 @@ const host = new URL(process.env.SHOPIFY_APP_URL || "http://localhost")
   .hostname;
 
 export default defineConfig({
-  plugins: [
-    remix({
-      ignoredRouteFiles: ["**/.*"],
-      future: {
-        v3_fetcherPersist: true,
-        v3_relativeSplatPath: true,
-        v3_throwAbortReason: true,
-        v3_singleFetch: false, // IMPORTANT: Must be false for Shopify embedded apps
-        v3_lazyRouteDiscovery: true,
-      },
-    }),
+  plugins: [remix({
+    ignoredRouteFiles: ["**/.*"],
+    future: {
+      v3_fetcherPersist: true,
+      v3_relativeSplatPath: true,
+      v3_throwAbortReason: true,
+      v3_singleFetch: false, // IMPORTANT: Must be false for Shopify embedded apps
+      v3_lazyRouteDiscovery: true,
+    },
     tsconfigPaths(),
     sentryVitePlugin({
       org: "techify-boost-36",
       project: "javascript-remix",
       authToken: process.env.SENTRY_AUTH_TOKEN,
-    }),
+    })
   ],
   server: {
     port: Number(process.env.PORT || 3000),
@@ -42,9 +40,9 @@ export default defineConfig({
   },
   build: {
     assetsInlineLimit: 0,
+    sourcemap: true
   },
   optimizeDeps: {
     include: ["@shopify/app-bridge-react", "@shopify/polaris"],
   },
 });
-

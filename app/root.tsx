@@ -7,6 +7,7 @@ import {
   useRouteError,
   isRouteErrorResponse
 } from "@remix-run/react";
+import * as Sentry from "@sentry/remix";
 import { withSentry, captureRemixErrorBoundaryError } from "@sentry/remix";
 
 function App() {
@@ -67,4 +68,3 @@ export function ErrorBoundary() {
 }
 
 export default withSentry(App);
-
