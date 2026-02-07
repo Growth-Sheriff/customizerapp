@@ -350,10 +350,9 @@ async function getR2UploadUrl(
     // R2 public URL logic
     let publicUrl: string
     
-    // FORCE UPDATE: Always use app.customizerapp.dev proxy for R2 to prevent pub-xxx.r2.dev links
-    // This ensures that even if a public bucket is configured, we route through our app
-    // which then handles the signing/redirecting to the actual R2 bucket.
-    const appHost = 'https://app.customizerapp.dev'
+    // FORCE UPDATE: Always use main app domain for R2 proxy
+    // Using app. subdomain caused 404s due to missing DNS/Cloudflare config
+    const appHost = process.env.SHOPIFY_APP_URL || 'https://customizerapp.dev'
     
     // We don't strictly need a token for r2: paths in api.files.$.tsx (as per its current logic),
     // but generating one keeps it consistent with local file handling.
@@ -562,7 +561,7 @@ export function getThumbnailUrl(
       .join('/')
       
     // Always prefer the custom domain (hardcoded + env fallback)
-    const r2PublicUrl = 'https://app.customizerapp.dev' || process.env.R2_PUBLIC_URL 
+    const r2PublicUrl = process.env.SHOPIFY_APP_URL || 'https://customizerapp.dev' 
     
     if (r2PublicUrl) {
        const baseUrl = r2PublicUrl.endsWith('/') ? r2PublicUrl.slice(0, -1) : r2PublicUrl

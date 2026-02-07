@@ -211,8 +211,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       // R2 storage - build public URL via Proxy
       const r2Key = firstItem.storageKey.replace('r2:', '')
       
-      // FORCE UPDATE: Always use app.customizerapp.dev proxy for R2
-      const appHost = 'https://app.customizerapp.dev'
+      // FORCE UPDATE: Always use main app domain for R2 proxy
+      const appHost = process.env.SHOPIFY_APP_URL || 'https://customizerapp.dev'
       const encodedPath = r2Key
           .split('/')
           .map((segment) => encodeURIComponent(segment))
@@ -267,8 +267,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       // R2 thumbnail - build public URL via Proxy
       const r2Key = firstItem.thumbnailKey.replace('r2:', '')
       
-       // FORCE UPDATE: Always use app.customizerapp.dev proxy for R2
-      const appHost = 'https://app.customizerapp.dev'
+       // FORCE UPDATE: Always use main app domain for R2 proxy
+      const appHost = process.env.SHOPIFY_APP_URL || 'https://customizerapp.dev'
       const encodedPath = r2Key
           .split('/')
           .map((segment) => encodeURIComponent(segment))
