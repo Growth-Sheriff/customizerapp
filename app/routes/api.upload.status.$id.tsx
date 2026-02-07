@@ -208,25 +208,21 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         .join('/')
       downloadUrl = `${cdnUrl}/${encodedPath}`
     } else if (isR2Key(firstItem.storageKey)) {
-      // R2 storage - build public URL
+      // R2 storage - build public URL via Proxy
       const r2Key = firstItem.storageKey.replace('r2:', '')
-      const r2PublicUrl = storageConfig.r2PublicUrl || process.env.R2_PUBLIC_URL
-      if (r2PublicUrl) {
-        // Custom domain configured
-        const encodedPath = r2Key
+      
+      // FORCE UPDATE: Always use app.customizerapp.dev proxy for R2
+      const appHost = 'https://app.customizerapp.dev'
+      const encodedPath = r2Key
           .split('/')
           .map((segment) => encodeURIComponent(segment))
           .join('/')
-        downloadUrl = `${r2PublicUrl}/${encodedPath}`
-      } else {
-        // Use r2.dev URL format
-        const r2AccountId = storageConfig.r2AccountId || process.env.R2_ACCOUNT_ID
-        const encodedPath = r2Key
-          .split('/')
-          .map((segment) => encodeURIComponent(segment))
-          .join('/')
-        downloadUrl = `https://pub-${r2AccountId}.r2.dev/${encodedPath}`
-      }
+      
+      // Generate token for proxy access
+      const tokenExpiresAt = Date.now() + 365 * 24 * 3600 * 1000 // 1 year
+      const token = generateLocalFileToken(`r2:${r2Key}`, tokenExpiresAt)
+      
+      downloadUrl = `${appHost}/api/files/r2:${encodedPath}?token=${token}`
     } else if (isShopifyFileId(firstItem.storageKey)) {
       // Shopify fileId - resolve to URL via API
       const fileId = firstItem.storageKey.replace('shopify:', '')
@@ -268,23 +264,21 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       // Bunny key - use optimizer
       thumbnailUrl = getThumbnailUrl(storageConfig, firstItem.thumbnailKey, 200)
     } else if (isR2Key(firstItem.thumbnailKey)) {
-      // R2 thumbnail - build public URL
+      // R2 thumbnail - build public URL via Proxy
       const r2Key = firstItem.thumbnailKey.replace('r2:', '')
-      const r2PublicUrl = storageConfig.r2PublicUrl || process.env.R2_PUBLIC_URL
-      if (r2PublicUrl) {
-        const encodedPath = r2Key
+      
+       // FORCE UPDATE: Always use app.customizerapp.dev proxy for R2
+      const appHost = 'https://app.customizerapp.dev'
+      const encodedPath = r2Key
           .split('/')
           .map((segment) => encodeURIComponent(segment))
           .join('/')
-        thumbnailUrl = `${r2PublicUrl}/${encodedPath}`
-      } else {
-        const r2AccountId = storageConfig.r2AccountId || process.env.R2_ACCOUNT_ID
-        const encodedPath = r2Key
-          .split('/')
-          .map((segment) => encodeURIComponent(segment))
-          .join('/')
-        thumbnailUrl = `https://pub-${r2AccountId}.r2.dev/${encodedPath}`
-      }
+      
+       // Generate token for proxy access
+      const tokenExpiresAt = Date.now() + 365 * 24 * 3600 * 1000 // 1 year
+      const token = generateLocalFileToken(`r2:${r2Key}`, tokenExpiresAt)
+
+      thumbnailUrl = `${appHost}/api/files/r2:${encodedPath}?token=${token}`
     } else if (isShopifyFileId(firstItem.thumbnailKey)) {
       const fileId = firstItem.thumbnailKey.replace('shopify:', '')
       thumbnailUrl = await resolveShopifyFileUrl(fileId, shop.shopDomain, shop.accessToken)
