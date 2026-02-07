@@ -39,12 +39,21 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
   const decodedKey = decodeURIComponent(key)
 
   try {
-    // If the key is R2, redirect to signed URL
-    // NOTE: We do this BEFORE token check because dashboard doesn't have token for these
+    // Debug logging for R2 issues
     if (decodedKey.startsWith('r2:')) {
+      console.log('[FileServe] R2 Request:', { key, decodedKey });
       const r2Key = decodedKey.replace('r2:', '')
       const config = getStorageConfig()
+      
+      // Explicitly check config here to debug
+      console.log('[FileServe] Config validation:', {
+         hasAccountId: !!process.env.R2_ACCOUNT_ID,
+         hasAccessKey: !!process.env.R2_ACCESS_KEY_ID, 
+         hasSecret: !!process.env.R2_SECRET_ACCESS_KEY
+      });
+
       const signedUrl = await getR2SignedGetUrl(config, r2Key)
+      console.log('[FileServe] Signed URL result:', signedUrl ? 'Generated' : 'NULL');
 
       if (signedUrl) {
         return Response.redirect(signedUrl, 302)
