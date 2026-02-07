@@ -39,8 +39,8 @@ const LOCAL_FILE_SECRET = process.env.SECRET_KEY || 'fallback-secret-key'
 // Bunny.net Configuration
 const BUNNY_STORAGE_ZONE = process.env.BUNNY_STORAGE_ZONE || 'customizerappdev'
 const BUNNY_API_KEY = process.env.BUNNY_API_KEY || ''
-const BUNNY_CDN_URL = process.env.BUNNY_CDN_URL || 'https://customizerappdev.b-cdn.net'
-const BUNNY_STORAGE_HOST = 'storage.bunnycdn.com'
+const BUNNY_CDN_URL = process.env.BUNNY_CDN_URL || 'https://img.customizerapp.dev'
+const BUNNY_STORAGE_HOST = process.env.BUNNY_STORAGE_HOST || 'storage.bunnycdn.com'
 
 // R2 Configuration (for future use)
 const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID || ''

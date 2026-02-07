@@ -26,3 +26,20 @@ customizerapp.dev {
         format json
     }
 }
+
+# 🆕 Upload Proxy for BunnyCDN (Bypass Firewall Blocks)
+upload.customizerapp.dev {
+    reverse_proxy https://storage.bunnycdn.com {
+        header_up Host {upstream_hostport}
+    }
+
+    # High timeout for large uploads
+    request_body {
+        max_size 1500MB
+    }
+
+    log {
+        output file /var/log/caddy/upload.log
+        format json
+    }
+}
