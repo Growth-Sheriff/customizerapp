@@ -19,13 +19,14 @@ import {
   Text,
   TextField,
 } from '@shopify/polaris'
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import prisma from '~/lib/prisma.server'
+import { isPayPalConfigured } from '~/lib/paypal.server'
 import { authenticate } from '~/shopify.server'
 
-// Fixed commission per order: $0.015 (1.5 cents)
+// Fixed commission per order: $0.10
 const COMMISSION_PER_ORDER = 0.1
-const PAYPAL_EMAIL = 'payments@customizerapp.dev' // PayPal hesabı
+const PAYPAL_EMAIL = process.env.PAYPAL_EMAIL || 'billing@techifyboost.com'
 
 interface CommissionSummary {
   totalCommission: number
@@ -173,6 +174,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     totalFiles: uploadStats._count,
     commissionPerOrder: COMMISSION_PER_ORDER,
     paypalEmail: PAYPAL_EMAIL,
+    paypalEnabled: isPayPalConfigured(),
+    paypalClientId: process.env.PAYPAL_CLIENT_ID || '',
   })
 }
 
@@ -262,19 +265,105 @@ export default function BillingPage() {
     totalFiles,
     commissionPerOrder,
     paypalEmail,
+    paypalEnabled,
   } = useLoaderData<typeof loader>()
   const navigation = useNavigation()
   const isSubmitting = navigation.state === 'submitting'
 
-  // Payment modal state
+  // Payment modal state (manual flow)
   const [paymentModalOpen, setPaymentModalOpen] = useState(false)
   const [paymentRef, setPaymentRef] = useState('')
+
+  // PayPal state
+  const [paypalLoading, setPaypalLoading] = useState(false)
+  const [paypalError, setPaypalError] = useState<string | null>(null)
+  const [paypalSuccess, setPaypalSuccess] = useState(false)
+  const [paypalCaptureId, setPaypalCaptureId] = useState<string | null>(null)
 
   const handlePaymentModalOpen = useCallback(() => setPaymentModalOpen(true), [])
   const handlePaymentModalClose = useCallback(() => {
     setPaymentModalOpen(false)
     setPaymentRef('')
   }, [])
+
+  // Check URL params for PayPal return
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search)
+    const paypalStatus = urlParams.get('paypal')
+    if (paypalStatus === 'cancelled') {
+      setPaypalError('Payment was cancelled. You can try again.')
+    }
+  }, [])
+
+  // PayPal checkout flow
+  const handlePayWithPayPal = useCallback(async () => {
+    setPaypalLoading(true)
+    setPaypalError(null)
+
+    try {
+      // Step 1: Create PayPal order via our API
+      const createResponse = await fetch('/api/paypal/create-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+
+      const createData = await createResponse.json()
+
+      if (!createResponse.ok || !createData.success) {
+        throw new Error(createData.error || 'Failed to create PayPal order')
+      }
+
+      // Step 2: Redirect to PayPal for approval
+      // PayPal will redirect back to /app/billing?paypal=success
+      window.open(createData.approvalUrl, '_blank')
+
+      // Show instructions
+      setPaypalError(null)
+      setPaypalLoading(false)
+
+      // Poll for completion (the user completes payment in PayPal tab)
+      // Wait for user to click "I Completed Payment on PayPal"
+      setPaypalCaptureId(createData.paypalOrderId)
+    } catch (error) {
+      console.error('PayPal error:', error)
+      setPaypalError(error instanceof Error ? error.message : 'PayPal payment failed')
+      setPaypalLoading(false)
+    }
+  }, [])
+
+  // Capture PayPal payment after user confirms
+  const handleCapturePayPal = useCallback(async () => {
+    if (!paypalCaptureId) return
+
+    setPaypalLoading(true)
+    setPaypalError(null)
+
+    try {
+      const captureResponse = await fetch('/api/paypal/capture-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paypalOrderId: paypalCaptureId }),
+      })
+
+      const captureData = await captureResponse.json()
+
+      if (!captureResponse.ok || !captureData.success) {
+        throw new Error(captureData.error || 'Failed to capture payment')
+      }
+
+      setPaypalSuccess(true)
+      setPaypalCaptureId(null)
+
+      // Reload page to reflect paid status
+      setTimeout(() => {
+        window.location.href = '/app/billing'
+      }, 2000)
+    } catch (error) {
+      console.error('PayPal capture error:', error)
+      setPaypalError(error instanceof Error ? error.message : 'Payment capture failed')
+      setPaypalLoading(false)
+    }
+  }, [paypalCaptureId])
 
   // Format date for display
   const formatDate = (iso: string) => {
@@ -395,24 +484,98 @@ export default function BillingPage() {
           <Layout.Section>
             <Card>
               <BlockStack gap="400">
+                {/* PayPal Success Banner */}
+                {paypalSuccess && (
+                  <Banner tone="success" onDismiss={() => setPaypalSuccess(false)}>
+                    <p>
+                      Payment successful! Your commissions have been marked as paid. Page will
+                      refresh shortly.
+                    </p>
+                  </Banner>
+                )}
+
+                {/* PayPal Error Banner */}
+                {paypalError && (
+                  <Banner tone="critical" onDismiss={() => setPaypalError(null)}>
+                    <p>{paypalError}</p>
+                  </Banner>
+                )}
+
                 <InlineStack align="space-between">
                   <BlockStack gap="100">
                     <Text as="h2" variant="headingMd">
                       Payment Due
                     </Text>
                     <Text as="p" variant="bodyMd">
-                      Please send <strong>${summary.pendingAmount.toFixed(2)}</strong> via PayPal
+                      Please send <strong>${summary.pendingAmount.toFixed(2)}</strong> for{' '}
+                      {summary.pendingOrders} orders
                     </Text>
                   </BlockStack>
-                  <Button variant="primary" onClick={handlePaymentModalOpen}>
-                    I've Made Payment
-                  </Button>
+                  <InlineStack gap="200">
+                    {/* PayPal Checkout Button */}
+                    {paypalEnabled && !paypalCaptureId && (
+                      <Button
+                        variant="primary"
+                        onClick={handlePayWithPayPal}
+                        loading={paypalLoading}
+                        disabled={paypalLoading}
+                      >
+                        💳 Pay with PayPal
+                      </Button>
+                    )}
+                    {/* Capture Button - shown after PayPal approval */}
+                    {paypalCaptureId && (
+                      <Button
+                        variant="primary"
+                        tone="success"
+                        onClick={handleCapturePayPal}
+                        loading={paypalLoading}
+                        disabled={paypalLoading}
+                      >
+                        ✅ I Completed Payment on PayPal
+                      </Button>
+                    )}
+                    {/* Manual Payment Button (always available as fallback) */}
+                    <Button onClick={handlePaymentModalOpen}>
+                      I've Made Payment Manually
+                    </Button>
+                  </InlineStack>
                 </InlineStack>
 
                 <Divider />
 
+                {/* PayPal Instructions */}
+                {paypalEnabled && !paypalCaptureId && (
+                  <Box background="bg-surface-secondary" padding="400" borderRadius="200">
+                    <BlockStack gap="200">
+                      <Text as="p" variant="bodyMd" fontWeight="semibold">
+                        🔒 Secure PayPal Checkout
+                      </Text>
+                      <Text as="p" variant="bodySm">
+                        Click "Pay with PayPal" to pay securely. You'll be redirected to PayPal
+                        to complete the payment. After completing, click "I Completed Payment" to
+                        confirm.
+                      </Text>
+                    </BlockStack>
+                  </Box>
+                )}
+
+                {/* PayPal Capture Instructions */}
+                {paypalCaptureId && (
+                  <Banner tone="warning">
+                    <p>
+                      A PayPal payment window has opened. Complete the payment there, then click
+                      "I Completed Payment on PayPal" above.
+                    </p>
+                  </Banner>
+                )}
+
+                {/* Manual Payment Instructions */}
                 <Box background="bg-surface-secondary" padding="400" borderRadius="200">
                   <BlockStack gap="200">
+                    <Text as="p" variant="bodyMd" fontWeight="semibold">
+                      Manual Payment Option
+                    </Text>
                     <InlineStack gap="200">
                       <Text as="p" variant="bodyMd" fontWeight="semibold">
                         PayPal Email:
@@ -441,7 +604,8 @@ export default function BillingPage() {
                 </Box>
 
                 <Text as="p" variant="bodySm" tone="subdued">
-                  Please include your shop domain ({shopDomain}) in the PayPal payment note.
+                  You can pay via PayPal checkout button or send payment manually to the email
+                  above.
                 </Text>
               </BlockStack>
             </Card>
@@ -492,11 +656,12 @@ export default function BillingPage() {
                   {commissionPerOrder.toFixed(3)} per order
                 </Text>
                 <Text as="p" variant="bodyMd">
-                  3. <strong>Monthly Payment</strong> - Send pending commission via PayPal
+                  3. <strong>Pay with PayPal</strong> - Click the PayPal button to pay all pending
+                  commissions securely
                 </Text>
                 <Text as="p" variant="bodyMd">
-                  4. <strong>Confirmation</strong> - Click "I've Made Payment" and enter PayPal
-                  transaction ID
+                  4. <strong>Automatic Confirmation</strong> - Payment is verified and commissions
+                  are marked as paid automatically
                 </Text>
               </BlockStack>
             </BlockStack>
