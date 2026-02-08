@@ -57,6 +57,30 @@ export async function action({ request }: ActionFunctionArgs) {
     const captureAmount =
       capture.purchase_units?.[0]?.payments?.captures?.[0]?.amount?.value || '0';
     const payerEmail = capture.payer?.email_address || 'unknown';
+    const payerId = capture.payer?.payer_id || '';
+
+    // ── Save PayPal vault token if present (for future auto-charges) ──
+    // The vault token is returned in the capture response when vault was requested
+    const captureRaw = capture as unknown as Record<string, unknown>;
+    const paymentSource = captureRaw.payment_source as Record<string, unknown> | undefined;
+    const paypalSource = paymentSource?.paypal as Record<string, unknown> | undefined;
+    const vaultAttributes = paypalSource?.attributes as Record<string, unknown> | undefined;
+    const vaultData = vaultAttributes?.vault as { id?: string; status?: string } | undefined;
+
+    if (vaultData?.id && vaultData?.status === 'VAULTED') {
+      // Save vault token to shop for future auto-charges
+      await prisma.shop.update({
+        where: { id: shop.id },
+        data: {
+          paypalVaultId: vaultData.id,
+          paypalPayerId: payerId,
+          paypalPayerEmail: payerEmail,
+          paypalAutoCharge: true,
+          paypalVaultedAt: new Date(),
+        },
+      });
+      console.log(`[PayPal] Vault saved for ${shopDomain}: vault=${vaultData.id}, payer=${payerId}`);
+    }
 
     // Find the audit log with pending order IDs for this PayPal order
     const auditLog = await prisma.auditLog.findFirst({

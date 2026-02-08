@@ -6,7 +6,7 @@
  */
 import type { ActionFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
-import { createPayPalOrder, isPayPalConfigured } from '~/lib/paypal.server';
+import { createPayPalOrder, createPayPalOrderWithVault, isPayPalConfigured } from '~/lib/paypal.server';
 import prisma from '~/lib/prisma.server';
 import { authenticate } from '~/shopify.server';
 
@@ -76,12 +76,27 @@ export async function action({ request }: ActionFunctionArgs) {
     });
 
     // Use audit log ID as custom_id (short, unique reference)
-    const order = await createPayPalOrder(
-      totalAmount,
-      shopDomain,
-      description,
-      auditEntry.id // Short cuid instead of massive order list
-    );
+    // If shop doesn't have a PayPal vault yet, create order WITH vault to save payment method
+    const hasVault = Boolean(shop.paypalVaultId);
+    let order;
+
+    if (hasVault) {
+      // Already vaulted - normal order (manual payments still go through normal flow)
+      order = await createPayPalOrder(
+        totalAmount,
+        shopDomain,
+        description,
+        auditEntry.id
+      );
+    } else {
+      // No vault yet - create order with vault to save payment method for future auto-charges
+      order = await createPayPalOrderWithVault(
+        totalAmount,
+        shopDomain,
+        description,
+        auditEntry.id
+      );
+    }
 
     // Find the approval URL
     const approvalLink = order.links.find((link) => link.rel === 'approve');

@@ -51,6 +51,13 @@ model Shop {
   onboardingStep      Int     @default(0) @map("onboarding_step") // 0-5
   onboardingData      Json?   @map("onboarding_data_json")
 
+  // PayPal Vault (automatic payments)
+  paypalVaultId     String?   @map("paypal_vault_id")      // PayPal saved payment token
+  paypalPayerId     String?   @map("paypal_payer_id")      // PayPal payer ID
+  paypalPayerEmail  String?   @map("paypal_payer_email")   // PayPal payer email
+  paypalAutoCharge  Boolean   @default(false) @map("paypal_auto_charge") // Auto-charge enabled
+  paypalVaultedAt   DateTime? @map("paypal_vaulted_at")    // When payment method was saved
+
   installedAt DateTime @default(now()) @map("installed_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 

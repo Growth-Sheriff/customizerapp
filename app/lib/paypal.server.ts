@@ -314,6 +314,169 @@ export async function getPayPalOrder(
 }
 
 /**
+ * Create a PayPal order WITH vault (save payment method for future auto-charges)
+ *
+ * On first payment, we include vault instructions so PayPal saves the payment method.
+ * Future payments can then be charged automatically without merchant interaction.
+ */
+export async function createPayPalOrderWithVault(
+  amount: string,
+  shopDomain: string,
+  description: string,
+  customId: string
+): Promise<PayPalOrderResponse> {
+  const accessToken = await getAccessToken();
+
+  const payload = {
+    intent: 'CAPTURE',
+    purchase_units: [
+      {
+        reference_id: shopDomain,
+        description: description,
+        custom_id: customId,
+        amount: {
+          currency_code: 'USD',
+          value: amount,
+        },
+      },
+    ],
+    payment_source: {
+      paypal: {
+        experience_context: {
+          brand_name: 'Upload Lift - Customizer App',
+          landing_page: 'LOGIN',
+          user_action: 'PAY_NOW',
+          payment_method_preference: 'IMMEDIATE_PAYMENT_REQUIRED',
+          return_url: `https://customizerapp.dev/app/billing?paypal=success`,
+          cancel_url: `https://customizerapp.dev/app/billing?paypal=cancelled`,
+        },
+        attributes: {
+          vault: {
+            store_in_vault: 'ON_SUCCESS',
+            usage_type: 'MERCHANT',
+            permit_multiple_payment_tokens: false,
+          },
+        },
+      },
+    },
+  };
+
+  const response = await fetch(`${PAYPAL_BASE_URL}/v2/checkout/orders`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=representation',
+      'PayPal-Request-Id': `vault-${shopDomain}-${Date.now()}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('[PayPal] Create vault order error:', response.status, errorText);
+    throw new Error(`PayPal create vault order failed: ${response.status} - ${errorText}`);
+  }
+
+  const order: PayPalOrderResponse = await response.json();
+  console.log('[PayPal] Vault order created:', order.id, 'status:', order.status);
+  return order;
+}
+
+/**
+ * Charge a vaulted (saved) payment method without buyer interaction
+ *
+ * This is used for automatic charges when commission threshold ($49.99) is reached.
+ * The payment token was saved during the first manual payment.
+ */
+export async function chargeWithVault(
+  vaultId: string,
+  payerId: string,
+  amount: string,
+  shopDomain: string,
+  description: string,
+  customId: string
+): Promise<PayPalCaptureResponse> {
+  const accessToken = await getAccessToken();
+
+  // Step 1: Create order with saved payment source
+  const createPayload = {
+    intent: 'CAPTURE',
+    purchase_units: [
+      {
+        reference_id: shopDomain,
+        description: description,
+        custom_id: customId,
+        amount: {
+          currency_code: 'USD',
+          value: amount,
+        },
+      },
+    ],
+    payment_source: {
+      paypal: {
+        vault_id: vaultId,
+        experience_context: {
+          brand_name: 'Upload Lift - Customizer App',
+          payment_method_preference: 'IMMEDIATE_PAYMENT_REQUIRED',
+          shipping_preference: 'NO_SHIPPING',
+        },
+      },
+    },
+  };
+
+  const createResponse = await fetch(`${PAYPAL_BASE_URL}/v2/checkout/orders`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=representation',
+      'PayPal-Request-Id': `auto-${shopDomain}-${Date.now()}`,
+    },
+    body: JSON.stringify(createPayload),
+  });
+
+  if (!createResponse.ok) {
+    const errorText = await createResponse.text();
+    console.error('[PayPal] Vault charge create error:', createResponse.status, errorText);
+    throw new Error(`PayPal vault charge create failed: ${createResponse.status} - ${errorText}`);
+  }
+
+  const order: PayPalOrderResponse = await createResponse.json();
+  console.log('[PayPal] Vault order created for auto-charge:', order.id, 'status:', order.status);
+
+  // Step 2: If order is COMPLETED (auto-captured with vault), we're done
+  // With vault + IMMEDIATE_PAYMENT_REQUIRED, PayPal may auto-capture
+  if (order.status === 'COMPLETED') {
+    // Fetch full capture details
+    return getPayPalOrder(order.id);
+  }
+
+  // Step 3: If not auto-captured, capture manually
+  const captureResponse = await fetch(
+    `${PAYPAL_BASE_URL}/v2/checkout/orders/${order.id}/capture`,
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=representation',
+      },
+    }
+  );
+
+  if (!captureResponse.ok) {
+    const errorText = await captureResponse.text();
+    console.error('[PayPal] Vault charge capture error:', captureResponse.status, errorText);
+    throw new Error(`PayPal vault charge capture failed: ${captureResponse.status} - ${errorText}`);
+  }
+
+  const capture: PayPalCaptureResponse = await captureResponse.json();
+  console.log('[PayPal] Vault charge captured:', capture.id, 'status:', capture.status);
+  return capture;
+}
+
+/**
  * Check if PayPal is configured
  */
 export function isPayPalConfigured(): boolean {

@@ -176,6 +176,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
     paypalEmail: PAYPAL_EMAIL,
     paypalEnabled: isPayPalConfigured(),
     paypalClientId: process.env.PAYPAL_CLIENT_ID || '',
+    autoChargeEnabled: shop.paypalAutoCharge,
+    paypalVaulted: Boolean(shop.paypalVaultId),
+    paypalPayerEmail: shop.paypalPayerEmail || null,
+    autoChargeThreshold: 49.99,
   })
 }
 
@@ -193,6 +197,36 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const formData = await request.formData()
   const actionType = formData.get('_action') as string
+
+  // Toggle auto-charge on/off
+  if (actionType === 'toggle_auto_charge') {
+    const enabled = formData.get('enabled') === 'true'
+
+    // Can only enable if vault exists
+    if (enabled && !shop.paypalVaultId) {
+      return json(
+        { error: 'No saved payment method. Complete a PayPal payment first.' },
+        { status: 400 }
+      )
+    }
+
+    await prisma.shop.update({
+      where: { id: shop.id },
+      data: { paypalAutoCharge: enabled },
+    })
+
+    await prisma.auditLog.create({
+      data: {
+        shopId: shop.id,
+        action: enabled ? 'auto_charge_enabled' : 'auto_charge_disabled',
+        resourceType: 'billing',
+        resourceId: shop.id,
+        metadata: { enabled },
+      },
+    })
+
+    return json({ success: true, message: `Auto-charge ${enabled ? 'enabled' : 'disabled'}` })
+  }
 
   // Mark orders as paid - creates/updates commission records
   if (actionType === 'mark_paid') {
@@ -266,6 +300,10 @@ export default function BillingPage() {
     commissionPerOrder,
     paypalEmail,
     paypalEnabled,
+    autoChargeEnabled,
+    paypalVaulted,
+    paypalPayerEmail,
+    autoChargeThreshold,
   } = useLoaderData<typeof loader>()
   const navigation = useNavigation()
   const isSubmitting = navigation.state === 'submitting'
@@ -612,6 +650,95 @@ export default function BillingPage() {
           </Layout.Section>
         )}
 
+        {/* Auto-Charge Settings */}
+        <Layout.Section>
+          <Card>
+            <BlockStack gap="400">
+              <InlineStack align="space-between" blockAlign="center">
+                <BlockStack gap="100">
+                  <InlineStack gap="200" blockAlign="center">
+                    <Text as="h2" variant="headingMd">
+                      ⚡ Automatic Payments
+                    </Text>
+                    {autoChargeEnabled ? (
+                      <Badge tone="success">Active</Badge>
+                    ) : paypalVaulted ? (
+                      <Badge tone="attention">Paused</Badge>
+                    ) : (
+                      <Badge>Not Set Up</Badge>
+                    )}
+                  </InlineStack>
+                  <Text as="p" variant="bodySm" tone="subdued">
+                    When enabled, we'll automatically charge your PayPal when pending commissions
+                    reach ${autoChargeThreshold.toFixed(2)}.
+                  </Text>
+                </BlockStack>
+
+                {paypalVaulted && (
+                  <Form method="post">
+                    <input type="hidden" name="_action" value="toggle_auto_charge" />
+                    <input
+                      type="hidden"
+                      name="enabled"
+                      value={autoChargeEnabled ? 'false' : 'true'}
+                    />
+                    <Button
+                      submit
+                      variant={autoChargeEnabled ? 'plain' : 'primary'}
+                      tone={autoChargeEnabled ? 'critical' : undefined}
+                    >
+                      {autoChargeEnabled ? 'Disable Auto-Pay' : 'Enable Auto-Pay'}
+                    </Button>
+                  </Form>
+                )}
+              </InlineStack>
+
+              {paypalVaulted && paypalPayerEmail && (
+                <>
+                  <Divider />
+                  <Box background="bg-surface-secondary" padding="300" borderRadius="200">
+                    <InlineStack gap="400">
+                      <BlockStack gap="100">
+                        <Text as="p" variant="bodySm" tone="subdued">
+                          Payment Method
+                        </Text>
+                        <Text as="p" variant="bodyMd">
+                          PayPal ({paypalPayerEmail})
+                        </Text>
+                      </BlockStack>
+                      <BlockStack gap="100">
+                        <Text as="p" variant="bodySm" tone="subdued">
+                          Threshold
+                        </Text>
+                        <Text as="p" variant="bodyMd">
+                          ${autoChargeThreshold.toFixed(2)}
+                        </Text>
+                      </BlockStack>
+                      <BlockStack gap="100">
+                        <Text as="p" variant="bodySm" tone="subdued">
+                          Status
+                        </Text>
+                        <Text as="p" variant="bodyMd">
+                          {autoChargeEnabled ? '✅ Auto-charging' : '⏸️ Paused'}
+                        </Text>
+                      </BlockStack>
+                    </InlineStack>
+                  </Box>
+                </>
+              )}
+
+              {!paypalVaulted && (
+                <Banner tone="info">
+                  <p>
+                    Complete your first PayPal payment above to enable automatic payments. Your
+                    payment method will be securely saved for future charges.
+                  </p>
+                </Banner>
+              )}
+            </BlockStack>
+          </Card>
+        </Layout.Section>
+
         {/* Commission History */}
         <Layout.Section>
           <Card>
@@ -660,7 +787,11 @@ export default function BillingPage() {
                   commissions securely
                 </Text>
                 <Text as="p" variant="bodyMd">
-                  4. <strong>Automatic Confirmation</strong> - Payment is verified and commissions
+                  4. <strong>Automatic Payments</strong> - After your first payment, auto-pay kicks
+                  in when commissions reach $49.99
+                </Text>
+                <Text as="p" variant="bodyMd">
+                  5. <strong>Automatic Confirmation</strong> - Payment is verified and commissions
                   are marked as paid automatically
                 </Text>
               </BlockStack>

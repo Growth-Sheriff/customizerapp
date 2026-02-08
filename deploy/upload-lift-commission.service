@@ -1,0 +1,21 @@
+[Unit]
+Description=Upload Lift - Commission Auto-Charge Worker
+After=network.target fast-dtf-transfer.service
+Requires=fast-dtf-transfer.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/var/www/fast-dtf-transfer
+ExecStart=/usr/bin/npx tsx workers/commission.worker.ts
+Restart=always
+RestartSec=30
+Environment=NODE_ENV=production
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=commission-worker
+
+[Install]
+WantedBy=multi-user.target
