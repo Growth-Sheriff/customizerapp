@@ -994,11 +994,18 @@
             name: error.name,
             attempt,
             maxRetries,
+            isFatal: error.isFatal
           })
 
           // Don't retry on user cancellation
           if (error.message?.includes('cancelled') || error.message?.includes('aborted')) {
             return { success: false, error: error.message }
+          }
+
+          // Research Fix: Don't retry on fatal network errors (blocked connection)
+          if (error.isFatal || error.message?.includes('blocked')) {
+             console.warn(`[UL] ${providerName} fatal error detected, skipping retries.`)
+             return { success: false, error: error.message }
           }
 
           // If not last attempt, wait and retry
@@ -1032,6 +1039,9 @@
         if (instance) {
           instance.activeXHR = xhr
         }
+
+        // Research Fix: 30s timeout to prevent hanging on firewalls
+        xhr.timeout = 30000 
 
         xhr.upload.addEventListener('progress', (e) => {
           if (e.lengthComputable) {
@@ -1094,13 +1104,19 @@
           
           // Try to provide more specific error message
           let errorMsg = 'Network error during Bunny upload'
-          if (xhr.readyState === 4 && xhr.status === 0) {
-            errorMsg = 'Connection failed - CORS or network issue'
+          let isFatal = false
+
+          // Research Fix: Detect blocking (Status 0)
+          if (xhr.status === 0) {
+            errorMsg = 'Connection blocked (Firewall/CORS) - failing over'
+            isFatal = true
           } else if (xhr.readyState < 4) {
             errorMsg = `Connection interrupted at state ${xhr.readyState}`
           }
           
-          reject(new Error(errorMsg))
+          const error = new Error(errorMsg)
+          if (isFatal) error.isFatal = true
+          reject(error)
         })
 
         xhr.addEventListener('timeout', () => {

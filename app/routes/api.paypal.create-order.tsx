@@ -60,11 +60,27 @@ export async function action({ request }: ActionFunctionArgs) {
   const description = `Upload Lift commission: ${pendingOrderIds.length} orders @ $${COMMISSION_PER_ORDER}/order`;
 
   try {
+    // First, save order IDs to audit log and get the reference ID
+    const auditEntry = await prisma.auditLog.create({
+      data: {
+        shopId: shop.id,
+        action: 'paypal_order_pending',
+        resourceType: 'paypal_order',
+        resourceId: 'pending',
+        metadata: {
+          orderIds: pendingOrderIds,
+          amount: totalAmount,
+          orderCount: pendingOrderIds.length,
+        },
+      },
+    });
+
+    // Use audit log ID as custom_id (short, unique reference)
     const order = await createPayPalOrder(
       totalAmount,
       shopDomain,
       description,
-      pendingOrderIds.join(',')
+      auditEntry.id // Short cuid instead of massive order list
     );
 
     // Find the approval URL
@@ -76,17 +92,18 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     // Store the PayPal order ID with pending order IDs for later capture
-    // Using audit log as temp storage for the mapping
-    await prisma.auditLog.create({
+    // Update the audit log entry with the PayPal order ID
+    await prisma.auditLog.update({
+      where: { id: auditEntry.id },
       data: {
-        shopId: shop.id,
         action: 'paypal_order_created',
-        resourceType: 'paypal_order',
         resourceId: order.id,
         metadata: {
           paypalOrderId: order.id,
+          auditRefId: auditEntry.id,
           orderIds: pendingOrderIds,
           amount: totalAmount,
+          orderCount: pendingOrderIds.length,
           status: order.status,
         },
       },

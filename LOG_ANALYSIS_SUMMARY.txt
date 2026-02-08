@@ -1,0 +1,48 @@
+LOG ANALYSIS SUMMARY - BUNNY CDN FAILURES
+=======================================
+Date: 2026-02-07
+Scope: /var/log/upload-lift/client.log (Recent Entries)
+
+1. FAILURE RATE
+---------------
+Total Samples Analyzed: ~228
+Success (Bunny): 148 (65%)
+Failed (Bunny):   80 (35%) -> FELL BACK TO R2
+
+2. ERROR PATTERN
+----------------
+Error Type: "network_error"
+Status: 0 (No HTTP Status - Connection Refused/Aborted)
+Elapsed Time: ~21,000ms (21 seconds) - Consistent Timeout
+Message: "Connection failed - CORS or network issue"
+
+3. USER AGENT CORRELATION
+-------------------------
+Platform        | Status  | Count | Rate
+----------------|---------|-------|-----
+Windows (Chrome)| Failed  | 50    | ~46% failure rate
+Windows (Edge)  | Failed  | 17    | ~68% failure rate
+iOS (iPhone)    | Success | 20    | 95% success rate (Only 1 failure)
+Mac (Chrome)    | Mixed   | 3/14  | ~21% failure rate
+
+4. OBSERVATIONS
+---------------
+- The failures are heavily skewed towards Windows users.
+- iOS users have almost no issues.
+- The error is a "Silent Drop" (Timeout) rather than a rejection (403/401).
+- R2 Fallback is working 100% of the time after the Bunny failure.
+
+5. CONCLUSION
+-------------
+The issue is local to the user's environment (Windows PC).
+Likely Causes:
+1. Corporate Firewalls / Zscaler Blocking "storage.bunnycdn.com".
+2. Antivirus blocking the non-standard "AccessKey" header.
+3. AdBlockers interfering with the domain.
+
+R2 works because it uses standard "r2.cloudflarestorage.com" and Query-String Auth (no special headers).
+
+6. UX IMPACT
+------------
+Current Logic: 3 Retries x 21s Timeout = ~63 Seconds wait.
+The user stares at a loading bar for 1 minute before R2 kicks in.
