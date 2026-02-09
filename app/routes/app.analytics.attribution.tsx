@@ -32,9 +32,11 @@ import {
   getReferrerBreakdown,
   getShopIdFromDomain,
   getSourceBreakdown,
+  generateAttributionRecommendations,
   type AttributionStats,
   type CampaignBreakdown,
   type ClickIdStats,
+  type MarketingRecommendation,
   type MediumBreakdown,
   type ReferrerBreakdown,
   type SourceBreakdown,
@@ -48,6 +50,7 @@ interface LoaderData {
   campaigns: CampaignBreakdown[]
   clickIds: ClickIdStats
   referrers: ReferrerBreakdown[]
+  recommendations: MarketingRecommendation[]
   period: string
   dateRangeText: string
   error?: string
@@ -72,6 +75,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       campaigns: [],
       clickIds: { gclid: 0, fbclid: 0, msclkid: 0, ttclid: 0, total: 0 },
       referrers: [],
+      recommendations: [],
       period: '30d',
       dateRangeText: '',
       error: 'Shop not found',
@@ -126,6 +130,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
       getReferrerBreakdown(shopId, startDate, endDate),
     ])
 
+    const recommendations = await generateAttributionRecommendations(
+      stats, sources, mediums, campaigns, clickIds, referrers
+    )
+
     return json<LoaderData>({
       stats,
       sources,
@@ -133,6 +141,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       campaigns,
       clickIds,
       referrers,
+      recommendations,
       period,
       dateRangeText,
     })
@@ -152,6 +161,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       campaigns: [],
       clickIds: { gclid: 0, fbclid: 0, msclkid: 0, ttclid: 0, total: 0 },
       referrers: [],
+      recommendations: [],
       period: '30d',
       dateRangeText: '',
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -226,7 +236,7 @@ function PlatformCard({
 }
 
 export default function AnalyticsAttribution() {
-  const { stats, sources, mediums, campaigns, clickIds, referrers, period, dateRangeText, error } =
+  const { stats, sources, mediums, campaigns, clickIds, referrers, recommendations, period, dateRangeText, error } =
     useLoaderData<typeof loader>()
   const [selectedPeriod, setSelectedPeriod] = useState(period)
   const [customStartDate, setCustomStartDate] = useState('')
@@ -377,6 +387,104 @@ export default function AnalyticsAttribution() {
           </InlineGrid>
         </Layout.Section>
 
+        {/* 🧠 AI Marketing Recommendations */}
+        {recommendations.length > 0 && (
+          <Layout.Section>
+            <Card>
+              <BlockStack gap="400">
+                <InlineStack align="space-between" blockAlign="center">
+                  <BlockStack gap="100">
+                    <Text as="h2" variant="headingMd">
+                      🧠 AI Marketing Recommendations
+                    </Text>
+                    <Text as="p" variant="bodySm" tone="subdued">
+                      Data-driven insights to optimize your marketing spend and grow revenue
+                    </Text>
+                  </BlockStack>
+                  <Badge tone="success">{`${recommendations.length} insights`}</Badge>
+                </InlineStack>
+                <Divider />
+                <BlockStack gap="400">
+                  {recommendations.map((rec, index) => {
+                    const impactTone =
+                      rec.impact === 'high' ? 'critical' : rec.impact === 'medium' ? 'warning' : 'info'
+                    const categoryLabel =
+                      rec.category === 'acquisition'
+                        ? '🚀 Acquisition'
+                        : rec.category === 'optimization'
+                          ? '⚙️ Optimization'
+                          : rec.category === 'budget'
+                            ? '💰 Budget'
+                            : rec.category === 'strategy'
+                              ? '🎯 Strategy'
+                              : '🔄 Retention'
+
+                    return (
+                      <Box
+                        key={rec.id}
+                        padding="400"
+                        background={
+                          rec.impact === 'high' ? 'bg-surface-warning' : 'bg-surface-secondary'
+                        }
+                        borderRadius="300"
+                      >
+                        <BlockStack gap="300">
+                          <InlineStack align="space-between" blockAlign="start">
+                            <InlineStack gap="200" blockAlign="center">
+                              <Text as="span" variant="headingMd">
+                                {rec.icon}
+                              </Text>
+                              <BlockStack gap="100">
+                                <Text as="h3" variant="headingSm" fontWeight="bold">
+                                  {index + 1}. {rec.title}
+                                </Text>
+                                <InlineStack gap="200">
+                                  <Badge tone={impactTone}>
+                                    {`${rec.impact.toUpperCase()} IMPACT`}
+                                  </Badge>
+                                  <Badge>{categoryLabel}</Badge>
+                                </InlineStack>
+                              </BlockStack>
+                            </InlineStack>
+                            {rec.dataPoint && (
+                              <Box
+                                padding="200"
+                                background="bg-surface"
+                                borderRadius="200"
+                              >
+                                <Text as="span" variant="bodySm" fontWeight="semibold">
+                                  📈 {rec.dataPoint}
+                                </Text>
+                              </Box>
+                            )}
+                          </InlineStack>
+                          <Text as="p" variant="bodyMd">
+                            {rec.description}
+                          </Text>
+                          <Box
+                            padding="300"
+                            background="bg-surface"
+                            borderRadius="200"
+                          >
+                            <InlineStack gap="200" blockAlign="center">
+                              <Text as="span" variant="bodySm" fontWeight="bold" tone="success">
+                                ✅ Action:
+                              </Text>
+                              <Text as="span" variant="bodySm">
+                                {rec.actionText}
+                              </Text>
+                            </InlineStack>
+                          </Box>
+                        </BlockStack>
+                      </Box>
+                    )
+                  })}
+                </BlockStack>
+              </BlockStack>
+            </Card>
+          </Layout.Section>
+        )}
+
         {/* Ad Platform Breakdown */}
         <Layout.Section>
           <Card>
@@ -390,7 +498,7 @@ export default function AnalyticsAttribution() {
                     Click tracking from major ad platforms
                   </Text>
                 </BlockStack>
-                <Badge tone="info">{clickIds.total} total clicks</Badge>
+                <Badge tone="info">{`${clickIds.total} total clicks`}</Badge>
               </InlineStack>
               <Divider />
               <InlineGrid columns={{ xs: 2, md: 4 }} gap="400">
@@ -532,7 +640,7 @@ export default function AnalyticsAttribution() {
                 <Text as="h3" variant="headingMd">
                   📣 Campaign Performance
                 </Text>
-                <Badge>{campaigns.length} campaigns</Badge>
+                <Badge>{`${campaigns.length} campaigns`}</Badge>
               </InlineStack>
               {campaignRows.length > 0 ? (
                 <DataTable

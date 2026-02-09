@@ -48,6 +48,7 @@ import {
   getVisitorsByScreenResolution,
   getVisitorsByTimezone,
   getVisitorsByLanguage,
+  getCustomerMetrics,
   type VisitorStats,
   type VisitorGeo,
   type VisitorDevice,
@@ -58,10 +59,12 @@ import {
   type ScreenResolution,
   type VisitorTimezone,
   type VisitorLanguage,
+  type CustomerMetrics,
 } from "~/lib/analytics.server";
 
 interface LoaderData {
   stats: VisitorStats;
+  customerMetrics: CustomerMetrics;
   geoData: VisitorGeo[];
   deviceData: VisitorDevice[];
   browserData: VisitorBrowser[];
@@ -92,6 +95,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
         visitorsWithOrders: 0,
         uploadConversionRate: 0,
         orderConversionRate: 0,
+      },
+      customerMetrics: {
+        uniqueCustomers: 0,
+        repeatCustomers: 0,
+        newCustomers: 0,
+        avgUploadsPerCustomer: 0,
+        avgOrdersPerCustomer: 0,
+        avgRevenuePerCustomer: 0,
+        topCustomerRevenue: 0,
       },
       geoData: [],
       deviceData: [],
@@ -146,7 +158,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     : `${startDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} - ${endDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
 
   try {
-    const [stats, geoData, deviceData, browserData, osData, screenData, timezoneData, languageData, dailyData, topVisitors] = await Promise.all([
+    const [stats, geoData, deviceData, browserData, osData, screenData, timezoneData, languageData, dailyData, topVisitors, customerMetrics] = await Promise.all([
       getVisitorStats(shopId, startDate, endDate),
       getVisitorsByCountry(shopId),
       getVisitorsByDevice(shopId),
@@ -157,10 +169,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
       getVisitorsByLanguage(shopId),
       getDailyVisitors(shopId, startDate, endDate),
       getTopVisitors(shopId, 15),
+      getCustomerMetrics(shopId, startDate, endDate),
     ]);
 
     return json<LoaderData>({
       stats,
+      customerMetrics,
       geoData,
       deviceData,
       browserData,
@@ -186,6 +200,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
         visitorsWithOrders: 0,
         uploadConversionRate: 0,
         orderConversionRate: 0,
+      },
+      customerMetrics: {
+        uniqueCustomers: 0,
+        repeatCustomers: 0,
+        newCustomers: 0,
+        avgUploadsPerCustomer: 0,
+        avgOrdersPerCustomer: 0,
+        avgRevenuePerCustomer: 0,
+        topCustomerRevenue: 0,
       },
       geoData: [],
       deviceData: [],
@@ -289,7 +312,7 @@ function ProgressCard({
 }
 
 export default function AnalyticsVisitors() {
-  const { stats, geoData, deviceData, browserData, osData, screenData, timezoneData, languageData, dailyData, topVisitors, period, dateRangeText, error } =
+  const { stats, customerMetrics, geoData, deviceData, browserData, osData, screenData, timezoneData, languageData, dailyData, topVisitors, period, dateRangeText, error } =
     useLoaderData<typeof loader>();
   const [selectedPeriod, setSelectedPeriod] = useState(period);
   const [customStartDate, setCustomStartDate] = useState("");
@@ -462,6 +485,113 @@ export default function AnalyticsVisitors() {
               subtitle="Visitors who placed orders"
             />
           </InlineGrid>
+        </Layout.Section>
+
+        {/* 🆕 Customer Metrics */}
+        <Layout.Section>
+          <Card>
+            <BlockStack gap="400">
+              <InlineStack align="space-between" blockAlign="center">
+                <BlockStack gap="100">
+                  <Text as="h2" variant="headingMd">
+                    🆕 Customer Overview
+                  </Text>
+                  <Text as="p" variant="bodySm" tone="subdued">
+                    Customers who interacted with your customizer
+                  </Text>
+                </BlockStack>
+                {customerMetrics.newCustomers > 0 && (
+                  <Badge tone="success">
+                    {`+${customerMetrics.newCustomers} new`}
+                  </Badge>
+                )}
+              </InlineStack>
+              <Divider />
+              <InlineGrid columns={{ xs: 1, sm: 2, md: 4 }} gap="400">
+                <Box padding="300" background="bg-surface-success" borderRadius="300">
+                  <BlockStack gap="200" inlineAlign="center">
+                    <Text as="span" variant="headingLg">🆕</Text>
+                    <Text as="p" variant="bodySm" tone="subdued">New Customers</Text>
+                    <Text as="p" variant="headingXl" fontWeight="bold">
+                      {customerMetrics.newCustomers.toLocaleString()}
+                    </Text>
+                    <Text as="p" variant="bodySm" tone="subdued">
+                      First time in this period
+                    </Text>
+                  </BlockStack>
+                </Box>
+                <Box padding="300" background="bg-surface-secondary" borderRadius="300">
+                  <BlockStack gap="200" inlineAlign="center">
+                    <Text as="span" variant="headingLg">🔄</Text>
+                    <Text as="p" variant="bodySm" tone="subdued">Repeat Customers</Text>
+                    <Text as="p" variant="headingXl" fontWeight="bold">
+                      {customerMetrics.repeatCustomers.toLocaleString()}
+                    </Text>
+                    <Text as="p" variant="bodySm" tone="subdued">
+                      Multiple uploads
+                    </Text>
+                  </BlockStack>
+                </Box>
+                <Box padding="300" background="bg-surface-secondary" borderRadius="300">
+                  <BlockStack gap="200" inlineAlign="center">
+                    <Text as="span" variant="headingLg">👥</Text>
+                    <Text as="p" variant="bodySm" tone="subdued">Unique Customers</Text>
+                    <Text as="p" variant="headingXl" fontWeight="bold">
+                      {customerMetrics.uniqueCustomers.toLocaleString()}
+                    </Text>
+                    <Text as="p" variant="bodySm" tone="subdued">
+                      Total identified
+                    </Text>
+                  </BlockStack>
+                </Box>
+                <Box padding="300" background="bg-surface-secondary" borderRadius="300">
+                  <BlockStack gap="200" inlineAlign="center">
+                    <Text as="span" variant="headingLg">💰</Text>
+                    <Text as="p" variant="bodySm" tone="subdued">Avg Revenue/Customer</Text>
+                    <Text as="p" variant="headingXl" fontWeight="bold">
+                      ${customerMetrics.avgRevenuePerCustomer.toFixed(2)}
+                    </Text>
+                    <Text as="p" variant="bodySm" tone="subdued">
+                      Top: ${customerMetrics.topCustomerRevenue.toFixed(2)}
+                    </Text>
+                  </BlockStack>
+                </Box>
+              </InlineGrid>
+              {customerMetrics.uniqueCustomers > 0 && (
+                <>
+                  <Divider />
+                  <InlineGrid columns={{ xs: 1, sm: 3 }} gap="300">
+                    <Box padding="200">
+                      <BlockStack gap="100" inlineAlign="center">
+                        <Text as="p" variant="bodySm" tone="subdued">Avg Uploads/Customer</Text>
+                        <Text as="p" variant="headingMd" fontWeight="bold">
+                          {customerMetrics.avgUploadsPerCustomer.toFixed(1)}
+                        </Text>
+                      </BlockStack>
+                    </Box>
+                    <Box padding="200">
+                      <BlockStack gap="100" inlineAlign="center">
+                        <Text as="p" variant="bodySm" tone="subdued">Avg Orders/Customer</Text>
+                        <Text as="p" variant="headingMd" fontWeight="bold">
+                          {customerMetrics.avgOrdersPerCustomer.toFixed(1)}
+                        </Text>
+                      </BlockStack>
+                    </Box>
+                    <Box padding="200">
+                      <BlockStack gap="100" inlineAlign="center">
+                        <Text as="p" variant="bodySm" tone="subdued">Repeat Rate</Text>
+                        <Text as="p" variant="headingMd" fontWeight="bold">
+                          {customerMetrics.uniqueCustomers > 0
+                            ? `${((customerMetrics.repeatCustomers / customerMetrics.uniqueCustomers) * 100).toFixed(1)}%`
+                            : '0%'}
+                        </Text>
+                      </BlockStack>
+                    </Box>
+                  </InlineGrid>
+                </>
+              )}
+            </BlockStack>
+          </Card>
         </Layout.Section>
 
         {/* Device & Browser */}

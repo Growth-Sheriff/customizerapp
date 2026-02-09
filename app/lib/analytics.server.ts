@@ -1622,3 +1622,374 @@ export async function generateEnhancedAIInsights(
 
   return insights.slice(0, 10) // Return top 10 insights
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ATTRIBUTION MARKETING RECOMMENDATIONS (10 Ultra-Advanced)
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface MarketingRecommendation {
+  id: string
+  icon: string
+  title: string
+  description: string
+  actionText: string
+  impact: 'high' | 'medium' | 'low'
+  category: 'acquisition' | 'optimization' | 'budget' | 'strategy' | 'retention'
+  dataPoint?: string
+}
+
+export async function generateAttributionRecommendations(
+  stats: AttributionStats,
+  sources: SourceBreakdown[],
+  mediums: MediumBreakdown[],
+  campaigns: CampaignBreakdown[],
+  clickIds: ClickIdStats,
+  referrers: ReferrerBreakdown[]
+): Promise<MarketingRecommendation[]> {
+  const recommendations: MarketingRecommendation[] = []
+
+  // ─── 1. AD PLATFORM ALLOCATION ANALYSIS ──────────────────────
+  const totalAdClicks = clickIds.total
+  if (totalAdClicks > 0) {
+    const platforms = [
+      { name: 'Google Ads', clicks: clickIds.gclid, key: 'gclid' },
+      { name: 'Facebook Ads', clicks: clickIds.fbclid, key: 'fbclid' },
+      { name: 'Microsoft Ads', clicks: clickIds.msclkid, key: 'msclkid' },
+      { name: 'TikTok Ads', clicks: clickIds.ttclid, key: 'ttclid' },
+    ].sort((a, b) => b.clicks - a.clicks)
+
+    const topPlatform = platforms[0]
+    const topPlatformShare = ((topPlatform.clicks / totalAdClicks) * 100).toFixed(0)
+    const activePlatforms = platforms.filter((p) => p.clicks > 0)
+    const inactivePlatforms = platforms.filter((p) => p.clicks === 0)
+
+    if (activePlatforms.length === 1) {
+      recommendations.push({
+        id: 'diversify-ad-platforms',
+        icon: '🎯',
+        title: 'Diversify Your Ad Spend',
+        description: `You're only running ads on ${topPlatform.name} (${topPlatform.clicks} clicks). Depending on a single platform is risky — algorithm changes or cost increases could tank your ROAS overnight. ${inactivePlatforms.length > 0 ? `Consider testing ${inactivePlatforms.slice(0, 2).map((p) => p.name).join(' and ')} to find cheaper acquisition channels.` : ''}`,
+        actionText: `Start testing ${inactivePlatforms[0]?.name || 'another platform'} with 15-20% of your ad budget`,
+        impact: 'high',
+        category: 'strategy',
+        dataPoint: `${topPlatformShare}% of clicks from ${topPlatform.name}`,
+      })
+    } else if (activePlatforms.length >= 2) {
+      const secondPlatform = platforms[1]
+      const ratio = topPlatform.clicks > 0 && secondPlatform.clicks > 0
+        ? (topPlatform.clicks / secondPlatform.clicks).toFixed(1)
+        : '∞'
+      recommendations.push({
+        id: 'optimize-platform-mix',
+        icon: '⚖️',
+        title: 'Optimize Your Platform Mix',
+        description: `${topPlatform.name} delivers ${topPlatform.clicks} clicks vs ${secondPlatform.name} with ${secondPlatform.clicks} clicks (${ratio}x ratio). Compare CPA across platforms — if ${secondPlatform.name} has lower CPA, scale it up. Test shifting 10% budget from the weaker performer.`,
+        actionText: `Compare CPA: ${topPlatform.name} vs ${secondPlatform.name}`,
+        impact: 'high',
+        category: 'budget',
+        dataPoint: `${activePlatforms.length} active platforms, ${totalAdClicks} total clicks`,
+      })
+    }
+  } else {
+    recommendations.push({
+      id: 'start-paid-ads',
+      icon: '💰',
+      title: 'Launch Paid Advertising',
+      description: `You have zero paid ad clicks. DTF/print customizer products are highly visual — they perform exceptionally well with Facebook/Instagram image ads and Google Shopping. Even $10/day on Facebook with product mockup creatives can drive qualified traffic.`,
+      actionText: 'Start with Facebook Ads — carousel format showing DTF designs on products',
+      impact: 'high',
+      category: 'acquisition',
+      dataPoint: '0 paid clicks detected',
+    })
+  }
+
+  // ─── 2. UTM TRACKING COVERAGE ────────────────────────────────
+  if (stats.totalSessions > 0) {
+    const utmRate = stats.utmPercentage
+    if (utmRate < 20) {
+      recommendations.push({
+        id: 'improve-utm-tracking',
+        icon: '📊',
+        title: 'Critical: Fix Your UTM Tracking',
+        description: `Only ${utmRate.toFixed(1)}% of sessions have UTM tags. You're essentially flying blind — you cannot measure which channels drive revenue without proper UTM tagging. Every marketing link (ads, emails, social posts, influencer links) must have UTM parameters.`,
+        actionText: 'Tag ALL marketing links: ?utm_source=X&utm_medium=Y&utm_campaign=Z',
+        impact: 'high',
+        category: 'optimization',
+        dataPoint: `${stats.sessionsWithUTM}/${stats.totalSessions} sessions tracked`,
+      })
+    } else if (utmRate < 50) {
+      recommendations.push({
+        id: 'expand-utm-coverage',
+        icon: '🔍',
+        title: 'Expand UTM Coverage to 80%+',
+        description: `${utmRate.toFixed(1)}% UTM coverage means ${(100 - utmRate).toFixed(0)}% of traffic is unattributed. You're likely missing UTM tags on email campaigns, social media bios, or organic social posts. Goal: 80%+ coverage for reliable ROAS calculations.`,
+        actionText: 'Audit all marketing touchpoints and add UTM tags',
+        impact: 'medium',
+        category: 'optimization',
+        dataPoint: `${utmRate.toFixed(0)}% attribution rate`,
+      })
+    } else {
+      recommendations.push({
+        id: 'utm-coverage-good',
+        icon: '✅',
+        title: 'Strong Attribution Setup',
+        description: `${utmRate.toFixed(1)}% UTM coverage is excellent. You can trust your attribution data for budget decisions. Focus on optimizing the channels that show best conversion rates in the source breakdown below.`,
+        actionText: 'Use source conversion data to reallocate budget to top performers',
+        impact: 'low',
+        category: 'optimization',
+        dataPoint: `${stats.sessionsWithUTM} tagged sessions`,
+      })
+    }
+  }
+
+  // ─── 3. SOURCE CONVERSION ROI ANALYSIS ────────────────────────
+  const sourcesWithData = sources.filter((s) => s.sessions >= 3)
+  if (sourcesWithData.length >= 2) {
+    const bestConverter = sourcesWithData.reduce((a, b) =>
+      a.conversionRate > b.conversionRate ? a : b
+    )
+    const worstConverter = sourcesWithData.reduce((a, b) =>
+      a.conversionRate < b.conversionRate ? a : b
+    )
+
+    if (bestConverter.conversionRate > worstConverter.conversionRate * 2) {
+      recommendations.push({
+        id: 'source-roi-gap',
+        icon: '🏆',
+        title: `Double Down on "${bestConverter.source}" Traffic`,
+        description: `"${bestConverter.source}" converts at ${bestConverter.conversionRate.toFixed(1)}% (${bestConverter.uploads} uploads from ${bestConverter.sessions} sessions) while "${worstConverter.source}" converts at only ${worstConverter.conversionRate.toFixed(1)}%. That's a ${(bestConverter.conversionRate / Math.max(worstConverter.conversionRate, 0.1)).toFixed(1)}x difference. Shift budget toward your best converter.`,
+        actionText: `Increase "${bestConverter.source}" spend by 25-50%`,
+        impact: 'high',
+        category: 'budget',
+        dataPoint: `${bestConverter.conversionRate.toFixed(1)}% vs ${worstConverter.conversionRate.toFixed(1)}% conversion`,
+      })
+    }
+  } else if (sourcesWithData.length === 1) {
+    recommendations.push({
+      id: 'single-source-risk',
+      icon: '⚠️',
+      title: 'Single Source Dependency Risk',
+      description: `"${sourcesWithData[0].source}" is your only significant traffic source (${sourcesWithData[0].sessions} sessions). If this channel stops performing, your pipeline dries up. Diversify into at least 2-3 traffic sources for stability.`,
+      actionText: 'Test 2 new acquisition channels this month',
+      impact: 'high',
+      category: 'strategy',
+      dataPoint: `${sourcesWithData[0].sessions} sessions from single source`,
+    })
+  }
+
+  // ─── 4. MEDIUM EFFECTIVENESS ANALYSIS ────────────────────────
+  const paidMediums = mediums.filter(
+    (m) => m.medium === 'cpc' || m.medium === 'paid' || m.medium === 'ppc'
+  )
+  const organicMediums = mediums.filter(
+    (m) => m.medium === 'organic' || m.medium === 'none' || !m.medium
+  )
+  const socialMediums = mediums.filter((m) => m.medium === 'social')
+  const emailMediums = mediums.filter((m) => m.medium === 'email')
+
+  const paidSessions = paidMediums.reduce((sum, m) => sum + m.sessions, 0)
+  const organicSessions = organicMediums.reduce((sum, m) => sum + m.sessions, 0)
+  const socialSessions = socialMediums.reduce((sum, m) => sum + m.sessions, 0)
+  const emailSessions = emailMediums.reduce((sum, m) => sum + m.sessions, 0)
+
+  if (organicSessions > paidSessions * 3 && paidSessions > 0) {
+    recommendations.push({
+      id: 'organic-dominant',
+      icon: '🌱',
+      title: 'Leverage Your Organic Strength',
+      description: `Organic traffic (${organicSessions} sessions) dwarfs paid (${paidSessions}). Your SEO/content is working — scale it. Create DTF design tutorials, "how-to" blog posts, and YouTube videos to compound this organic advantage. Consider hiring an SEO specialist.`,
+      actionText: 'Create 4 SEO-optimized DTF tutorial blog posts per month',
+      impact: 'medium',
+      category: 'strategy',
+      dataPoint: `${organicSessions}:${paidSessions} organic:paid ratio`,
+    })
+  } else if (paidSessions > organicSessions * 3 && organicSessions > 0) {
+    recommendations.push({
+      id: 'paid-dependent',
+      icon: '🔄',
+      title: 'Build Organic Traffic to Reduce CAC',
+      description: `${((paidSessions / Math.max(stats.totalSessions, 1)) * 100).toFixed(0)}% of traffic is paid. This means high CAC (Customer Acquisition Cost). Invest in SEO, content marketing, and community building to create a sustainable free traffic engine alongside your paid strategy.`,
+      actionText: 'Start a blog + social media content calendar focusing on DTF tips',
+      impact: 'medium',
+      category: 'strategy',
+      dataPoint: `${paidSessions} paid vs ${organicSessions} organic sessions`,
+    })
+  }
+
+  // ─── 5. EMAIL MARKETING OPPORTUNITY ──────────────────────────
+  if (emailSessions === 0 && stats.totalSessions > 20) {
+    recommendations.push({
+      id: 'email-missing',
+      icon: '📧',
+      title: 'Untapped Gold: Email Marketing',
+      description: `Zero sessions from email campaigns detected. Email marketing has the highest ROI of any channel ($36-42 per $1 spent). Collect emails via pop-ups, post-purchase flows, and abandoned cart sequences. DTF reorder reminders alone can generate 15-25% repeat revenue.`,
+      actionText: 'Set up: Welcome series → Abandoned cart → Reorder reminder → Win-back',
+      impact: 'high',
+      category: 'acquisition',
+      dataPoint: '0 email-attributed sessions',
+    })
+  } else if (emailSessions > 0 && emailSessions < stats.totalSessions * 0.1) {
+    recommendations.push({
+      id: 'scale-email',
+      icon: '📧',
+      title: 'Scale Your Email Channel',
+      description: `Email drives only ${emailSessions} sessions (${((emailSessions / Math.max(stats.totalSessions, 1)) * 100).toFixed(1)}% of traffic). For a custom DTF business, email should be 20-30% of revenue. Segment your list: new customers, repeat buyers, cart abandoners, and inactive users. Send targeted campaigns to each.`,
+      actionText: 'Segment list and launch weekly targeted campaigns',
+      impact: 'medium',
+      category: 'retention',
+      dataPoint: `${emailSessions} email sessions`,
+    })
+  }
+
+  // ─── 6. SOCIAL MEDIA STRATEGY ────────────────────────────────
+  if (socialSessions === 0 && stats.totalSessions > 20) {
+    recommendations.push({
+      id: 'social-missing',
+      icon: '📱',
+      title: 'Social Media: Your Missing Growth Engine',
+      description: `No social traffic detected. DTF/custom printing is an inherently visual, shareable product. TikTok and Instagram Reels showing "before & after" DTF transfers go viral regularly. User-generated content (customer showcase) can drive massive organic reach at zero cost.`,
+      actionText: 'Post 3-5 TikTok/Reels per week showing DTF application process',
+      impact: 'high',
+      category: 'acquisition',
+      dataPoint: '0 social media sessions',
+    })
+  } else if (socialSessions > 0) {
+    const socialPct = ((socialSessions / Math.max(stats.totalSessions, 1)) * 100).toFixed(1)
+    recommendations.push({
+      id: 'optimize-social',
+      icon: '📱',
+      title: 'Amplify Your Social Presence',
+      description: `Social brings ${socialSessions} sessions (${socialPct}%). Double down on what works: identify your best-performing post types and replicate them. Run "design of the week" contests, customer spotlight posts, and limited-time DTF offers exclusive to social followers.`,
+      actionText: 'Create a content calendar with 5 posts/week + stories daily',
+      impact: 'medium',
+      category: 'strategy',
+      dataPoint: `${socialSessions} social sessions (${socialPct}%)`,
+    })
+  }
+
+  // ─── 7. REFERRAL TRAFFIC ANALYSIS ────────────────────────────
+  const referralTraffic = referrers.find((r) => r.type === 'referral')
+  const searchTraffic = referrers.find((r) => r.type === 'search')
+  const directTraffic = referrers.find((r) => r.type === 'direct')
+
+  if (directTraffic && directTraffic.percentage > 60) {
+    recommendations.push({
+      id: 'high-direct-suspicious',
+      icon: '🔎',
+      title: 'Investigate High Direct Traffic',
+      description: `${directTraffic.percentage.toFixed(0)}% direct traffic is unusually high. This often means: (1) Missing UTM tags on marketing links, (2) Dark social sharing (WhatsApp, DM links), or (3) Returning brand-loyal customers. If #1, fix UTM tagging. If #3, that's great — launch a referral program to amplify word-of-mouth.`,
+      actionText: 'Audit all marketing links for UTM tags; launch a referral reward program',
+      impact: 'medium',
+      category: 'optimization',
+      dataPoint: `${directTraffic.percentage.toFixed(0)}% direct traffic`,
+    })
+  }
+
+  if (searchTraffic && searchTraffic.percentage > 30) {
+    recommendations.push({
+      id: 'strong-seo',
+      icon: '🔍',
+      title: 'Maximize Your SEO Advantage',
+      description: `${searchTraffic.percentage.toFixed(0)}% search traffic is a strong signal that your SEO is working. Create more content around high-intent keywords: "custom DTF transfers", "DTF printing near me", "custom t-shirt printing". Build topical authority with a comprehensive DTF knowledge base.`,
+      actionText: 'Research 20 high-intent keywords and create dedicated landing pages',
+      impact: 'high',
+      category: 'strategy',
+      dataPoint: `${searchTraffic.sessions} search-referred sessions`,
+    })
+  }
+
+  // ─── 8. CAMPAIGN PERFORMANCE INTEL ────────────────────────────
+  if (campaigns.length > 0) {
+    const topCampaign = campaigns[0]
+    const lowPerformers = campaigns.filter(
+      (c) => c.sessions >= 5 && c.uploads === 0
+    )
+
+    if (lowPerformers.length > 0) {
+      recommendations.push({
+        id: 'kill-bad-campaigns',
+        icon: '💸',
+        title: `Kill ${lowPerformers.length} Underperforming Campaign${lowPerformers.length > 1 ? 's' : ''}`,
+        description: `${lowPerformers.map((c) => `"${c.campaign}"`).join(', ')} ${lowPerformers.length > 1 ? 'have' : 'has'} ${lowPerformers.reduce((s, c) => s + c.sessions, 0)} sessions but ZERO uploads. You're spending money driving traffic that doesn't convert. Either fix the landing page experience or reallocate that budget to "${topCampaign.campaign}" which already generates ${topCampaign.uploads} uploads.`,
+        actionText: `Pause underperformers; Reallocate to "${topCampaign.campaign}"`,
+        impact: 'high',
+        category: 'budget',
+        dataPoint: `${lowPerformers.reduce((s, c) => s + c.sessions, 0)} wasted sessions`,
+      })
+    }
+
+    if (campaigns.length >= 3) {
+      const uploadRates = campaigns
+        .filter((c) => c.sessions >= 3)
+        .map((c) => ({
+          ...c,
+          rate: c.sessions > 0 ? (c.uploads / c.sessions) * 100 : 0,
+        }))
+        .sort((a, b) => b.rate - a.rate)
+
+      if (uploadRates.length >= 2 && uploadRates[0].rate > 0) {
+        recommendations.push({
+          id: 'campaign-winner',
+          icon: '🏅',
+          title: `Scale Your Winner: "${uploadRates[0].campaign}"`,
+          description: `"${uploadRates[0].campaign}" has ${uploadRates[0].rate.toFixed(1)}% upload rate — your best performer. Analyze what makes this campaign work: Is it the audience targeting? The creative? The landing page? Replicate its formula across other campaigns. Consider increasing its budget by 50-100%.`,
+          actionText: `Clone "${uploadRates[0].campaign}" targeting + creatives for new campaigns`,
+          impact: 'high',
+          category: 'budget',
+          dataPoint: `${uploadRates[0].rate.toFixed(1)}% upload rate`,
+        })
+      }
+    }
+  } else {
+    recommendations.push({
+      id: 'no-campaigns',
+      icon: '📣',
+      title: 'Launch Your First UTM Campaign',
+      description: `No campaign data found. Without campaigns, you can't A/B test messaging, audiences, or offers. Start with 2-3 campaigns: (1) "Brand Awareness" on social, (2) "High Intent" search ads targeting "custom DTF printing", (3) "Retargeting" visitors who didn't upload.`,
+      actionText: 'Create 3 campaigns with proper UTM tags this week',
+      impact: 'high',
+      category: 'acquisition',
+      dataPoint: '0 tracked campaigns',
+    })
+  }
+
+  // ─── 9. TIKTOK OPPORTUNITY ────────────────────────────────────
+  if (clickIds.ttclid === 0 && clickIds.total > 0) {
+    recommendations.push({
+      id: 'tiktok-opportunity',
+      icon: '🎵',
+      title: 'TikTok: The Underused Goldmine for DTF',
+      description: `You're running ads on ${clickIds.gclid > 0 ? 'Google' : ''}${clickIds.fbclid > 0 ? (clickIds.gclid > 0 ? '/' : '') + 'Facebook' : ''}${clickIds.msclkid > 0 ? '/Bing' : ''} but not TikTok. TikTok CPMs for e-commerce are 30-50% lower than Facebook. The "satisfying DTF transfer" video format is tailor-made for TikTok's algorithm. Test with $20-30/day budget.`,
+      actionText: 'Create 3-5 "satisfying process" DTF videos and launch TikTok Ads',
+      impact: 'medium',
+      category: 'acquisition',
+      dataPoint: `${clickIds.total} clicks on other platforms, 0 on TikTok`,
+    })
+  }
+
+  // ─── 10. RETARGETING OPPORTUNITY ──────────────────────────────
+  if (stats.totalSessions > 50) {
+    const uploadConversionRate = sources.length > 0
+      ? sources.reduce((sum, s) => sum + s.uploads, 0) / Math.max(stats.totalSessions, 1) * 100
+      : 0
+
+    if (uploadConversionRate < 15) {
+      recommendations.push({
+        id: 'retargeting-needed',
+        icon: '🎯',
+        title: 'Retargeting: Recover Lost Visitors',
+        description: `${(100 - uploadConversionRate).toFixed(0)}% of visitors leave without uploading a design. Install Facebook Pixel and Google Remarketing tags, then create retargeting campaigns showing the exact products they viewed. Retargeting typically converts 3-5x better than cold traffic at 50-70% lower CPA.`,
+        actionText: 'Set up retargeting audiences: "Visited but didn\'t upload" and "Uploaded but didn\'t buy"',
+        impact: 'high',
+        category: 'retention',
+        dataPoint: `${uploadConversionRate.toFixed(1)}% upload rate — ${(100 - uploadConversionRate).toFixed(0)}% drop-off`,
+      })
+    }
+  }
+
+  // Sort by impact priority
+  const impactOrder = { high: 0, medium: 1, low: 2 }
+  recommendations.sort((a, b) => impactOrder[a.impact] - impactOrder[b.impact])
+
+  return recommendations.slice(0, 10)
+}
