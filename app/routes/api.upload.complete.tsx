@@ -120,9 +120,12 @@ export async function action({ request }: ActionFunctionArgs) {
       if (hasZeroByteFile) {
         console.error(`[Upload Complete] REJECTED: 0-byte file detected in upload ${uploadId}`)
         return corsJson(
-          { error: 'Upload rejected: One or more files are empty (0 bytes). Please re-upload.' },
+          {
+            error: 'The selected file is empty (0 bytes). File size must be greater than 0 bytes. Please select a valid file and try again.',
+            code: 'ZERO_BYTE_FILE',
+          },
           request,
-          { status: 400 }
+          { status: 422 }
         )
       }
     }

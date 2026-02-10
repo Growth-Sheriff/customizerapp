@@ -837,7 +837,8 @@
     })
 
     if (!completeResponse.ok) {
-      throw new Error('Failed to complete upload')
+      const errData = await completeResponse.json().catch(() => ({}))
+      throw new Error(errData.error || 'Failed to complete upload')
     }
 
     // Calculate upload duration

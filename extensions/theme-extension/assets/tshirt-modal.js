@@ -1122,7 +1122,7 @@ console.log('[ULTShirtModal] Script loading...')
         this.step1.newUpload.status = 'error'
         if (this.el.uploadProgress) this.el.uploadProgress.style.display = 'none'
         this.el.uploadZone?.classList.remove('uploading')
-        this.showToast('Upload failed. Please try again.', 'error')
+        this.showToast(error.message || 'Upload failed. Please try again.', 'error')
       }
     },
 
