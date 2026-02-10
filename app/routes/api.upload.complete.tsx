@@ -108,6 +108,25 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   try {
+    // ========================================================================
+    // 0-BYTE FILE PROTECTION (SERVER-SIDE)
+    // Verify at least one item has a non-zero fileSize before accepting
+    // This prevents empty/corrupt files from entering the system
+    // ========================================================================
+    if (items && Array.isArray(items) && items.length > 0) {
+      const hasZeroByteFile = items.some(
+        (item: any) => item.fileSize !== undefined && item.fileSize <= 0
+      )
+      if (hasZeroByteFile) {
+        console.error(`[Upload Complete] REJECTED: 0-byte file detected in upload ${uploadId}`)
+        return corsJson(
+          { error: 'Upload rejected: One or more files are empty (0 bytes). Please re-upload.' },
+          request,
+          { status: 400 }
+        )
+      }
+    }
+
     // Update upload status to "uploaded" - preflight worker will handle the rest
     // autoApprove is read from shop.settings by the preflight worker
     await prisma.upload.update({

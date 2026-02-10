@@ -618,6 +618,13 @@
       // Reset cancelled flag for new upload
       instance.isCancelled = false
 
+      // 0-byte file protection: Reject empty files immediately
+      if (!file.size || file.size === 0) {
+        this.showError(productId, 'The selected file is empty (0 bytes). Please select a valid file.')
+        console.error('[DTF Uploader] 0-byte file rejected:', file.name)
+        return
+      }
+
       // FAZ 7: Use ULErrorHandler for file validation
       if (window.ULErrorHandler) {
         const validation = window.ULErrorHandler.validateFile(file, {

@@ -409,6 +409,13 @@
     }
 
     function handleFile(file) {
+      // 0-byte file protection: Reject empty files immediately
+      if (!file.size || file.size === 0) {
+        alert('The selected file is empty (0 bytes). Please select a valid file.')
+        console.error('[Carousel Upload] 0-byte file rejected:', file.name)
+        return
+      }
+
       // Validate file type by MIME type or extension
       const ext = file.name.split('.').pop()?.toLowerCase() || ''
       const isValidType =

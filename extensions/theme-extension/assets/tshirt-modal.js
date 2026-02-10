@@ -1017,6 +1017,13 @@ console.log('[ULTShirtModal] Script loading...')
         'application/pdf',
         'application/postscript',
       ]
+      // 0-byte file protection: Reject empty files immediately
+      if (!file.size || file.size === 0) {
+        this.showToast('The selected file is empty (0 bytes). Please select a valid file.', 'error')
+        console.error('[T-Shirt Modal] 0-byte file rejected:', file.name)
+        return
+      }
+
       const allowedExtensions = [
         'png',
         'jpg',

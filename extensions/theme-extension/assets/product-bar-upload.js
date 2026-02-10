@@ -447,6 +447,13 @@
   }
 
   function handleFile(file, overlay) {
+    // 0-byte file protection: Reject empty files immediately
+    if (!file.size || file.size === 0) {
+      alert('The selected file is empty (0 bytes). Please select a valid file.')
+      console.error('[Product Bar Upload] 0-byte file rejected:', file.name)
+      return
+    }
+
     // Validate file type - check both MIME type and extension
     const ext = file.name.split('.').pop()?.toLowerCase() || ''
     if (!CONFIG.allowedTypes.includes(file.type) && !CONFIG.allowedExtensions.includes(ext)) {
