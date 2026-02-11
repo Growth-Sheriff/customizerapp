@@ -25,26 +25,27 @@ interface RateLimitResult {
   retryAfter?: number;
 }
 
-// Predefined rate limit configs
+// v4.5.0: Rate limits effectively disabled for enterprise usage
+// Single shop use case - no need for restrictive limits
 export const RATE_LIMITS = {
   uploadIntent: {
     windowMs: 60 * 1000,  // 1 minute
-    maxRequests: 10,
+    maxRequests: 10000,   // Effectively unlimited
     keyPrefix: "rl:upload:",
   },
   preflight: {
     windowMs: 60 * 1000,
-    maxRequests: 20,
+    maxRequests: 10000,   // Effectively unlimited
     keyPrefix: "rl:preflight:",
   },
   adminApi: {
     windowMs: 60 * 1000,
-    maxRequests: 100,
+    maxRequests: 10000,   // Effectively unlimited
     keyPrefix: "rl:admin:",
   },
   storageTest: {
     windowMs: 60 * 1000,
-    maxRequests: 5,
+    maxRequests: 10000,   // Effectively unlimited
     keyPrefix: "rl:storage:",
   },
 } as const;

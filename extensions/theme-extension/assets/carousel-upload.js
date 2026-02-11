@@ -20,7 +20,8 @@
   // ========================================
   const CONFIG = {
     apiBase: '/apps/customizer',
-    maxFileSize: 1024 * 1024 * 1024, // 1GB (Free/Starter plan limit)
+    // v4.5.0: Enterprise plan - 10GB file support
+    maxFileSize: 10240 * 1024 * 1024, // 10GB - Enterprise plan (backend validates per plan)
     allowedTypes: [
       'image/png',
       'image/jpeg',

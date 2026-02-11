@@ -65,7 +65,8 @@
     'ai',
     'eps',
   ]
-  const MAX_FILE_SIZE = 1453 * 1024 * 1024 // 1453MB - Pro plan max (backend validates per plan)
+  // v4.5.0: Enterprise plan - 10GB file support
+  const MAX_FILE_SIZE = 10240 * 1024 * 1024 // 10GB - Enterprise plan (backend validates per plan)
   const POLL_INTERVAL = 1000 // 1 second
   const MAX_POLLS = 120 // 120 seconds max wait for large files
 

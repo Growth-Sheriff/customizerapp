@@ -50,6 +50,26 @@ export const PLAN_LIMITS = {
     },
     description: "For growing businesses with unlimited needs",
   },
+  // v4.5.0: Enterprise plan with 10GB file support and no limits
+  enterprise: {
+    monthlyPrice: 0, // Custom billing
+    freeOrdersPerMonth: 999999, // Unlimited
+    extraOrderPrice: 0,
+    maxFileSizeMB: 10240, // 10GB - no limits
+    modes: ["3d_designer", "classic", "quick", "dtf"],
+    features: {
+      "3d_designer": true,
+      "quick_upload": true,
+      "analytics": true,
+      "export": true,
+      "team": true,
+      "api": true,
+      "whiteLabel": true,
+      "flow": true,
+      "priority_support": true,
+    },
+    description: "Enterprise - unlimited everything",
+  },
 } as const;
 
 export type PlanName = keyof typeof PLAN_LIMITS;

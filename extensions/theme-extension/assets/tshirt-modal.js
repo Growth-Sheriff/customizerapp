@@ -1044,8 +1044,9 @@ console.log('[ULTShirtModal] Script loading...')
         return
       }
 
-      if (file.size > 1453 * 1024 * 1024) {
-        this.showToast('File size must be less than 1.4GB', 'error')
+      // v4.5.0: Enterprise plan - 10GB file support
+      if (file.size > 10240 * 1024 * 1024) {
+        this.showToast('File size must be less than 10GB', 'error')
         return
       }
 

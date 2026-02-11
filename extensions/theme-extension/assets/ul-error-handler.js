@@ -474,8 +474,9 @@
      * @param {object} config - Validation config
      */
     validateFile(file, config = {}) {
+      // v4.5.0: Enterprise plan - 10GB file support
       const {
-        maxSize = 1453 * 1024 * 1024, // 1453MB - Pro plan max (backend validates per plan)
+        maxSize = 10240 * 1024 * 1024, // 10GB - Enterprise plan (backend validates per plan)
         allowedTypes = [
           'image/png', 'image/jpeg', 'image/webp', 'image/tiff',
           'image/vnd.adobe.photoshop', 'application/x-photoshop', 'image/x-psd',

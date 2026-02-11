@@ -88,10 +88,10 @@ export const PLAN_CONFIGS: Record<string, PreflightConfig> = {
     requireTransparency: false,
   },
   enterprise: {
-    maxFileSizeMB: 1453, // Enterprise gets 1453MB
-    minDPI: 150,
-    requiredDPI: 300,
-    maxPages: 10,
+    maxFileSizeMB: 10240, // Enterprise gets 10GB - no limits
+    minDPI: 72, // No minimum DPI requirement
+    requiredDPI: 150, // Lower requirement for enterprise
+    maxPages: 999, // Unlimited pages
     allowedFormats: [
       'image/png',
       'image/jpeg',
@@ -160,9 +160,9 @@ export async function getImageInfo(filePath: string): Promise<{
   format: string
 }> {
   try {
+    // v4.5.0: No timeout - large files (10GB+) need unlimited time
     const { stdout } = await execAsync(
-      `identify -format "%w|%h|%x|%y|%[colorspace]|%[channels]|%m" "${filePath}[0]"`,
-      { timeout: 30000 }
+      `identify -format "%w|%h|%x|%y|%[colorspace]|%[channels]|%m" "${filePath}[0]"`
     )
 
     const parts = stdout.trim().split('|')
@@ -195,7 +195,8 @@ export async function getPdfInfo(filePath: string): Promise<{
   height: number
 }> {
   try {
-    const { stdout } = await execAsync(`pdfinfo "${filePath}"`, { timeout: 10000 })
+    // v4.5.0: No timeout for PDF info extraction
+    const { stdout } = await execAsync(`pdfinfo "${filePath}"`)
 
     const pagesMatch = stdout.match(/Pages:\s+(\d+)/)
     const sizeMatch = stdout.match(/Page size:\s+([\d.]+)\s+x\s+([\d.]+)/)
@@ -234,7 +235,8 @@ export async function convertPdfToPng(
 
   for (const cmd of commands) {
     try {
-      await execAsync(cmd, { timeout: 60000 })
+      // v4.5.0: No timeout - large PDF files need unlimited time
+      await execAsync(cmd)
       // Verify the output file exists and is valid
       const stats = await fs.stat(outputPath).catch(() => null)
       if (stats && stats.size > 100) {
@@ -256,13 +258,14 @@ export async function getPdfPageCount(inputPath: string): Promise<number> {
   const cmd = `gs -q -dNODISPLAY -c "(${inputPath.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}) (r) file runpdfbegin pdfpagecount = quit"`
 
   try {
-    const { stdout } = await execAsync(cmd, { timeout: 10000 })
+    // v4.5.0: No timeout - large files need unlimited time
+    const { stdout } = await execAsync(cmd)
     const pageCount = parseInt(stdout.trim(), 10)
     return isNaN(pageCount) ? 1 : pageCount
   } catch (error) {
     // Fallback: try with pdfinfo if available
     try {
-      const { stdout } = await execAsync(`pdfinfo "${inputPath}" | grep Pages`, { timeout: 5000 })
+      const { stdout } = await execAsync(`pdfinfo "${inputPath}" | grep Pages`)
       const match = stdout.match(/Pages:\s*(\d+)/)
       return match ? parseInt(match[1], 10) : 1
     } catch {
@@ -292,7 +295,8 @@ export async function convertEpsToPng(
 
   for (const cmd of commands) {
     try {
-      await execAsync(cmd, { timeout: 60000 })
+      // v4.5.0: No timeout - AI/EPS files need unlimited time
+      await execAsync(cmd)
       // Verify the output file exists and is valid
       const stats = await fs.stat(outputPath).catch(() => null)
       if (stats && stats.size > 100) {
@@ -316,7 +320,8 @@ export async function convertTiffToPng(inputPath: string, outputPath: string): P
   const cmd = `convert "${inputPath}[0]" -colorspace sRGB -flatten -quality 100 "${outputPath}"`
 
   try {
-    await execAsync(cmd, { timeout: 60000 }) // 60s timeout for large TIFF files
+    // v4.5.0: No timeout - large TIFF files need unlimited time
+    await execAsync(cmd)
   } catch (error) {
     console.error('[Preflight] TIFF conversion failed:', error)
     throw new Error('TIFF conversion failed')
@@ -331,7 +336,8 @@ export async function convertPsdToPng(inputPath: string, outputPath: string): Pr
   const cmd = `convert "${inputPath}[0]" -colorspace sRGB -flatten -quality 100 "${outputPath}"`
 
   try {
-    await execAsync(cmd, { timeout: 120000 }) // 120s timeout for large PSD files
+    // v4.5.0: No timeout - large PSD files (10GB+) need unlimited time
+    await execAsync(cmd)
   } catch (error) {
     console.error('[Preflight] PSD conversion failed:', error)
     throw new Error('PSD conversion failed')
@@ -347,7 +353,8 @@ export async function generateThumbnail(
   const cmd = `convert "${inputPath}[0]" -thumbnail ${maxSize}x${maxSize}\\> -quality 85 "${outputPath}"`
 
   try {
-    await execAsync(cmd, { timeout: 30000 })
+    // v4.5.0: No timeout - thumbnail generation needs time for large files
+    await execAsync(cmd)
     // Verify thumbnail was created and is valid
     const stats = await fs.stat(outputPath).catch(() => null)
     if (!stats || stats.size < 100) {
@@ -356,14 +363,14 @@ export async function generateThumbnail(
   } catch (error) {
     console.error('[Preflight] Thumbnail generation failed:', error)
 
-    // Create a fallback placeholder thumbnail
+    // v4.5.0: Create a fallback placeholder thumbnail with file format label
     try {
-      console.log('[Preflight] Creating fallback placeholder thumbnail')
-      // Create a simple gray placeholder with "PDF" or "AI" text
+      console.log('[Preflight] Creating fallback placeholder thumbnail with file format label')
+      // Detect file type label for better user experience
       const ext = path.extname(inputPath).toLowerCase().replace('.', '').toUpperCase() || 'FILE'
-      const fallbackCmd = `convert -size ${maxSize}x${maxSize} xc:#f3f4f6 -gravity center -pointsize 48 -fill "#6b7280" -annotate 0 "${ext}" -quality 85 "${outputPath}"`
-      await execAsync(fallbackCmd, { timeout: 10000 })
-      console.log('[Preflight] Fallback thumbnail created successfully')
+      const fallbackCmd = `convert -size ${maxSize}x${maxSize} xc:#f3f4f6 -gravity center -pointsize 64 -fill "#6b7280" -font "DejaVu-Sans-Bold" -annotate 0 "${ext}" -quality 85 "${outputPath}"`
+      await execAsync(fallbackCmd)
+      console.log('[Preflight] Fallback thumbnail created successfully with label:', ext)
       return
     } catch (fallbackError) {
       console.error('[Preflight] Fallback thumbnail also failed:', fallbackError)
