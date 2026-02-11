@@ -792,7 +792,8 @@
 
       xhr.onload = () => resolve({ ok: xhr.status >= 200 && xhr.status < 300, status: xhr.status })
       xhr.onerror = () => reject(new Error('Network error during upload'))
-      xhr.ontimeout = () => reject(new Error('Upload timeout'))
+      // v4.4.0: No timeout for large file uploads
+      // xhr.ontimeout = () => reject(new Error('Upload timeout'))
 
       if (storageProvider === 'bunny' || storageProvider === 'r2') {
         // Direct PUT to CDN storage
