@@ -1047,8 +1047,8 @@
           instance.activeXHR = xhr
         }
 
-        // Research Fix: 30s timeout to prevent hanging on firewalls
-        xhr.timeout = 30000 
+        // v4.4.0: No timeout - large files (200MB+) need unlimited time
+        // R2 fallback will handle if connection completely stalls
 
         xhr.upload.addEventListener('progress', (e) => {
           if (e.lengthComputable) {
@@ -1126,10 +1126,11 @@
           reject(error)
         })
 
-        xhr.addEventListener('timeout', () => {
-          console.error('[UL] Bunny upload timeout after', Date.now() - startTime, 'ms')
-          reject(new Error('Upload timeout - connection too slow'))
-        })
+        // v4.4.0: Timeout disabled - this listener kept for future use if needed
+        // xhr.addEventListener('timeout', () => {
+        //   console.error('[UL] Bunny upload timeout after', Date.now() - startTime, 'ms')
+        //   reject(new Error('Upload timeout - connection too slow'))
+        // })
 
         xhr.addEventListener('abort', () => reject(new Error('Bunny upload cancelled')))
 
