@@ -66,7 +66,7 @@
             <line x1="12" y1="3" x2="12" y2="15"/>
           </svg>
           <p><strong>Click to upload</strong></p>
-          <span>PNG, JPG, WEBP, TIFF, PSD, PDF, AI, EPS (Max 1GB)</span>
+          <span>PNG, JPG, WEBP, TIFF, PSD, PDF, AI, EPS (Max 10GB)</span>
           <input type="file" id="ul-file-{{ unique_id }}" accept=".png,.jpg,.jpeg,.webp,.tiff,.tif,.psd,.svg,.pdf,.ai,.eps" style="display:none">
         </div>
 
@@ -1031,7 +1031,8 @@
 
           xhr.onload = () => resolve({ ok: xhr.status >= 200 && xhr.status < 300, status: xhr.status });
           xhr.onerror = () => reject(new Error('Network error during upload'));
-          xhr.ontimeout = () => reject(new Error('Upload timeout'));
+          // v4.5.0: No timeout for large file uploads
+          // xhr.ontimeout = () => reject(new Error('Upload timeout'));
 
           xhr.open('PUT', uploadUrl);
           xhr.setRequestHeader('Content-Type', mimeType);
@@ -1078,7 +1079,8 @@
 
           xhr.onload = () => resolve({ ok: xhr.status >= 200 && xhr.status < 300, status: xhr.status });
           xhr.onerror = () => reject(new Error('Network error during upload'));
-          xhr.ontimeout = () => reject(new Error('Upload timeout'));
+          // v4.5.0: No timeout for large file uploads
+          // xhr.ontimeout = () => reject(new Error('Upload timeout'));
 
           xhr.open('POST', uploadUrl);
           xhr.send(formData);
