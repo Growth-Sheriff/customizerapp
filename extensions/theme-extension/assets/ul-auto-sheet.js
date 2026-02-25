@@ -381,6 +381,18 @@
       return;
     }
 
+    // Lazy re-init: if config was loaded after initial init, re-read it
+    if (!isEnabled()) {
+      try {
+        var sc = (window.ULState && typeof window.ULState.get === 'function')
+          ? window.ULState.get('storefrontConfig') : null;
+        if (sc && sc.autoSheet) {
+          state.config = Object.assign({}, DEFAULT_CONFIG, sc.autoSheet);
+          console.log('[ULAutoSheet] Re-initialized from storefront config, enabled:', state.config.enabled);
+        }
+      } catch (e) { /* ignore */ }
+    }
+
     if (!isEnabled()) {
       console.log('[ULAutoSheet] Feature not enabled');
       return;

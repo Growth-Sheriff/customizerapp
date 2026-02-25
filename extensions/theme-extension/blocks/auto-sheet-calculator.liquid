@@ -102,18 +102,30 @@
 
     function $(id) { return document.getElementById(id); }
 
+    var _initAttempts = 0;
+    var MAX_INIT_ATTEMPTS = 50; // 50 x 200ms = 10 seconds max wait
+
     function initWidget() {
       if (!window.ULAutoSheet || !window.ULDimensionReader || !window.ULNestingEngine) {
         setTimeout(initWidget, 200);
         return;
       }
 
-      // Init the module
+      // Wait for storefront config to be loaded from API
       var config = {};
       try {
         var sc = (window.ULState && typeof window.ULState.get === 'function')
           ? window.ULState.get('storefrontConfig') : null;
-        if (sc && sc.autoSheet) config = sc.autoSheet;
+        if (sc && sc.autoSheet) {
+          config = sc.autoSheet;
+        } else if (_initAttempts < MAX_INIT_ATTEMPTS) {
+          // Config not loaded yet, retry
+          _initAttempts++;
+          setTimeout(initWidget, 200);
+          return;
+        } else {
+          console.warn('[ULAutoSheet] Config not loaded after max retries, initializing with defaults');
+        }
       } catch (e) {}
       window.ULAutoSheet.init(config);
 
