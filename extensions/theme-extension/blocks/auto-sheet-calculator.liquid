@@ -20,14 +20,11 @@
 {% endcomment %}
 
 {% comment %}
-  Load CSS - Soft, elegant, light-colored modal styles
-  App embed (target: body) does not create visible wrappers
+  All content wrapped in display:none to prevent Shopify block wrapper whitespace.
+  Scripts and stylesheets still load and execute inside display:none containers.
 {% endcomment %}
+<div style="display:none!important;position:absolute!important;width:0!important;height:0!important;overflow:hidden!important;pointer-events:none!important">
 {{ 'ul-auto-sheet.css' | asset_url | stylesheet_tag }}
-
-{% comment %}
-  Load JS modules in dependency order
-{% endcomment %}
 <script src="{{ 'ul-dimension-reader.js' | asset_url }}" defer></script>
 <script src="{{ 'ul-nesting-engine.js' | asset_url }}" defer></script>
 <script src="{{ 'ul-sheet-optimizer.js' | asset_url }}" defer></script>
@@ -359,11 +356,13 @@
     }
   })();
 </script>
+</div>
 
 {% schema %}
 {
   "name": "Auto Sheet Calculator",
-  "target": "body",
+  "target": "section",
+  "templates": ["product"],
   "settings": [
     {
       "type": "paragraph",
