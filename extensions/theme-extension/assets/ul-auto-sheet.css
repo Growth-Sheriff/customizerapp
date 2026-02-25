@@ -1150,3 +1150,195 @@
   background: var(--ul-sheet-primary);
   color: #fff;
 }
+
+/* ── Visible Widget (Product Page Card) ── */
+.ul-calc-widget {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.ul-calc-card {
+  border: 1.5px solid #e2e8f0;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #fafbff 0%, #f8fafc 100%);
+  padding: 20px;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+.ul-calc-card:hover {
+  border-color: #c7d2fe;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.08);
+}
+.ul-calc-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.ul-calc-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #6366f1 0%, #818cf8 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.ul-calc-icon svg { color: #fff; }
+.ul-calc-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0;
+  line-height: 1.3;
+}
+.ul-calc-subtitle {
+  font-size: 12px;
+  color: #94a3b8;
+  font-weight: 500;
+  margin: 0;
+}
+.ul-calc-desc {
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.5;
+  margin: 0 0 16px 0;
+}
+/* Upload drop zone */
+.ul-calc-dropzone {
+  border: 2px dashed #cbd5e1;
+  border-radius: 12px;
+  padding: 24px 16px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  background: #fff;
+  position: relative;
+}
+.ul-calc-dropzone:hover,
+.ul-calc-dropzone.ul-calc-dragover {
+  border-color: #6366f1;
+  background: rgba(99, 102, 241, 0.03);
+}
+.ul-calc-dropzone-icon {
+  color: #94a3b8;
+  margin-bottom: 8px;
+}
+.ul-calc-dropzone:hover .ul-calc-dropzone-icon { color: #6366f1; }
+.ul-calc-dropzone-text {
+  font-size: 13px;
+  color: #64748b;
+  margin: 0;
+}
+.ul-calc-dropzone-text strong {
+  color: #6366f1;
+  cursor: pointer;
+}
+.ul-calc-dropzone-hint {
+  font-size: 11px;
+  color: #94a3b8;
+  margin: 6px 0 0 0;
+}
+.ul-calc-file-input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  width: 100%;
+  height: 100%;
+}
+/* Preview state */
+.ul-calc-preview {
+  display: none;
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  background: #fff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
+  margin-bottom: 12px;
+}
+.ul-calc-preview.ul-calc-has-file { display: flex; }
+.ul-calc-preview-thumb {
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+}
+.ul-calc-preview-info { flex: 1; min-width: 0; }
+.ul-calc-preview-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ul-calc-preview-meta {
+  font-size: 11px;
+  color: #94a3b8;
+  margin: 2px 0 0 0;
+}
+.ul-calc-preview-remove {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: #f1f5f9;
+  color: #94a3b8;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+.ul-calc-preview-remove:hover { background: #fee2e2; color: #ef4444; }
+/* Calculate button */
+.ul-calc-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #6366f1 0%, #818cf8 100%);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  font-family: inherit;
+  margin-top: 12px;
+}
+.ul-calc-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35); }
+.ul-calc-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+/* Result badge */
+.ul-calc-result {
+  display: none;
+  margin-top: 14px;
+  padding: 12px 14px;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 10px;
+}
+.ul-calc-result.ul-calc-has-result { display: block; }
+.ul-calc-result-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #059669;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0 0 6px 0;
+}
+.ul-calc-result-text {
+  font-size: 13px;
+  color: #1e293b;
+  margin: 0;
+  line-height: 1.5;
+}
+.ul-calc-result-text strong { color: #6366f1; }
