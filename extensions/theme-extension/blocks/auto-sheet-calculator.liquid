@@ -20,9 +20,43 @@
 {% endcomment %}
 
 {% comment %}
-  All content wrapped in display:none to prevent Shopify block wrapper whitespace.
-  Scripts and stylesheets still load and execute inside display:none containers.
+  Hide the theme's step-card wrapper AND our content to prevent whitespace.
+  The theme wraps app blocks in div.step-card.pm-app-block with padding/margin.
+  We hide both the Shopify wrapper and the theme wrapper via CSS + JS fallback.
 {% endcomment %}
+<style>
+  /* Hide the Shopify block wrapper */
+  #shopify-block-{{ block.id }} {
+    display: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  /* Hide the theme's step-card wrapper that contains our block */
+  .step-card.pm-app-block:has(#shopify-block-{{ block.id }}) {
+    display: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+</style>
+<script>
+  /* JS fallback: hide theme wrapper for browsers without :has() support */
+  (function(){
+    var bid = 'shopify-block-{{ block.id }}';
+    function hideWrapper() {
+      var el = document.getElementById(bid);
+      if (!el) return;
+      var parent = el.parentElement;
+      if (parent && parent.classList && parent.classList.contains('pm-app-block')) {
+        parent.style.cssText = 'display:none!important;padding:0!important;margin:0!important';
+      }
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', hideWrapper);
+    } else {
+      hideWrapper();
+    }
+  })();
+</script>
 <div style="display:none!important;position:absolute!important;width:0!important;height:0!important;overflow:hidden!important;pointer-events:none!important">
 {{ 'ul-auto-sheet.css' | asset_url | stylesheet_tag }}
 <script src="{{ 'ul-dimension-reader.js' | asset_url }}" defer></script>
