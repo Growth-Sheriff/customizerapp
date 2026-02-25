@@ -2,6 +2,7 @@ import type { LoaderFunctionArgs } from "@remix-run/node";
 import { handleCorsOptions, corsJson } from "~/lib/cors.server";
 import { rateLimitGuard, getIdentifier } from "~/lib/rateLimit.server";
 import prisma from "~/lib/prisma.server";
+import { extractAutoSheetFromSettings } from "~/lib/autoSheet.server";
 
 /**
  * GET /api/storefront/config?shopDomain=xxx&productId=xxx
@@ -141,6 +142,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
     ],
   };
 
+  // Auto Sheet Calculator config (extracted from already-loaded settings, no extra DB query)
+  const autoSheet = extractAutoSheetFromSettings(settings);
+
   return corsJson({
     shop: {
       domain: shop.shopDomain,
@@ -150,5 +154,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
     assetSet,
     product,
     settings: storefrontSettings,
+    autoSheet,
   }, request);
 }

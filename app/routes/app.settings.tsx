@@ -3,11 +3,14 @@ import { json } from "@remix-run/node";
 import { useLoaderData, useActionData, Form, useNavigation } from "@remix-run/react";
 import {
   Page, Layout, Card, Text, BlockStack, InlineStack,
-  TextField, Button, Banner, FormLayout, Box, Badge, Divider
+  TextField, Button, Banner, FormLayout, Box, Badge, Divider,
+  Checkbox, Select, RangeSlider
 } from "@shopify/polaris";
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { authenticate } from "~/shopify.server";
 import prisma from "~/lib/prisma.server";
+import { getAutoSheetConfig, saveAutoSheetConfig, DEFAULT_AUTO_SHEET_CONFIG } from "~/lib/autoSheet.server";
+import type { AutoSheetConfig } from "~/lib/autoSheet.server";
 
 // GraphQL query to get shop info
 const SHOP_INFO_QUERY = `
@@ -54,6 +57,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const settings = (shop.settings as Record<string, unknown>) || {};
 
+  // Get auto sheet config
+  const autoSheetConfig = await getAutoSheetConfig(shopDomain);
+
   return json({
     shop: {
       domain: shop.shopDomain,
@@ -71,6 +77,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       watermarkEnabled: false, // No watermark for any plan
       redisEnabled: settings.redisEnabled || false,
     },
+    autoSheet: autoSheetConfig,
   });
 }
 
@@ -114,11 +121,51 @@ export async function action({ request }: ActionFunctionArgs) {
     return json({ success: true, message: "General settings saved" });
   }
 
+  if (action === "save_auto_sheet") {
+    const enabled = formData.get("enabled") === "true";
+
+    // When calculator is disabled, sub-setting hidden inputs are not in the DOM.
+    // Only include fields that actually exist in the form data so we don't
+    // silently reset saved preferences to false.
+    const config: Partial<AutoSheetConfig> = { enabled };
+
+    if (formData.has("gapMm")) {
+      const gapMm = parseInt(formData.get("gapMm") as string, 10);
+      if (!isNaN(gapMm)) config.gapMm = gapMm;
+    }
+    if (formData.has("marginMm")) {
+      const marginMm = parseInt(formData.get("marginMm") as string, 10);
+      if (!isNaN(marginMm)) config.marginMm = marginMm;
+    }
+    if (formData.has("allowRotation")) {
+      config.allowRotation = formData.get("allowRotation") === "true";
+    }
+    if (formData.has("strategy")) {
+      config.strategy = formData.get("strategy") as AutoSheetConfig["strategy"];
+    }
+    if (formData.has("showSimulator")) {
+      config.showSimulator = formData.get("showSimulator") === "true";
+    }
+    if (formData.has("showAlternatives")) {
+      config.showAlternatives = formData.get("showAlternatives") === "true";
+    }
+    if (formData.has("showComparison")) {
+      config.showComparison = formData.get("showComparison") === "true";
+    }
+    if (formData.has("showQuantitySuggestion")) {
+      config.showQuantitySuggestion = formData.get("showQuantitySuggestion") === "true";
+    }
+
+    await saveAutoSheetConfig(shopDomain, config);
+
+    return json({ success: true, message: "Auto sheet calculator settings saved" });
+  }
+
   return json({ error: "Unknown action" }, { status: 400 });
 }
 
 export default function SettingsPage() {
-  const { shop, storageConfig, settings } = useLoaderData<typeof loader>();
+  const { shop, storageConfig, settings, autoSheet } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
@@ -126,6 +173,20 @@ export default function SettingsPage() {
   // Form state for general settings
   const [shopName, setShopName] = useState(settings.shopName as string);
   const [notificationEmail, setNotificationEmail] = useState(settings.notificationEmail as string);
+
+  // Form state for auto sheet settings
+  const [sheetEnabled, setSheetEnabled] = useState(autoSheet.enabled);
+  const [sheetGap, setSheetGap] = useState(autoSheet.gapMm);
+  const [sheetMargin, setSheetMargin] = useState(autoSheet.marginMm);
+  const [sheetRotation, setSheetRotation] = useState(autoSheet.allowRotation);
+  const [sheetStrategy, setSheetStrategy] = useState(autoSheet.strategy);
+  const [sheetSimulator, setSheetSimulator] = useState(autoSheet.showSimulator);
+  const [sheetAlternatives, setSheetAlternatives] = useState(autoSheet.showAlternatives);
+  const [sheetComparison, setSheetComparison] = useState(autoSheet.showComparison);
+  const [sheetQtySuggestion, setSheetQtySuggestion] = useState(autoSheet.showQuantitySuggestion);
+
+  const handleSheetGapChange = useCallback((value: number) => setSheetGap(value), []);
+  const handleSheetMarginChange = useCallback((value: number) => setSheetMargin(value), []);
 
   return (
     <Page title="Settings" backAction={{ content: "Dashboard", url: "/app" }}>
@@ -227,6 +288,138 @@ export default function SettingsPage() {
                   )}
                 </InlineStack>
               </BlockStack>
+            </Card>
+          </Layout.Section>
+
+          {/* Auto Sheet Size Calculator Settings */}
+          <Layout.Section>
+            <Card>
+              <Form method="post">
+                <input type="hidden" name="_action" value="save_auto_sheet" />
+                <BlockStack gap="400">
+                  <InlineStack align="space-between">
+                    <Text as="h2" variant="headingMd">🧮 Auto Sheet Size Calculator</Text>
+                    <Badge tone={sheetEnabled ? "success" : "enabled"}>
+                      {sheetEnabled ? "Active" : "Inactive"}
+                    </Badge>
+                  </InlineStack>
+
+                  <Text as="p" variant="bodySm" tone="subdued">
+                    Automatically calculates the optimal sheet size for customers based on their design dimensions and quantity. 
+                    Reduces waste and helps customers choose the most cost-effective variant.
+                  </Text>
+
+                  <Divider />
+
+                  <Checkbox
+                    label="Enable Auto Sheet Calculator"
+                    helpText="Show the sheet size calculator modal on product pages"
+                    checked={sheetEnabled}
+                    onChange={setSheetEnabled}
+                  />
+                  <input type="hidden" name="enabled" value={sheetEnabled ? "true" : "false"} />
+
+                  {sheetEnabled && (
+                    <BlockStack gap="400">
+                      <Divider />
+
+                      <Text as="h3" variant="headingSm">Layout Settings</Text>
+
+                      <RangeSlider
+                        label={`Gap Between Designs: ${sheetGap}mm`}
+                        value={sheetGap}
+                        min={0}
+                        max={20}
+                        step={1}
+                        onChange={handleSheetGapChange}
+                        helpText="Space between each design placement on the sheet"
+                        output
+                      />
+                      <input type="hidden" name="gapMm" value={sheetGap.toString()} />
+
+                      <RangeSlider
+                        label={`Sheet Margin: ${sheetMargin}mm`}
+                        value={sheetMargin}
+                        min={0}
+                        max={20}
+                        step={1}
+                        onChange={handleSheetMarginChange}
+                        helpText="Safe area margin from sheet edges"
+                        output
+                      />
+                      <input type="hidden" name="marginMm" value={sheetMargin.toString()} />
+
+                      <Checkbox
+                        label="Allow Design Rotation"
+                        helpText="Allow 90° rotation of designs for better fit"
+                        checked={sheetRotation}
+                        onChange={setSheetRotation}
+                      />
+                      <input type="hidden" name="allowRotation" value={sheetRotation ? "true" : "false"} />
+
+                      <Divider />
+
+                      <Text as="h3" variant="headingSm">Optimization Strategy</Text>
+
+                      <Select
+                        label="Strategy"
+                        options={[
+                          { label: "Balanced (Recommended)", value: "balanced" },
+                          { label: "Minimize Waste", value: "waste" },
+                          { label: "Fewest Sheets", value: "sheets" },
+                          { label: "Lowest Cost", value: "cost" },
+                        ]}
+                        value={sheetStrategy}
+                        onChange={setSheetStrategy}
+                        helpText="How to prioritize when recommending sheet sizes"
+                      />
+                      <input type="hidden" name="strategy" value={sheetStrategy} />
+
+                      <Divider />
+
+                      <Text as="h3" variant="headingSm">Display Options</Text>
+
+                      <Checkbox
+                        label="Show Visual Simulator"
+                        helpText="Interactive canvas showing how designs are placed on the sheet"
+                        checked={sheetSimulator}
+                        onChange={setSheetSimulator}
+                      />
+                      <input type="hidden" name="showSimulator" value={sheetSimulator ? "true" : "false"} />
+
+                      <Checkbox
+                        label="Show Alternative Sizes"
+                        helpText="Display other sheet size options besides the recommended one"
+                        checked={sheetAlternatives}
+                        onChange={setSheetAlternatives}
+                      />
+                      <input type="hidden" name="showAlternatives" value={sheetAlternatives ? "true" : "false"} />
+
+                      <Checkbox
+                        label="Show Comparison Table"
+                        helpText="Detailed comparison table of all sheet sizes"
+                        checked={sheetComparison}
+                        onChange={setSheetComparison}
+                      />
+                      <input type="hidden" name="showComparison" value={sheetComparison ? "true" : "false"} />
+
+                      <Checkbox
+                        label="Show Quantity Suggestions"
+                        helpText="Suggest quantity adjustments to reduce waste"
+                        checked={sheetQtySuggestion}
+                        onChange={setSheetQtySuggestion}
+                      />
+                      <input type="hidden" name="showQuantitySuggestion" value={sheetQtySuggestion ? "true" : "false"} />
+                    </BlockStack>
+                  )}
+
+                  <InlineStack align="end">
+                    <Button submit loading={isSubmitting}>
+                      Save Calculator Settings
+                    </Button>
+                  </InlineStack>
+                </BlockStack>
+              </Form>
             </Card>
           </Layout.Section>
 

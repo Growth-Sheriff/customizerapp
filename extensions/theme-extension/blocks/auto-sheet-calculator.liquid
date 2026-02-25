@@ -1,0 +1,388 @@
+{% comment %}
+  Auto Sheet Size Calculator - Theme App Block
+  =============================================
+  Provides intelligent sheet size recommendation for DTF transfers.
+  Reads design dimensions, calculates optimal nesting, and shows
+  a visual simulator to help customers choose the right sheet size.
+
+  This block loads as an independent module alongside the DTF uploader.
+  It does NOT modify existing upload or cart flows.
+
+  Dependencies:
+    - ul-dimension-reader.js (EXIF/DPI reader)
+    - ul-nesting-engine.js (Grid strip-packing)
+    - ul-sheet-optimizer.js (Cost/waste optimizer)
+    - ul-sheet-simulator.js (Canvas 2D preview)
+    - ul-auto-sheet.js (Main orchestrator)
+    - ul-auto-sheet.css (Styles)
+
+  Version: 1.0.0
+{% endcomment %}
+
+{% comment %}
+  Load CSS - Soft, elegant, light-colored modal styles
+{% endcomment %}
+{{ 'ul-auto-sheet.css' | asset_url | stylesheet_tag }}
+
+{% comment %}
+  Load JS modules in dependency order
+{% endcomment %}
+<script src="{{ 'ul-dimension-reader.js' | asset_url }}" defer></script>
+<script src="{{ 'ul-nesting-engine.js' | asset_url }}" defer></script>
+<script src="{{ 'ul-sheet-optimizer.js' | asset_url }}" defer></script>
+<script src="{{ 'ul-sheet-simulator.js' | asset_url }}" defer></script>
+<script src="{{ 'ul-auto-sheet.js' | asset_url }}" defer></script>
+
+{% comment %}
+  Initialize Auto Sheet with storefront config
+  Waits for ULState to load config, then initializes
+{% endcomment %}
+<script>
+  (function() {
+    'use strict';
+
+    function initAutoSheet() {
+      // Check if auto sheet modules are loaded
+      if (!window.ULAutoSheet || !window.ULDimensionReader || !window.ULNestingEngine) {
+        // Retry after a short delay
+        setTimeout(initAutoSheet, 200);
+        return;
+      }
+
+      // Get config from ULState if available
+      var config = {};
+      try {
+        var storefrontConfig = (window.ULState && typeof window.ULState.get === 'function')
+          ? window.ULState.get('storefrontConfig')
+          : null;
+        if (storefrontConfig && storefrontConfig.autoSheet) {
+          config = storefrontConfig.autoSheet;
+        }
+      } catch (e) {
+        console.warn('[ULAutoSheet] Could not read config from ULState');
+      }
+
+      // Initialize the module
+      window.ULAutoSheet.init(config);
+
+      // If configuration says enabled, integrate with the upload flow
+      if (window.ULAutoSheet.isEnabled()) {
+        integrateWithUploader();
+      }
+    }
+
+    /**
+     * Integrate with the existing DTF uploader
+     * Adds a "Calculate Sheet Size" button after file upload
+     */
+    var _lastCapturedFile = null;
+
+    function integrateWithUploader() {
+      // Passively capture file references from user interactions
+      // so we have the File object when uploadComplete fires
+      document.addEventListener('change', function(e) {
+        var target = e.target;
+        if (target && target.type === 'file' && target.files && target.files[0]) {
+          _lastCapturedFile = target.files[0];
+        }
+      }, true);
+
+      document.addEventListener('drop', function(e) {
+        if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
+          _lastCapturedFile = e.dataTransfer.files[0];
+        }
+      }, true);
+
+      // Listen for upload completion to show the calculator trigger
+      if (window.ULEvents) {
+        window.ULEvents.on('uploadComplete', function(data) {
+          if (!data || !data.productId) return;
+          if (!_lastCapturedFile) return;
+
+          var shopDomain = '';
+          try {
+            shopDomain = (window.ULState && typeof window.ULState.get === 'function')
+              ? (window.ULState.get('shopDomain') || '')
+              : '';
+          } catch (e) { /* ignore */ }
+
+          showCalculatorTrigger({
+            file: _lastCapturedFile,
+            productId: data.productId,
+            uploadId: data.uploadId,
+            thumbnailUrl: data.thumbnailUrl,
+            shopDomain: shopDomain || '{{ shop.permanent_domain }}',
+          });
+        });
+      }
+
+      // Also watch for upload previews appearing
+      observeUploadState();
+    }
+
+    /**
+     * Show a subtle trigger button after file selection
+     * @param {Object} data - Upload event data with file reference
+     */
+    function showCalculatorTrigger(data) {
+      if (!data || !data.file || !data.productId) return;
+
+      var productId = data.productId;
+      var containerId = 'ul-sheet-trigger-' + productId;
+
+      // Don't add duplicate triggers
+      if (document.getElementById(containerId)) return;
+
+      // Find the upload area to inject the trigger nearby
+      var uploadArea = document.querySelector(
+        '#ul-file-preview-' + productId + ', ' +
+        '[data-product-id="' + productId + '"] .ul-upload-preview, ' +
+        '.ul-preview-container-' + productId
+      );
+
+      if (!uploadArea) return;
+
+      var trigger = document.createElement('div');
+      trigger.id = containerId;
+      trigger.className = 'ul-sheet-trigger';
+      trigger.innerHTML = [
+        '<button type="button" class="ul-sheet-trigger-btn" data-sheet-calc="' + productId + '">',
+        '  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">',
+        '    <rect x="3" y="3" width="18" height="18" rx="2"/>',
+        '    <path d="M3 9h18"/>',
+        '    <path d="M9 3v18"/>',
+        '  </svg>',
+        '  <span>Calculate Best Sheet Size</span>',
+        '</button>',
+      ].join('');
+
+      // Add inline styles for the trigger button
+      var style = trigger.querySelector('.ul-sheet-trigger-btn');
+      if (style) {
+        style.setAttribute('style', [
+          'display:inline-flex',
+          'align-items:center',
+          'gap:8px',
+          'padding:10px 16px',
+          'margin-top:10px',
+          'border:1.5px solid #e2e8f0',
+          'border-radius:10px',
+          'background:#f8fafc',
+          'color:#64748b',
+          'font-size:13px',
+          'font-weight:600',
+          'cursor:pointer',
+          'transition:all 0.2s',
+          'font-family:inherit',
+          'width:100%',
+          'justify-content:center',
+        ].join(';'));
+      }
+
+      // Hover effect
+      var btn = trigger.querySelector('.ul-sheet-trigger-btn');
+      if (btn) {
+        btn.addEventListener('mouseenter', function() {
+          this.style.borderColor = '#6366f1';
+          this.style.color = '#6366f1';
+          this.style.background = 'rgba(99, 102, 241, 0.05)';
+        });
+        btn.addEventListener('mouseleave', function() {
+          this.style.borderColor = '#e2e8f0';
+          this.style.color = '#64748b';
+          this.style.background = '#f8fafc';
+        });
+      }
+
+      uploadArea.parentNode.insertBefore(trigger, uploadArea.nextSibling);
+
+      // Bind click
+      trigger.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        openSheetCalculator(data);
+      });
+    }
+
+    /**
+     * Open the sheet calculator modal
+     * @param {Object} data - { file, productId, variants }
+     */
+    function openSheetCalculator(data) {
+      // Get variants from the product JSON
+      var variants = data.variants || [];
+
+      // If variants not provided, try to get from the page
+      if (variants.length === 0) {
+        var variantScript = document.querySelector(
+          'script[type="application/json"][data-product-variants],' +
+          '#ul-variants-' + data.productId + ',' +
+          '[id*="product-variants-json"]'
+        );
+
+        if (variantScript) {
+          try {
+            variants = JSON.parse(variantScript.textContent);
+          } catch (e) {
+            console.warn('[ULAutoSheet] Could not parse variants JSON');
+          }
+        }
+
+        // Fallback: try Shopify product JSON
+        if (variants.length === 0) {
+          var productJson = document.querySelector(
+            'script[type="application/json"][data-product-json],' +
+            '[id*="ProductJson"]'
+          );
+          if (productJson) {
+            try {
+              var product = JSON.parse(productJson.textContent);
+              variants = product.variants || [];
+            } catch (e) {
+              // ignore
+            }
+          }
+        }
+      }
+
+      window.ULAutoSheet.openModal({
+        file: data.file,
+        variants: variants,
+        productId: data.productId,
+        shopDomain: data.shopDomain || (window.ULState && window.ULState.shopDomain) || '{{ shop.permanent_domain }}',
+        quantity: data.quantity || 1,
+        onSelect: function(result) {
+          handleSheetSelected(result, data.productId);
+        },
+      });
+    }
+
+    /**
+     * Handle when user selects a sheet size from the calculator
+     * Updates the variant selector on the product page
+     * @param {Object} result
+     * @param {string} productId
+     */
+    function handleSheetSelected(result, productId) {
+      if (!result || !result.variantId) return;
+
+      // Try to update the variant selector on the page
+      var selectors = document.querySelectorAll(
+        'select[name="id"], ' +
+        '#ul-option-' + productId + '-0, ' +
+        '.ul-variant-select, ' +
+        'input[name="id"][value], ' +
+        '.product-form__input select'
+      );
+
+      for (var i = 0; i < selectors.length; i++) {
+        var sel = selectors[i];
+        if (sel.tagName === 'SELECT') {
+          // Find the option that matches our variant
+          for (var j = 0; j < sel.options.length; j++) {
+            if (String(sel.options[j].value) === String(result.variantId)) {
+              sel.selectedIndex = j;
+              sel.dispatchEvent(new Event('change', { bubbles: true }));
+              break;
+            }
+          }
+        } else if (sel.tagName === 'INPUT') {
+          sel.value = result.variantId;
+          sel.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      }
+
+      // Update quantity if the uploader has a quantity field
+      if (result.sheetsNeeded > 1) {
+        var qtyInputs = document.querySelectorAll(
+          '#ul-qty-' + productId + ', ' +
+          'input[name="quantity"], ' +
+          '.quantity-input'
+        );
+
+        for (var k = 0; k < qtyInputs.length; k++) {
+          qtyInputs[k].value = result.sheetsNeeded;
+          qtyInputs[k].dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      }
+
+      // Emit event for analytics
+      if (window.ULEvents) {
+        window.ULEvents.emit('autoSheet:applied', {
+          productId: productId,
+          variantId: result.variantId,
+          sheetName: result.sheetName,
+          sheetsNeeded: result.sheetsNeeded,
+          efficiency: result.efficiency,
+        });
+      }
+
+      console.log('[ULAutoSheet] Applied:', result.sheetName, '×', result.sheetsNeeded);
+    }
+
+    /**
+     * Watch for upload state changes via MutationObserver
+     * Detects when a file preview appears, even without ULEvents
+     */
+    function observeUploadState() {
+      // Throttled observer to avoid excessive checking
+      var observer = new MutationObserver(function(mutations) {
+        // Check if a file preview appeared
+        var previews = document.querySelectorAll('.ul-preview-container, .ul-upload-preview, .ul-quick-preview');
+        previews.forEach(function(preview) {
+          if (preview.dataset.sheetTriggerAdded) return;
+          preview.dataset.sheetTriggerAdded = 'true';
+          // Auto-show will happen via ULEvents
+        });
+      });
+
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+      });
+
+      // Clean up when user navigates away (no fixed timeout — let it
+      // run for the full page lifecycle to catch late uploads)
+      window.addEventListener('beforeunload', function() {
+        observer.disconnect();
+      });
+    }
+
+    // Start initialization when DOM is ready
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', function() {
+        setTimeout(initAutoSheet, 500);
+      });
+    } else {
+      setTimeout(initAutoSheet, 500);
+    }
+  })();
+</script>
+
+{% schema %}
+{
+  "name": "Auto Sheet Calculator",
+  "target": "section",
+  "templates": ["product"],
+  "settings": [
+    {
+      "type": "paragraph",
+      "content": "This block adds an intelligent sheet size calculator that helps customers choose the optimal DTF transfer sheet size based on their design dimensions and quantity."
+    },
+    {
+      "type": "checkbox",
+      "id": "auto_open",
+      "label": "Auto-open after upload",
+      "default": false,
+      "info": "Automatically open the calculator after a design is uploaded"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_trigger_button",
+      "label": "Show calculator button",
+      "default": true,
+      "info": "Show a 'Calculate Best Sheet Size' button after upload"
+    }
+  ]
+}
+{% endschema %}
