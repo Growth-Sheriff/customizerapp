@@ -443,6 +443,33 @@
       };
     }
 
+    // Try matching "NUMBER NUMBER" (space separated, e.g. "22 6", "22 240")
+    match = cleaned.match(/^(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)$/);
+    if (match) {
+      return {
+        widthInch: parseFloat(match[1]),
+        heightInch: parseFloat(match[2]),
+      };
+    }
+
+    // Try matching "NUMBERxNUMBER" in a longer string (e.g. "DTF 22x30 Premium")
+    match = cleaned.match(/(\d+(?:\.\d+)?)\s*[x×X]\s*(\d+(?:\.\d+)?)/i);
+    if (match) {
+      return {
+        widthInch: parseFloat(match[1]),
+        heightInch: parseFloat(match[2]),
+      };
+    }
+
+    // Try extracting any two numbers from the string
+    var numbers = cleaned.match(/(\d+(?:\.\d+)?)/g);
+    if (numbers && numbers.length >= 2) {
+      return {
+        widthInch: parseFloat(numbers[0]),
+        heightInch: parseFloat(numbers[1]),
+      };
+    }
+
     return null;
   }
 

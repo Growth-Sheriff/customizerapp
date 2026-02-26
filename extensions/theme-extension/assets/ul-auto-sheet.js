@@ -417,6 +417,13 @@
       ? window.ULNestingEngine.variantsToSheets(state.variants)
       : [];
 
+    console.log('[ULAutoSheet] Parsed', state.sheets.length, 'sheets from', state.variants.length, 'variants');
+    if (state.sheets.length > 0) {
+      console.log('[ULAutoSheet] Sheets:', state.sheets.map(function(s){ return s.name + ' ($' + s.price + ')'; }).join(', '));
+    } else {
+      console.warn('[ULAutoSheet] Variant titles:', state.variants.map(function(v){ return v.title || v.option1 || 'N/A'; }).join(', '));
+    }
+
     if (state.sheets.length === 0) {
       console.warn('[ULAutoSheet] No valid sheet sizes found in variants');
       // Show modal with an error instead of silently returning
@@ -576,6 +583,9 @@
       strategy: state.config.strategy,
     };
 
+    console.log('[ULAutoSheet] Design:', design.widthInch + '" × ' + design.heightInch + '" (' + state.dimensions.widthPx + '×' + state.dimensions.heightPx + 'px @ ' + state.dimensions.dpi + 'DPI)');
+    console.log('[ULAutoSheet] Available sheets:', state.sheets.map(function(s) { return s.name + ' (' + s.widthInch + '×' + s.heightInch + ')'; }));
+
     // Calculate all variants
     state.results = engine.nestAllVariants(design, state.sheets, config);
 
@@ -584,11 +594,37 @@
 
     // Handle case where no variant can fit the design
     if (!state.optimization.recommended) {
-      showError(
-        state.optimization.error ||
-        'Your design is too large for all available sheet sizes. ' +
-        'Try a smaller design or contact the store owner.'
-      );
+      // Show the design info + DPI override so user can adjust, don't kill the content
+      showContent();
+      updateDesignInfo();
+
+      // Force-show DPI override even if DPI was from EXIF
+      var dpiOverride = state.modalEl.querySelector('#ul-sheet-dpi-override');
+      if (dpiOverride) {
+        dpiOverride.style.display = 'flex';
+        dpiOverride.querySelector('span').textContent =
+          'Your design (' + design.widthInch.toFixed(1) + '" × ' + design.heightInch.toFixed(1) +
+          '") is too large for all sheet sizes. Try selecting a higher DPI to reduce the calculated size:';
+      }
+
+      // Show a smaller error in the recommended section
+      var recEl = state.modalEl.querySelector('#ul-sheet-recommended');
+      if (recEl) {
+        recEl.style.display = 'block';
+        recEl.innerHTML =
+          '<div class="ul-sheet-empty">' +
+          '  <div class="ul-sheet-empty-icon">⚠️</div>' +
+          '  <p class="ul-sheet-empty-text">Design too large for available sheets. Adjust DPI above or try a smaller design.</p>' +
+          '</div>';
+      }
+
+      // Hide other sections
+      var altEl = state.modalEl.querySelector('#ul-sheet-alternatives');
+      if (altEl) altEl.style.display = 'none';
+      var cmpEl = state.modalEl.querySelector('#ul-sheet-comparison');
+      if (cmpEl) cmpEl.style.display = 'none';
+
+      console.warn('[ULAutoSheet] Design too large for all sheets. Design:', design.widthInch + '×' + design.heightInch, 'Largest sheet:', state.sheets.length > 0 ? state.sheets[state.sheets.length - 1].widthInch + '×' + state.sheets[state.sheets.length - 1].heightInch : 'none');
       return;
     }
 
