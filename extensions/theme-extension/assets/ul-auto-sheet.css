@@ -1342,3 +1342,125 @@
   line-height: 1.5;
 }
 .ul-calc-result-text strong { color: #6366f1; }
+
+/* ── DPI Selector (always visible) ── */
+.ul-sheet-dpi-section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--ul-sheet-border, #e2e8f0);
+  margin-bottom: 8px;
+}
+.ul-sheet-dpi-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ul-sheet-text-secondary, #64748b);
+  white-space: nowrap;
+}
+.ul-sheet-dpi-buttons {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* ── Dimension Override Inputs ── */
+.ul-sheet-dim-override {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--ul-sheet-border, #e2e8f0);
+  margin-bottom: 8px;
+}
+.ul-sheet-dim-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ul-sheet-text-secondary, #64748b);
+  white-space: nowrap;
+}
+.ul-sheet-dim-inputs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ul-sheet-dim-input {
+  width: 70px;
+  padding: 6px 8px;
+  border: 1.5px solid var(--ul-sheet-border, #e2e8f0);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ul-sheet-text, #1e293b);
+  text-align: center;
+  background: #fff;
+  transition: border-color 0.2s;
+  font-family: inherit;
+}
+.ul-sheet-dim-input:focus {
+  outline: none;
+  border-color: var(--ul-sheet-primary, #6366f1);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+.ul-sheet-dim-x {
+  font-size: 14px;
+  color: var(--ul-sheet-text-secondary, #64748b);
+  font-weight: 600;
+}
+.ul-sheet-dim-unit {
+  font-size: 12px;
+  color: var(--ul-sheet-text-secondary, #64748b);
+  font-weight: 500;
+}
+
+/* ── All Sheets List ── */
+.ul-sheet-all-sheets {
+  margin-top: 8px;
+}
+.ul-sheet-all-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border: 1.5px solid var(--ul-sheet-border, #e2e8f0);
+  border-radius: 10px;
+  margin-bottom: 6px;
+  transition: all 0.2s;
+  font-size: 13px;
+}
+.ul-sheet-all-item--fit {
+  background: #fff;
+  border-color: var(--ul-sheet-border, #e2e8f0);
+}
+.ul-sheet-all-item--fit:hover {
+  border-color: var(--ul-sheet-primary, #6366f1);
+  background: rgba(99, 102, 241, 0.03);
+}
+.ul-sheet-all-item--nofit {
+  background: #f8fafc;
+  border-color: #f1f5f9;
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.ul-sheet-all-item--selected {
+  border-color: var(--ul-sheet-primary, #6366f1) !important;
+  background: rgba(99, 102, 241, 0.06) !important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+.ul-sheet-all-item-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: var(--ul-sheet-text, #1e293b);
+}
+.ul-sheet-all-item--nofit .ul-sheet-all-item-name {
+  color: #94a3b8;
+}
+.ul-sheet-all-item-icon {
+  font-size: 14px;
+}
+.ul-sheet-all-item-detail {
+  font-size: 12px;
+  color: var(--ul-sheet-text-secondary, #64748b);
+}

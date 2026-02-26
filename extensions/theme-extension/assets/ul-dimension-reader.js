@@ -13,7 +13,7 @@
   /**
    * Default DPI assumption when EXIF data is missing
    */
-  const DEFAULT_DPI = 150;
+  const DEFAULT_DPI = 300;
 
   /**
    * Minimum viable DPI for print

@@ -158,19 +158,30 @@
       '          </div>',
       '        </div>',
 
-      // DPI override (shown when DPI is estimated)
-      '        <div id="ul-sheet-dpi-override" class="ul-sheet-info-banner ul-sheet-info-banner--warning" style="display:none;">',
-      '          <svg class="ul-sheet-info-banner-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>',
-      '          <div>',
-      '            <span style="font-size:12px;">DPI could not be read from your file. Calculated dimensions may be inaccurate. If you know your file\u2019s DPI, select it:</span>',
-      '            <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">',
-      '              <button type="button" class="ul-sheet-dpi-btn" data-action="set-dpi" data-dpi="72">72 DPI</button>',
-      '              <button type="button" class="ul-sheet-dpi-btn" data-action="set-dpi" data-dpi="150">150 DPI</button>',
-      '              <button type="button" class="ul-sheet-dpi-btn" data-action="set-dpi" data-dpi="300">300 DPI</button>',
-      '              <button type="button" class="ul-sheet-dpi-btn" data-action="set-dpi" data-dpi="600">600 DPI</button>',
-      '            </div>',
+      // DPI selector (always visible, 300 default)
+      '        <div id="ul-sheet-dpi-override" class="ul-sheet-dpi-section">',
+      '          <span class="ul-sheet-dpi-label">Print DPI:</span>',
+      '          <div class="ul-sheet-dpi-buttons">',
+      '            <button type="button" class="ul-sheet-dpi-btn" data-action="set-dpi" data-dpi="72">72</button>',
+      '            <button type="button" class="ul-sheet-dpi-btn" data-action="set-dpi" data-dpi="150">150</button>',
+      '            <button type="button" class="ul-sheet-dpi-btn ul-sheet-dpi-btn--active" data-action="set-dpi" data-dpi="300">300</button>',
+      '            <button type="button" class="ul-sheet-dpi-btn" data-action="set-dpi" data-dpi="600">600</button>',
       '          </div>',
       '        </div>',
+
+      // Dimension override inputs
+      '        <div class="ul-sheet-dim-override">',
+      '          <span class="ul-sheet-dim-label">Design Size (inches):</span>',
+      '          <div class="ul-sheet-dim-inputs">',
+      '            <input type="number" class="ul-sheet-dim-input" id="ul-sheet-dim-w" step="0.1" min="0.1" max="999" placeholder="W">',
+      '            <span class="ul-sheet-dim-x">×</span>',
+      '            <input type="number" class="ul-sheet-dim-input" id="ul-sheet-dim-h" step="0.1" min="0.1" max="999" placeholder="H">',
+      '            <span class="ul-sheet-dim-unit">in</span>',
+      '          </div>',
+      '        </div>',
+
+      // All sheets list (shows fit/no-fit)
+      '        <div id="ul-sheet-all-sheets" class="ul-sheet-all-sheets"></div>',
 
       // Quantity row
       '        <div class="ul-sheet-quantity-row">',
@@ -351,6 +362,35 @@
           recalculate();
         }
       });
+    }
+
+    // Dimension override inputs
+    var dimW = modal.querySelector('#ul-sheet-dim-w');
+    var dimH = modal.querySelector('#ul-sheet-dim-h');
+
+    function handleDimChange() {
+      if (!state.dimensions) return;
+      var w = parseFloat(dimW ? dimW.value : 0);
+      var h = parseFloat(dimH ? dimH.value : 0);
+      if (w > 0 && h > 0) {
+        state.dimensions.widthInch = w;
+        state.dimensions.heightInch = h;
+        // Recalculate px from new inches and current DPI
+        state.dimensions.widthPx = Math.round(w * state.dimensions.dpi);
+        state.dimensions.heightPx = Math.round(h * state.dimensions.dpi);
+        state.dimensions.widthCm = parseFloat((w * 2.54).toFixed(2));
+        state.dimensions.heightCm = parseFloat((h * 2.54).toFixed(2));
+        state.dimensions.source = 'manual';
+        updateDesignInfo();
+        recalculate();
+      }
+    }
+
+    if (dimW) {
+      dimW.addEventListener('input', handleDimChange);
+    }
+    if (dimH) {
+      dimH.addEventListener('input', handleDimChange);
     }
 
     // Escape key
@@ -549,11 +589,17 @@
       }
     }
 
-    // Show/hide DPI override section when DPI was estimated
-    var dpiOverride = state.modalEl.querySelector('#ul-sheet-dpi-override');
-    if (dpiOverride) {
-      dpiOverride.style.display = dims.dpiFromExif ? 'none' : 'flex';
+    // DPI override is always visible now, just update the active button
+    var dpiButtons = state.modalEl.querySelectorAll('[data-action="set-dpi"]');
+    for (var db = 0; db < dpiButtons.length; db++) {
+      dpiButtons[db].classList.toggle('ul-sheet-dpi-btn--active', dpiButtons[db].dataset.dpi === String(dims.dpi));
     }
+
+    // Update dimension inputs
+    var dimW = state.modalEl.querySelector('#ul-sheet-dim-w');
+    var dimH = state.modalEl.querySelector('#ul-sheet-dim-h');
+    if (dimW) dimW.value = dims.widthInch;
+    if (dimH) dimH.value = dims.heightInch;
   }
 
   /* ─────────────────────────────────────────────
@@ -592,39 +638,18 @@
     // Optimize
     state.optimization = optimizer.optimize(state.results, config.strategy);
 
+    // Always render all-sheets list (fit = active, no-fit = gray)
+    renderAllSheets(design, config);
+
     // Handle case where no variant can fit the design
     if (!state.optimization.recommended) {
-      // Show the design info + DPI override so user can adjust, don't kill the content
-      showContent();
-      updateDesignInfo();
-
-      // Force-show DPI override even if DPI was from EXIF
-      var dpiOverride = state.modalEl.querySelector('#ul-sheet-dpi-override');
-      if (dpiOverride) {
-        dpiOverride.style.display = 'flex';
-        dpiOverride.querySelector('span').textContent =
-          'Your design (' + design.widthInch.toFixed(1) + '" × ' + design.heightInch.toFixed(1) +
-          '") is too large for all sheet sizes. Try selecting a higher DPI to reduce the calculated size:';
-      }
-
-      // Show a smaller error in the recommended section
+      // Hide recommended/alternatives/comparison, but keep all-sheets visible
       var recEl = state.modalEl.querySelector('#ul-sheet-recommended');
-      if (recEl) {
-        recEl.style.display = 'block';
-        recEl.innerHTML =
-          '<div class="ul-sheet-empty">' +
-          '  <div class="ul-sheet-empty-icon">⚠️</div>' +
-          '  <p class="ul-sheet-empty-text">Design too large for available sheets. Adjust DPI above or try a smaller design.</p>' +
-          '</div>';
-      }
-
-      // Hide other sections
+      if (recEl) recEl.style.display = 'none';
       var altEl = state.modalEl.querySelector('#ul-sheet-alternatives');
       if (altEl) altEl.style.display = 'none';
       var cmpEl = state.modalEl.querySelector('#ul-sheet-comparison');
       if (cmpEl) cmpEl.style.display = 'none';
-
-      console.warn('[ULAutoSheet] Design too large for all sheets. Design:', design.widthInch + '×' + design.heightInch, 'Largest sheet:', state.sheets.length > 0 ? state.sheets[state.sheets.length - 1].widthInch + '×' + state.sheets[state.sheets.length - 1].heightInch : 'none');
       return;
     }
 
@@ -648,6 +673,66 @@
     renderFooter();
     renderQuantitySuggestion();
     renderSavings();
+  }
+
+  /**
+   * Render all sheets list showing which ones fit (active) and which don't (gray)
+   */
+  function renderAllSheets(design, config) {
+    var container = state.modalEl.querySelector('#ul-sheet-all-sheets');
+    if (!container) return;
+
+    var engine = window.ULNestingEngine;
+    if (!engine || !state.sheets || state.sheets.length === 0) {
+      container.style.display = 'none';
+      return;
+    }
+
+    var html = [
+      '<div class="ul-sheet-section" style="margin-top:12px;">',
+      '  <div class="ul-sheet-section-title">',
+      '    <span class="ul-sheet-badge">📋</span>',
+      '    Available Sheets',
+      '  </div>',
+    ];
+
+    for (var i = 0; i < state.sheets.length; i++) {
+      var s = state.sheets[i];
+      var result = engine.nestDesigns(design, s, config);
+      var fits = result.designsPerSheet > 0;
+      var isSelected = state.selectedResult && state.selectedResult.sheet.id === s.id;
+
+      html.push(
+        '<div class="ul-sheet-all-item' +
+          (fits ? ' ul-sheet-all-item--fit' : ' ul-sheet-all-item--nofit') +
+          (isSelected ? ' ul-sheet-all-item--selected' : '') +
+          '"' +
+          (fits ? ' data-variant-id="' + escapeHtml(String(s.id)) + '" style="cursor:pointer;"' : '') +
+          '>',
+        '  <div class="ul-sheet-all-item-name">',
+        '    <span class="ul-sheet-all-item-icon">' + (fits ? '✅' : '❌') + '</span>',
+        '    ' + escapeHtml(s.name),
+        '  </div>',
+        '  <div class="ul-sheet-all-item-detail">'
+      );
+
+      if (fits) {
+        html.push(
+          result.designsPerSheet + '/sheet · ' + result.efficiency.toFixed(0) + '% efficiency'
+        );
+      } else {
+        html.push('<span style="color:#94a3b8;">Design too large</span>');
+      }
+
+      html.push(
+        '  </div>',
+        '</div>'
+      );
+    }
+
+    html.push('</div>');
+    container.innerHTML = html.join('\n');
+    container.style.display = 'block';
   }
 
   /**
