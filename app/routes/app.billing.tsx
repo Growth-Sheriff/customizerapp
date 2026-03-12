@@ -480,8 +480,17 @@ export default function BillingPage() {
         throw new Error(data.error || 'Failed to create Stripe checkout')
       }
 
-      // Open Stripe Checkout in new tab (Shopify admin runs in iframe)
-      window.open(data.checkoutUrl, '_top')
+      // Shopify embedded apps run in an iframe — must break out to top frame
+      // or open in a new tab for Stripe Checkout to work
+      const stripeWindow = window.open(data.checkoutUrl, '_blank')
+      if (!stripeWindow) {
+        // Popup blocked — fallback to top-level navigation
+        if (window.top) {
+          window.top.location.href = data.checkoutUrl
+        } else {
+          window.location.href = data.checkoutUrl
+        }
+      }
     } catch (error) {
       console.error('Stripe error:', error)
       setStripeError(error instanceof Error ? error.message : 'Stripe payment failed')
