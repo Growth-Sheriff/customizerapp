@@ -434,9 +434,11 @@ export function createExportWorker(redisConnection: { host: string; port: number
 
 // Standalone execution
 if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith('export.worker.ts')) {
+  const redisUrl = new URL(process.env.REDIS_URL || 'redis://localhost:6379')
   const redisConnection = {
-    host: process.env.REDIS_HOST || 'localhost',
-    port: parseInt(process.env.REDIS_PORT || '6379'),
+    host: redisUrl.hostname,
+    port: parseInt(redisUrl.port || '6379'),
+    db: parseInt(redisUrl.pathname?.slice(1) || '0'),
   }
 
   const worker = createExportWorker(redisConnection)
