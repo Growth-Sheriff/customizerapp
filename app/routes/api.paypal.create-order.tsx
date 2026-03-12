@@ -32,6 +32,21 @@ export async function action({ request }: ActionFunctionArgs) {
     return json({ error: 'Shop not found' }, { status: 404 });
   }
 
+  // Check if request body contains specific orderIds (per-month payment)
+  let requestedOrderIds: string[] | null = null;
+  let monthKey: string | null = null;
+  try {
+    const body = await request.json();
+    if (body.orderIds && Array.isArray(body.orderIds) && body.orderIds.length > 0) {
+      requestedOrderIds = body.orderIds;
+    }
+    if (body.monthKey) {
+      monthKey = body.monthKey;
+    }
+  } catch {
+    // No body or invalid JSON — pay all pending (default behavior)
+  }
+
   // Get all pending (unpaid) order IDs for this shop
   const orderLinks = await prisma.orderLink.findMany({
     where: { shopId: shop.id },
@@ -50,14 +65,27 @@ export async function action({ request }: ActionFunctionArgs) {
   });
 
   const paidOrderIds = new Set(paidCommissions.map((c) => c.orderId));
-  const pendingOrderIds = allOrderIds.filter((id) => !paidOrderIds.has(id));
+
+  let pendingOrderIds: string[];
+  if (requestedOrderIds) {
+    // Per-month payment: only pay the requested orders that are actually pending
+    const allOrderSet = new Set(allOrderIds);
+    pendingOrderIds = requestedOrderIds.filter(
+      (id) => allOrderSet.has(id) && !paidOrderIds.has(id)
+    );
+  } else {
+    // Default: pay all pending
+    pendingOrderIds = allOrderIds.filter((id) => !paidOrderIds.has(id));
+  }
 
   if (pendingOrderIds.length === 0) {
     return json({ error: 'No pending commissions to pay' }, { status: 400 });
   }
 
   const totalAmount = (pendingOrderIds.length * COMMISSION_PER_ORDER).toFixed(2);
-  const description = `Upload Lift commission: ${pendingOrderIds.length} orders @ $${COMMISSION_PER_ORDER}/order`;
+  const description = monthKey
+    ? `Upload Lift commission (${monthKey}): ${pendingOrderIds.length} orders @ $${COMMISSION_PER_ORDER}/order`
+    : `Upload Lift commission: ${pendingOrderIds.length} orders @ $${COMMISSION_PER_ORDER}/order`;
 
   try {
     // First, save order IDs to audit log and get the reference ID

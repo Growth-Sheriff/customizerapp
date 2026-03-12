@@ -8,6 +8,7 @@ import {
   Box,
   Button,
   Card,
+  Collapsible,
   DataTable,
   Divider,
   EmptyState,
@@ -46,6 +47,18 @@ interface OrderRecord {
   createdAt: string
   paidAt: string | null
   paymentRef: string | null
+}
+
+interface MonthlyBreakdown {
+  monthKey: string // "2026-03"
+  monthLabel: string // "March 2026"
+  totalOrders: number
+  pendingOrders: number
+  paidOrders: number
+  totalAmount: number
+  pendingAmount: number
+  paidAmount: number
+  orders: OrderRecord[]
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -153,6 +166,42 @@ export async function loader({ request }: LoaderFunctionArgs) {
     }
   })
 
+  // Group records by month
+  const monthMap = new Map<string, OrderRecord[]>()
+  for (const record of records) {
+    const date = new Date(record.createdAt)
+    const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+    if (!monthMap.has(monthKey)) {
+      monthMap.set(monthKey, [])
+    }
+    monthMap.get(monthKey)!.push(record)
+  }
+
+  // Build monthly breakdowns sorted by month descending (newest first)
+  const monthlyBreakdowns: MonthlyBreakdown[] = [...monthMap.entries()]
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .map(([monthKey, orders]) => {
+      const [year, month] = monthKey.split('-').map(Number)
+      const monthLabel = new Date(year, month - 1, 1).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+      })
+      const pendingOrders = orders.filter((o) => o.status === 'pending').length
+      const paidOrders = orders.filter((o) => o.status === 'paid').length
+
+      return {
+        monthKey,
+        monthLabel,
+        totalOrders: orders.length,
+        pendingOrders,
+        paidOrders,
+        totalAmount: orders.length * COMMISSION_PER_ORDER,
+        pendingAmount: pendingOrders * COMMISSION_PER_ORDER,
+        paidAmount: paidOrders * COMMISSION_PER_ORDER,
+        orders,
+      }
+    })
+
   // Calculate summary
   const totalOrders = uniqueOrderIds.length
   const paidOrders = paidOrderIds.size
@@ -171,6 +220,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     shopDomain,
     summary,
     records,
+    monthlyBreakdowns,
     totalTransferGB,
     totalFiles: uploadStats._count,
     commissionPerOrder: COMMISSION_PER_ORDER,
@@ -316,6 +366,7 @@ export default function BillingPage() {
     shopDomain,
     summary,
     records,
+    monthlyBreakdowns,
     totalTransferGB,
     totalFiles,
     commissionPerOrder,
@@ -347,6 +398,63 @@ export default function BillingPage() {
   const [stripeLoading, setStripeLoading] = useState(false)
   const [stripeError, setStripeError] = useState<string | null>(null)
   const [stripeSuccess, setStripeSuccess] = useState(false)
+
+  // Monthly breakdown state
+  const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set())
+  const [monthPaymentLoading, setMonthPaymentLoading] = useState<string | null>(null)
+
+  const toggleMonth = useCallback((monthKey: string) => {
+    setExpandedMonths((prev) => {
+      const next = new Set(prev)
+      if (next.has(monthKey)) {
+        next.delete(monthKey)
+      } else {
+        next.add(monthKey)
+      }
+      return next
+    })
+  }, [])
+
+  const handlePayMonth = useCallback(async (monthKey: string, orderIds: string[], provider: 'stripe' | 'paypal') => {
+    setMonthPaymentLoading(monthKey)
+
+    try {
+      const endpoint = provider === 'stripe' ? '/api/stripe/create-checkout' : '/api/paypal/create-order'
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderIds, monthKey }),
+      })
+
+      const data = await response.json()
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || `Failed to create ${provider} checkout`)
+      }
+
+      const url = provider === 'stripe' ? data.checkoutUrl : data.approvalUrl
+      const newWindow = window.open(url, '_blank')
+      if (!newWindow) {
+        if (window.top) {
+          window.top.location.href = url
+        } else {
+          window.location.href = url
+        }
+      }
+
+      if (provider === 'paypal') {
+        setPaypalCaptureId(data.paypalOrderId)
+      }
+    } catch (error) {
+      console.error(`${provider} month payment error:`, error)
+      if (provider === 'stripe') {
+        setStripeError(error instanceof Error ? error.message : 'Payment failed')
+      } else {
+        setPaypalError(error instanceof Error ? error.message : 'Payment failed')
+      }
+    } finally {
+      setMonthPaymentLoading(null)
+    }
+  }, [])
 
   const handlePaymentModalOpen = useCallback(() => setPaymentModalOpen(true), [])
   const handlePaymentModalClose = useCallback(() => {
@@ -911,6 +1019,124 @@ export default function BillingPage() {
             </BlockStack>
           </Card>
         </Layout.Section>
+
+        {/* Monthly Invoices Breakdown */}
+        {monthlyBreakdowns.length > 0 && (
+          <Layout.Section>
+            <Card>
+              <BlockStack gap="400">
+                <Text as="h2" variant="headingMd">
+                  📅 Monthly Invoices
+                </Text>
+                <Text as="p" variant="bodySm" tone="subdued">
+                  View your commission breakdown by month. You can pay for a specific month individually.
+                </Text>
+
+                {monthlyBreakdowns.map((mb) => {
+                  const isExpanded = expandedMonths.has(mb.monthKey)
+                  const isLoading = monthPaymentLoading === mb.monthKey
+                  const pendingOrderIds = mb.orders
+                    .filter((o) => o.status === 'pending')
+                    .map((o) => o.orderId)
+
+                  const monthRows = mb.orders.map((r) => [
+                    r.orderNumber,
+                    `$${r.commissionAmount.toFixed(3)}`,
+                    <Badge key={r.orderId} tone={r.status === 'paid' ? 'success' : 'warning'}>
+                      {r.status === 'paid' ? 'Paid' : 'Pending'}
+                    </Badge>,
+                    formatDate(r.createdAt),
+                    r.paidAt ? formatDate(r.paidAt) : '-',
+                  ])
+
+                  return (
+                    <Box
+                      key={mb.monthKey}
+                      background="bg-surface-secondary"
+                      padding="400"
+                      borderRadius="200"
+                    >
+                      <BlockStack gap="300">
+                        <InlineStack align="space-between" blockAlign="center">
+                          <InlineStack gap="300" blockAlign="center">
+                            <Button
+                              variant="plain"
+                              onClick={() => toggleMonth(mb.monthKey)}
+                            >
+                              {isExpanded ? '▼' : '▶'} {mb.monthLabel}
+                            </Button>
+                            <Badge tone={mb.pendingOrders === 0 ? 'success' : 'attention'}>
+                              {mb.pendingOrders === 0 ? 'Fully Paid' : `${mb.pendingOrders} pending`}
+                            </Badge>
+                          </InlineStack>
+
+                          <InlineStack gap="300" blockAlign="center">
+                            <BlockStack gap="0">
+                              <Text as="p" variant="bodyMd" fontWeight="semibold">
+                                ${mb.totalAmount.toFixed(2)}
+                              </Text>
+                              <Text as="p" variant="bodySm" tone="subdued">
+                                {mb.totalOrders} orders
+                              </Text>
+                            </BlockStack>
+
+                            {mb.pendingOrders > 0 && (
+                              <InlineStack gap="200">
+                                {stripeEnabled && (
+                                  <Button
+                                    size="slim"
+                                    variant="primary"
+                                    onClick={() => handlePayMonth(mb.monthKey, pendingOrderIds, 'stripe')}
+                                    loading={isLoading}
+                                    disabled={isLoading}
+                                  >
+                                    💳 Pay ${mb.pendingAmount.toFixed(2)}
+                                  </Button>
+                                )}
+                                {paypalEnabled && (
+                                  <Button
+                                    size="slim"
+                                    onClick={() => handlePayMonth(mb.monthKey, pendingOrderIds, 'paypal')}
+                                    loading={isLoading}
+                                    disabled={isLoading}
+                                  >
+                                    PayPal ${mb.pendingAmount.toFixed(2)}
+                                  </Button>
+                                )}
+                              </InlineStack>
+                            )}
+                          </InlineStack>
+                        </InlineStack>
+
+                        {/* Progress indicator */}
+                        <InlineStack gap="200">
+                          <Text as="p" variant="bodySm" tone="success">
+                            Paid: ${mb.paidAmount.toFixed(2)} ({mb.paidOrders})
+                          </Text>
+                          {mb.pendingOrders > 0 && (
+                            <Text as="p" variant="bodySm" tone="critical">
+                              Pending: ${mb.pendingAmount.toFixed(2)} ({mb.pendingOrders})
+                            </Text>
+                          )}
+                        </InlineStack>
+
+                        <Collapsible open={isExpanded} id={`month-${mb.monthKey}`}>
+                          <Box paddingBlockStart="200">
+                            <DataTable
+                              columnContentTypes={['text', 'text', 'text', 'text', 'text']}
+                              headings={['Order', 'Commission', 'Status', 'Order Date', 'Paid Date']}
+                              rows={monthRows}
+                            />
+                          </Box>
+                        </Collapsible>
+                      </BlockStack>
+                    </Box>
+                  )
+                })}
+              </BlockStack>
+            </Card>
+          </Layout.Section>
+        )}
 
         {/* Commission History */}
         <Layout.Section>
