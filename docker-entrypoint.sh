@@ -55,4 +55,4 @@ trap cleanup SIGTERM SIGINT
 
 # Start main app (foreground, PID 1)
 echo "[App:${TENANT_SLUG}] Starting Remix server on port ${PORT:-3000}..."
-exec node --import ./instrumentation.server.mjs node_modules/.bin/remix-serve ./build/server/index.js
+exec node --import ./instrumentation.server.mjs node_modules/@remix-run/serve/dist/cli.js ./build/server/index.js

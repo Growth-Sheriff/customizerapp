@@ -16,6 +16,7 @@ RUN pnpm install --frozen-lockfile --prod=false
 # Stage 2: Build application
 FROM node:20-slim AS build
 
+RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 RUN corepack enable && corepack prepare pnpm@10.12.1 --activate
 
 WORKDIR /app
@@ -57,6 +58,9 @@ COPY --from=build /app/prisma ./prisma
 
 # Copy Sentry instrumentation
 COPY --from=build /app/instrumentation.server.mjs ./
+
+# Copy app source (needed by workers that import from app/lib/)
+COPY --from=build /app/app ./app
 
 # Copy workers
 COPY --from=build /app/workers ./workers
