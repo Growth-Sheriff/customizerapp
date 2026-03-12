@@ -5,10 +5,6 @@ on:
     branches: [main]
   workflow_dispatch:
 
-env:
-  APP_DIR: /opt/apps/custom/customizerapp/upload-studio
-  IMAGE_NAME: upload-studio:latest
-
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -20,39 +16,40 @@ jobs:
           host: ${{ secrets.SERVER_HOST }}
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script_stop: true
           command_timeout: 30m
           script: |
             set -e
             echo "=== [1/4] Git Pull ==="
-            cd ${{ env.APP_DIR }}/src
+            cd /opt/apps/custom/customizerapp/upload-studio/src
             git pull origin main
 
             echo "=== [2/4] Docker Build ==="
-            /usr/bin/docker build -t ${{ env.IMAGE_NAME }} .
+            /usr/bin/docker build -t upload-studio:latest .
 
             echo "=== [3/4] Restart Containers ==="
-            cd ${{ env.APP_DIR }}
+            cd /opt/apps/custom/customizerapp/upload-studio
             /usr/bin/docker compose down
             /usr/bin/docker compose up -d
 
-            echo "=== [4/4] Health Check ==="
-            sleep 60
-            FAILED=0
-            for name in everydaycustomprint dtftransferohio dtfprinthouse dtfprintdepot eagledtfprint alphaprint gangsheet legendtransfers customprintaz; do
-              port=$(/usr/bin/docker port us-$name 3000/tcp 2>/dev/null | cut -d: -f2)
-              code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 http://127.0.0.1:$port/health 2>/dev/null)
-              if [ "$code" = "200" ]; then
-                echo "✅ $name (:$port): $code"
-              else
-                echo "❌ $name (:$port): $code"
-                FAILED=$((FAILED+1))
+            echo "=== [4/4] Health Check (retry 3x) ==="
+            for attempt in 1 2 3; do
+              echo "Attempt $attempt - waiting 90s..."
+              sleep 90
+              FAILED=0
+              for name in everydaycustomprint dtftransferohio dtfprinthouse dtfprintdepot eagledtfprint alphaprint gangsheet legendtransfers customprintaz; do
+                port=$(/usr/bin/docker port us-$name 3000/tcp 2>/dev/null | cut -d: -f2)
+                code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 http://127.0.0.1:$port/health 2>/dev/null)
+                echo "$name (:$port): $code"
+                if [ "$code" != "200" ]; then
+                  FAILED=$((FAILED+1))
+                fi
+              done
+              if [ $FAILED -eq 0 ]; then
+                echo "All 9 tenants healthy!"
+                exit 0
               fi
+              echo "$FAILED tenant(s) not ready yet..."
             done
-
-            if [ $FAILED -gt 0 ]; then
-              echo "⚠️ $FAILED tenant(s) failed health check"
-              exit 1
-            fi
-            echo "🎉 All 9 tenants healthy!"
+            echo "Some tenants failed after 3 attempts"
+            exit 1
 
