@@ -29,16 +29,16 @@ start_worker() {
 }
 
 # Start workers in background
-start_worker "preflight" node --import tsx workers/preflight.worker.ts &
+start_worker "preflight" tsx workers/preflight.worker.ts &
 PREFLIGHT_PID=$!
 
-start_worker "export" node --import tsx workers/export.worker.ts &
+start_worker "export" tsx workers/export.worker.ts &
 EXPORT_PID=$!
 
-start_worker "flow" node --import tsx workers/flow.worker.ts &
+start_worker "flow" tsx workers/flow.worker.ts &
 FLOW_PID=$!
 
-start_worker "commission" node --import tsx workers/commission.worker.ts &
+start_worker "commission" tsx workers/commission.worker.ts &
 COMMISSION_PID=$!
 
 echo "[App:${TENANT_SLUG}] Workers started (PIDs: ${PREFLIGHT_PID}, ${EXPORT_PID}, ${FLOW_PID}, ${COMMISSION_PID})"
